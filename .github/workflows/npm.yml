@@ -27,6 +27,14 @@ jobs:
   package:
     name: build, check and publish
     runs-on: ubuntu-latest
+    # At job level rather than on the publish step. A step's `if` cannot read
+    # the `secrets` context at all, and a step's own `env` block is not
+    # dependably in scope for that same step's `if` - so the guard below could
+    # decide "no token" while the token was sitting right there, and skip the
+    # publish silently. Job level is unambiguous, and the step inherits it for
+    # `npm publish` itself.
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -93,10 +101,25 @@ jobs:
           name: npm-package
           path: dist/*.tgz
 
-      # Only on a tag, and only with a token. Without one the job above still
-      # proves the package builds, so a broken installer is caught either way.
+      # On a tag, or on a deliberate manual run, and only with a token.
+      # Without one the job above still proves the package builds, so a broken
+      # installer is caught either way.
+      #
+      # `workflow_dispatch` publishes too, because the first publish happens
+      # *after* the token is added and the tag that wanted it has already been
+      # pushed. Without this, adding `NPM_TOKEN` would do nothing until the
+      # next release. The version comes from `Cargo.toml`, so a manual run
+      # publishes whatever version the checked-out tree says it is.
       - name: Publish
-        if: startsWith(github.ref, 'refs/tags/v') && env.NODE_AUTH_TOKEN != ''
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        if: >-
+          (startsWith(github.ref, 'refs/tags/v')
+            || github.event_name == 'workflow_dispatch')
+          && env.NODE_AUTH_TOKEN != ''
         run: cd packaging/npm && npm publish --access public
+
+      - name: Say why nothing was published
+        if: env.NODE_AUTH_TOKEN == ''
+        run: |
+          echo "No NPM_TOKEN secret, so the package was built and checked but"
+          echo "not published. Add one under Settings > Secrets and variables"
+          echo "> Actions, named NPM_TOKEN."

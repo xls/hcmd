@@ -23,10 +23,13 @@ a 40 GB file as fast as a 4 KB one. Everything runs in process: no `rg`, no
   terminal cannot deliver.
 - **Archives are directories.** Browse into `.zip`, `.7z`, `.rar`, `.tar` and
   every common compression of it (`.gz`, `.bz2`, `.xz`, `.zst`), and copy files
-  straight back out. Archives nest.
+  straight back out. Archives nest. The format is decided by the file's
+  **content**, so an archive under a name no table knows opens like any other.
+  A singly compressed file is a container holding one member: `disk.img.xz`
+  holds `disk.img`, which can be viewed, copied out, or stepped into.
 - **Disk images are directories too.** Read-only browsing of `.iso` and `.img`:
-  ISO 9660 with Joliet and Rock Ridge, FAT12/16/32, and GPT or MBR partition
-  tables, so a partition is a step in the path.
+  ISO 9660 with Joliet and Rock Ridge, FAT12/16/32, ext2/3/4, SquashFS, and GPT
+  or MBR partition tables, so a partition is a step in the path.
 - **SFTP, FTP and SMB.** Connect a panel to a host and it behaves like any
   other panel: copy, view, search, and browse an archive that lives on the far
   end. `smb://user:pass@nas` and `//nas/Media` both work, and a share is just
@@ -34,8 +37,20 @@ a 40 GB file as fast as a 4 KB one. Everything runs in process: no `rg`, no
 - **Search that finds things.** Names and content, in process, over local trees,
   remote connections and inside archives. Results are a panel you can act on
   while the walk is still running.
-- **A real viewer.** Text, hex, and syntax highlighting, streaming so that size
-  does not matter. Find, find-next, and an encoding ring.
+- **A real viewer.** Text, hex, and a document mode that renders JSON, HTML and
+  Markdown as documents rather than as source - and renders a recognised binary
+  as its fields. Syntax highlighting, streaming so that size does not matter,
+  find and find-next, and an encoding ring. Find searches whatever the mode is
+  showing: the file in text and hex, the rendered text in document mode.
+- **It tells you what a file is.** `Shift+F9` reads the file's own header
+  through 109 built-in binary templates and reports facts rather than fields: a
+  PNG says `1920 x 1080 px`, `RGBA`, `deflate`; an ELF says `x86-64`, `shared
+  object`. In hex mode the same templates paint the regions they know, and
+  stepping the cursor into one reads it out in the status bar.
+- **Compare, and convert.** `Shift+F2` marks what differs between the two
+  listings; `Ctrl+F2` compares two files byte for byte and says where they part.
+  `Shift+R` resizes and converts images, keeping the source's own channel count
+  rather than promoting it.
 - **A shell that stays put.** `Ctrl+O` hands the terminal to a persistent shell
   and takes it back, keeping the directory in step with the panel.
 - **Configuration in TOML**, with 21 themes, and every key rebindable. `Alt+T`

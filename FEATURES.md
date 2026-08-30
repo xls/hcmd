@@ -36,6 +36,8 @@ is stated rather than glossed over.
   date and optionally by contents.
 - Compare the two files under the cursors byte for byte, for a verdict: the
   same file, or the offset at which they stop agreeing.
+- Copy the full path of the selection to the system clipboard, for pasting into
+  a terminal or another program.
 - Resize and convert images, with the source's own pixel size, format and
   channel count carried through rather than promoted.
 
@@ -127,7 +129,12 @@ Read-only is the feature, not a stage of one: there is no write path to disable.
 
 ## Viewer
 
-- Text, hex and binary modes, chosen by content and switchable.
+- Three modes, chosen by content and switchable with `1`, `2` and `3`: text,
+  hex, and a document mode that renders JSON, HTML and Markdown as a document
+  rather than as source. A binary the templates recognise is rendered there
+  too, as its fields; one they do not still shows what can be read of it.
+- In hex mode a template paints the regions it knows, and stepping the cursor
+  into one reads it out in the status bar: what the field is, and its value.
 - Streaming: a 40 GB file opens as fast as a 4 KB one, and memory is bounded by
   the window rather than the file.
 - Syntax highlighting (`syntect`) with the active theme.
@@ -145,6 +152,9 @@ Read-only is the feature, not a stage of one: there is no write path to disable.
   walking a header with the arrow keys reads it field by field with nothing to
   select first.
 - Wrap toggle, tab width, and a configurable hex grouping.
+- The mode a file opens in is decided by the file, not by the last one viewed,
+  so a text file never opens in hex because the file before it was binary.
+  Whether a recognised document opens in document mode is configurable.
 
 ## Knowing what a file is
 
