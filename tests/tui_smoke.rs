@@ -1879,4 +1879,3 @@ fn ctrl_f_opens_an_empty_bar_even_after_a_search() {
         "Ctrl+F reopened the bar still holding the last pattern:\n{text}"
     );
 }
-
