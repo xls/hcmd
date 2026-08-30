@@ -1806,3 +1806,76 @@ fn alt_f6_asks_where_to_unpack_with_the_other_panel_prefilled() {
         "the dialog states a count nothing measured:\n{text}"
     );
 }
+
+/// A JSON with a word that survives rendering, for mode 3's find.
+struct JsonDoc {
+    root: PathBuf,
+}
+
+impl JsonDoc {
+    fn new(tag: &str) -> Self {
+        let root = std::env::temp_dir().join(format!("hcmd-doc-{}-{tag}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("fixture dir");
+        std::fs::write(
+            root.join("doc.json"),
+            br#"{"alpha":1,"beta":"needle","gamma":[1,2,3],"delta":"needle again"}"#,
+        )
+        .expect("the document");
+        Self { root }
+    }
+}
+
+impl Drop for JsonDoc {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+
+#[test]
+fn mode_three_searches_the_document_it_draws() {
+    let fixture = JsonDoc::new("find");
+    let mut run = Run::new(100, 30);
+    run.cwd = Some(fixture.root.clone());
+    // Onto doc.json, F3 to view, 3 for the document, then search.
+    let input = keys(&[DOWN, b"\x1b[13~", b"3", b"/needle"]);
+    run.input = &input;
+    run.settle = Duration::from_secs(5);
+    let (parser, _) = run_in_pty(run);
+    let text = plain(&parser);
+    assert!(
+        text.contains("find: needle"),
+        "the find bar did not open in mode 3:\n{text}"
+    );
+    // Two matches, and the count is exact: the whole document was read to
+    // produce it, so it never wears the streaming search's `+`.
+    assert!(
+        text.contains("1/2"),
+        "mode 3 did not count the matches it can see:\n{text}"
+    );
+    assert!(
+        !text.contains("not available in mode 3"),
+        "find is still refused in mode 3:\n{text}"
+    );
+}
+
+#[test]
+fn ctrl_f_opens_an_empty_bar_even_after_a_search() {
+    let fixture = JsonDoc::new("clearbar");
+    let mut run = Run::new(100, 30);
+    run.cwd = Some(fixture.root.clone());
+    // View, document mode, search for `needle`, then Ctrl+F again.
+    let input = keys(&[DOWN, b"\x1b[13~", b"3", b"/needle", b"\x06"]);
+    run.input = &input;
+    run.settle = Duration::from_secs(5);
+    let (parser, _) = run_in_pty(run);
+    let text = plain(&parser);
+    assert!(
+        text.contains("find:"),
+        "the find bar is not showing:\n{text}"
+    );
+    assert!(
+        !text.contains("find: needle"),
+        "Ctrl+F reopened the bar still holding the last pattern:\n{text}"
+    );
+}

@@ -964,9 +964,8 @@ pub fn draw_status(f: &mut Frame, app: &App, status: &Status, area: Rect) {
     // 3. The numbers.
     let bar = app
         .viewer()
-        .map(Viewer::find)
-        .filter(|find| find.is_open())
-        .map(crate::viewer::find::Find::bar_text);
+        .filter(|viewer| viewer.find().is_open())
+        .map(Viewer::find_bar_text);
     let text = match (bar, app.message.as_deref()) {
         (Some(bar), _) => bar,
         (None, Some(message)) => message.to_string(),

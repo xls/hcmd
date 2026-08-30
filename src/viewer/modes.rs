@@ -545,6 +545,17 @@ impl Viewer {
         let enc = self.encoding;
         self.find.recompile(enc, hex_mode);
         self.find_resume = (None, None);
+        // Mode 3 searches the document rather than the file, so a switch into
+        // or out of it changes which text the pattern is being applied to -
+        // exactly the situation this function exists for. Its hits are found
+        // in one pass with no counter to start and no budget to spend.
+        if matches!(self.mode, ViewerMode::Render) {
+            self.run_find_rendered();
+            return Ok(());
+        }
+        // And leaving mode 3 leaves nothing behind: hits into a document that
+        // is no longer on screen would highlight rows by coincidence.
+        self.clear_render_hits();
         // Only while the bar is open does re-reading the pattern move the view:
         // the "typing searches immediately" is about typing, and a
         // mode switch with the bar closed is a statement about the *screen*,

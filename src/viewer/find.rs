@@ -1387,6 +1387,16 @@ impl Find {
     /// `find: café [aa] 3/57+`, or the error where the counter would be - a
     /// half-typed hex pattern says so rather than showing a stale count.
     pub fn bar_text(&self) -> String {
+        self.bar_text_with(self.counter_text())
+    }
+
+    /// [`Find::bar_text`] with the counter supplied by the caller.
+    ///
+    /// Mode 3 counts its own hits - it searches the rendered document in one
+    /// pass, so its count is exact and never wears the `+` that says a
+    /// background scan is still running. Everything else about the bar is the
+    /// same in every mode, and is written once.
+    pub fn bar_text_with(&self, counter: Option<String>) -> String {
         let mut out = String::from("find: ");
         out.push_str(&self.query.input);
         out.push(' ');
@@ -1405,7 +1415,7 @@ impl Find {
             out.push_str(shown.label());
             out.push(']');
         }
-        match (&self.error, self.counter_text()) {
+        match (&self.error, counter) {
             (Some(FindError::Empty), _) => {}
             (Some(err), _) => {
                 out.push_str("  ");

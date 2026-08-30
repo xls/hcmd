@@ -132,7 +132,10 @@ Read-only is the feature, not a stage of one: there is no write path to disable.
   the window rather than the file.
 - Syntax highlighting (`syntect`) with the active theme.
 - Find and find-next, with the last search shared with Find Files, so `F3` on a
-  search result walks the matches inside it.
+  search result walks the matches inside it. Find searches whatever the mode is
+  showing: the file's text or bytes in modes 1 and 2, and in document mode the
+  rendered text itself - so a JSON key you can see is a key you can search for,
+  in the form it is drawn rather than the form it is stored in.
 - Encoding detection with a manual override ring.
 - Selection, including column selection, and copy to the system clipboard via
   OSC 52.

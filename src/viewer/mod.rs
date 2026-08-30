@@ -49,6 +49,7 @@ pub mod decode;
 pub mod encoding;
 pub mod fileinfo;
 pub mod find;
+pub mod find_render;
 pub mod hex;
 pub mod highlight;
 pub mod index;
@@ -673,6 +674,19 @@ pub struct Viewer {
 
     /// The find bar and its search.
     find: Find,
+    /// Mode 3's own hits, over the rendered text rather than the file's bytes.
+    /// See [`find_render`].
+    render_hits: Vec<find_render::RenderHit>,
+    /// Which of `render_hits` the cursor is on.
+    render_hit: Option<usize>,
+    /// Whether `render_hits` has been built for the pattern now in the bar.
+    ///
+    /// A seeded pattern - the session's last search, installed when the viewer
+    /// opens - compiles a matcher without running it, so mode 3 can hold a
+    /// live pattern and an empty hit list at the same time. Without this the
+    /// first `n` stepped an empty list and said "not found" about a word that
+    /// is on screen.
+    render_hits_built: bool,
     /// Where the bar was opened, which is where an incremental search starts
     /// from - so typing walks forward from where you were rather than from the
     /// top of the file on every character.
@@ -871,6 +885,9 @@ impl Viewer {
             // `[viewer]` key for the other half of that sentence yet; see the
             // v0.4 notes.
             find: Find::default(),
+            render_hits: Vec::new(),
+            render_hit: None,
+            render_hits_built: false,
             find_origin: found.bom_len,
             find_job: None,
             find_cancel: None,
@@ -2061,6 +2078,20 @@ impl Viewer {
         self.find_origin = self.cursor;
     }
 
+    /// `Ctrl+F` again, with the bar already open: empty it.
+    ///
+    /// A second press used to do nothing, so starting a different search meant
+    /// holding `Backspace` down over the old one. Emptying the bar also drops
+    /// the highlights, which is the honest picture: there is no pattern, so
+    /// nothing on screen matches it.
+    pub fn clear_find(&mut self) -> Result<()> {
+        self.find.set_input("");
+        self.clear_render_hits();
+        self.find_origin = self.cursor;
+        self.run_find()?;
+        Ok(())
+    }
+
     /// What is in the find bar, for the session pattern.
     pub const fn find_query(&self) -> &FindQuery {
         self.find.query()
@@ -2081,6 +2112,7 @@ impl Viewer {
         self.find.set_query(query);
         let hex_mode = matches!(self.mode, ViewerMode::Hex);
         self.find.compile(self.encoding, hex_mode);
+        self.render_hits_built = false;
     }
 
     /// Open on a search hit, with the pattern that found it installed.
@@ -2160,8 +2192,20 @@ impl Viewer {
     }
 
     /// Re-run the incremental search after a change to the query or the mode.
+    ///
+    /// Mode 3 searches the document it drew rather than the file underneath
+    /// it, in memory and in one pass; see [`find_render`] for why the two
+    /// searches are different questions.
     fn run_find(&mut self) -> Result<Found> {
         self.cancel_find_scan();
+        if matches!(self.mode, ViewerMode::Render) {
+            // The matcher is normally compiled inside `Find::search`, which
+            // this path does not reach; mode 3 needs it compiled just the
+            // same, and against plain text rather than hex, because what it
+            // searches is a `String` per line.
+            self.find.recompile(self.encoding, false);
+            return Ok(self.run_find_rendered());
+        }
         let hex_mode = matches!(self.mode, ViewerMode::Hex);
         let enc = self.encoding;
         let from = self.find_origin;
@@ -2187,6 +2231,9 @@ impl Viewer {
     /// position the next `n` carries on from, or the far end of a huge file
     /// would be unreachable by the only key that goes there.
     pub fn find_next(&mut self) -> Result<Found> {
+        if matches!(self.mode, ViewerMode::Render) {
+            return Ok(self.find_step_rendered(true));
+        }
         let Some(matcher) = self.find.matcher().cloned() else {
             return Ok(Found::None);
         };
@@ -2203,6 +2250,9 @@ impl Viewer {
 
     /// `Shift+N` - the previous match. The mirror of [`Viewer::find_next`].
     pub fn find_prev(&mut self) -> Result<Found> {
+        if matches!(self.mode, ViewerMode::Render) {
+            return Ok(self.find_step_rendered(false));
+        }
         let Some(matcher) = self.find.matcher().cloned() else {
             return Ok(Found::None);
         };

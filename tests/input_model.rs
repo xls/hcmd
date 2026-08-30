@@ -2706,8 +2706,22 @@ fn the_find_bar_takes_typing_rather_than_the_keys_those_letters_are_bound_to() {
         "keeping the position"
     );
 
-    // Backspace inside the bar edits it rather than navigating.
+    // Opening the bar again gives an **empty** one: `F7` and `Ctrl+F` mean
+    // "search for something", and the something is what is about to be typed.
+    // A bar that arrived holding the last pattern meant deleting it a
+    // character at a time before a different search could start. The
+    // remembered pattern is not lost - it is what `n` steps.
     press(&mut app, KeyCode::F(7), NONE);
+    assert_eq!(
+        app.viewer().map(|v| v.find().input().to_string()),
+        Some(String::new()),
+        "the bar opens empty"
+    );
+
+    // Backspace inside the bar edits it rather than navigating.
+    for ch in "nine".chars() {
+        press(&mut app, KeyCode::Char(ch), NONE);
+    }
     press(&mut app, KeyCode::Backspace, NONE);
     assert_eq!(
         app.viewer().map(|v| v.find().input().to_string()),

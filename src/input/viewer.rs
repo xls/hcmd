@@ -384,6 +384,9 @@ fn viewer_action(app: &mut App, action: Action, extend: Extend) -> Result<()> {
     let rows = app
         .focused_viewer()
         .map_or(1, crate::viewer::Viewer::view_rows);
+    // Read before the viewer is borrowed mutably: `n` on an empty bar falls
+    // back to it, and the borrow below lasts the rest of the function.
+    let remembered = app.viewers.last_find.clone();
     let Some(viewer) = app.focused_viewer_mut() else {
         // The stack emptied under us. Restore focus rather than sitting in a
         // `Focus::Viewer` with nothing behind it - the same repair
@@ -392,19 +395,21 @@ fn viewer_action(app: &mut App, action: Action, extend: Extend) -> Result<()> {
         return Ok(());
     };
 
-    // Find and selection are byte-range tools, and mode 3 has no byte range
-    // to give them: a rendered line is assembled from text the file may hold
-    // in a dozen places. Saying so and naming the mode that can search is the
-    // rule the whole viewer follows - a key that appears to do nothing is the
-    // thing being avoided.
+    // Selection is a byte-range tool, and mode 3 has no byte range to give it:
+    // a rendered line is assembled from text the file may hold in a dozen
+    // places. Saying so and naming the mode that can is the rule the whole
+    // viewer follows - a key that appears to do nothing is the thing being
+    // avoided.
+    //
+    // **Find is not in that list.** It used to be, and the reasoning was the
+    // same, but it was answering the wrong question: a reader searching a
+    // rendered document is looking for text they can see. Mode 3 searches what
+    // it draws, mode 1 searches the file; see [`crate::viewer::find_render`].
     if viewer.mode() == crate::config::ViewerMode::Render
-        && matches!(
-            action,
-            A::QuickFind | A::FindNext | A::FindPrev | A::SelectAll | A::SelectBlock
-        )
+        && matches!(action, A::SelectAll | A::SelectBlock)
     {
         app.message = Some(
-            "not available in mode 3 - it renders the document, not the file's bytes. Press 1 to search the text".to_string(),
+            "not available in mode 3 - it renders the document, not the file's bytes. Press 1 to select the text".to_string(),
         );
         return Ok(());
     }
@@ -412,8 +417,18 @@ fn viewer_action(app: &mut App, action: Action, extend: Extend) -> Result<()> {
     let outcome = match action {
         // `F7` / `/` / `Ctrl+F` open the bar, `n` / `Shift+N`
         // step. Answered before the borrow below because they report.
+        // `Ctrl+F` is "search for something", and the something is what is
+        // about to be typed. It therefore opens **empty**, every time: a bar
+        // that arrived holding the last pattern meant deleting it a character
+        // at a time before a different search could start.
+        //
+        // The remembered pattern is not lost by this. It belongs to the two
+        // keys that are about the *previous* search: `F3`, which seeds a newly
+        // opened viewer with it, and `n` / `Shift+N` below, which fall back to
+        // it when the bar is empty.
         A::QuickFind => {
             viewer.open_find();
+            viewer.clear_find()?;
             return Ok(());
         }
         A::FindNext | A::FindPrev => {
@@ -421,7 +436,16 @@ fn viewer_action(app: &mut App, action: Action, extend: Extend) -> Result<()> {
             // pattern. Recorded here rather than in the find bar, because
             // this is the point at which a pattern has actually been used to
             // find something and not merely typed.
-            let searched = viewer.find_query().clone();
+            let mut searched = viewer.find_query().clone();
+            // The bar is empty, which `Ctrl+F` now makes routine rather than
+            // rare. Step the session's last pattern if there is one: this key
+            // is the one that means "the search I was already doing".
+            if searched.input.is_empty()
+                && let Some(last) = remembered
+            {
+                searched = last.clone();
+                viewer.seed_find(last);
+            }
             // "pressed with no pattern set, it opens the find
             // bar instead, so the key is never inert". Nothing has been
             // searched for in this session and there is nothing to step to.

@@ -138,7 +138,15 @@ impl Viewer {
                 first: true,
                 text,
                 spans,
-                matches: Vec::new(),
+                // Mode 3's find highlights, in the same coordinates the
+                // spans use: a byte range into this line's own text.
+                matches: if collapsed {
+                    // A summary is not the line that was matched, so a
+                    // highlight rebased onto it would land on the wrong text.
+                    Vec::new()
+                } else {
+                    self.render_matches_on(line)
+                },
                 sel: None,
                 cursor: (line == cursor_line && self.cursor_enabled).then_some(0),
                 cut: false,
