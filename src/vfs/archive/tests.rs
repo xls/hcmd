@@ -360,16 +360,95 @@ async fn a_file_that_is_not_an_archive_is_refused_with_a_reason() {
         .open(&inside(&container, "/"))
         .expect_err("not an archive");
     assert!(err.to_string().contains("not a supported archive"), "{err}");
+}
 
-    // A singly compressed file is not one of the eight either, and
-    // says so rather than opening as an empty directory.
-    let gz = tree.path("notes.txt.gz");
+#[tokio::test]
+async fn a_disk_image_inside_a_compressed_file_opens_or_says_why_not() {
+    // The nesting the xz work makes reachable: `disk.img.gz` holds one member,
+    // and that member is a disk image. Whichever way this goes it must be
+    // said - the one outcome this program does not allow is a key that
+    // appears to do nothing.
+    let tree = TempTree::new("imginsidegz");
+    let image = crate::vfs::image::tests::fat_image(64 * 1024, &[("hello.txt", b"inside")]);
+    let gz = tree.path("disk.img.gz");
     let file = std::fs::File::create(&gz).expect("create");
     let mut encoder = flate2::write::GzEncoder::new(file, flate2::Compression::fast());
-    encoder.write_all(b"not a tar, just text").expect("write");
+    encoder.write_all(&image).expect("write");
     encoder.finish().expect("finish");
-    let err = session.open(&inside(&gz, "/")).expect_err("not a tar");
-    assert!(err.to_string().contains("does not contain a tar"), "{err}");
+
+    let inner = VfsPath::local(&gz)
+        .with_segment(BackendKind::Archive, "/disk.img")
+        .with_segment(BackendKind::Image, "/");
+    // Through the router, which is what decides which backend a path's
+    // innermost segment belongs to. `ArchiveSession::open` is the archive
+    // entry point and refuses an image segment by design.
+    let cfg = crate::config::Config::default();
+    let router = crate::vfs::router::VfsRouter::new(cfg.archive.clone(), cfg.remote.clone());
+    match router.backend_for(&inner) {
+        Ok(fs_impl) => {
+            let (rows, errors) = listing(fs_impl.as_ref(), &inner).await;
+            assert!(errors.is_empty(), "{errors:?}");
+            let names: Vec<&str> = rows
+                .iter()
+                .filter(|e| !e.is_parent)
+                .map(|e| e.name.as_str())
+                .collect();
+            assert!(
+                names.contains(&"hello.txt"),
+                "the image inside the gzip listed nothing: {names:?}"
+            );
+        }
+        Err(err) => {
+            let said = err.to_string();
+            assert!(
+                !said.trim().is_empty(),
+                "a refusal has to say something a reader can act on"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_singly_compressed_file_opens_as_a_container_of_one_member() {
+    // It used to be refused - "a gzip stream that does not contain a tar" -
+    // which is a true sentence about the implementation and an unhelpful one
+    // about a compressed disk image under the cursor. One compressed file is
+    // a container holding exactly one file, and then `Enter`, `F3`, `F5` and
+    // `Alt+F6` all mean what they already mean.
+    let tree = TempTree::new("singlestream");
+    let session = session(&tree);
+    let gz = tree.path("notes.txt.gz");
+    let body = b"not a tar, just text";
+    let file = std::fs::File::create(&gz).expect("create");
+    let mut encoder = flate2::write::GzEncoder::new(file, flate2::Compression::fast());
+    encoder.write_all(body).expect("write");
+    encoder.finish().expect("finish");
+
+    let fs_impl = session
+        .open(&inside(&gz, "/"))
+        .expect("a one-member container");
+    assert_eq!(fs_impl.format(), format::FormatId::Gz);
+    let (rows, errors) = listing(fs_impl.as_ref(), &inside(&gz, "/")).await;
+    assert!(errors.is_empty(), "{errors:?}");
+    let members: Vec<&Entry> = rows.iter().filter(|e| !e.is_parent).collect();
+    let names: Vec<&str> = members.iter().map(|e| e.name.as_str()).collect();
+    assert_eq!(
+        names,
+        vec!["notes.txt"],
+        "the member is the container's name without the compression suffix"
+    );
+    assert_eq!(
+        members[0].size,
+        body.len() as u64,
+        "gzip states its uncompressed size in its last four bytes"
+    );
+
+    let mut reader = fs_impl
+        .open_read(&inside(&gz, "/notes.txt"))
+        .expect("read the member");
+    let mut got = Vec::new();
+    std::io::Read::read_to_end(&mut reader, &mut got).expect("to the end");
+    assert_eq!(got, body, "the member decompresses byte for byte");
 }
 
 #[tokio::test]

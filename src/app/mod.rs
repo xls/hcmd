@@ -1061,6 +1061,21 @@ impl App {
     }
 }
 
+/// The backend to open a file through when it is being treated as a container.
+///
+/// [`container_kind`]'s answer where it has one, and [`BackendKind::Archive`]
+/// where it does not - because by the time this is asked, something has
+/// already decided the file *is* a container, and an archive is the reading
+/// that a content sniff can still overturn.
+///
+/// Split out so `Alt+F6` and `Enter` cannot disagree about what an `.iso` is:
+/// unpack used to hardcode the archive backend and so failed on every disk
+/// image with a message about archives.
+#[must_use]
+pub fn container_backend(name: &str) -> BackendKind {
+    container_kind(name).unwrap_or(BackendKind::Archive)
+}
+
 /// Which kind of container a file name claims to be, if any.
 ///
 /// The name is a hint and never the answer: the design sniffs an archive's

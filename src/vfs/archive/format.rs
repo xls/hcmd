@@ -70,6 +70,14 @@ pub enum FormatId {
     /// `.rar` - read only. RAR compression is patent-encumbered and `unrar`
     /// cannot write.
     Rar,
+    /// A `.gz` that is not a tar: one compressed file, read only.
+    Gz,
+    /// A `.bz2` that is not a tar.
+    Bz2,
+    /// A `.xz` that is not a tar - a compressed disk image, most often.
+    Xz,
+    /// A `.zst` that is not a tar.
+    Zst,
 }
 
 impl FormatId {
@@ -83,6 +91,10 @@ impl FormatId {
         Self::TarZst,
         Self::SevenZ,
         Self::Rar,
+        Self::Gz,
+        Self::Bz2,
+        Self::Xz,
+        Self::Zst,
     ];
 
     /// The name shown in the pack dialog and in error messages.
@@ -96,6 +108,10 @@ impl FormatId {
             Self::TarZst => "tar.zst",
             Self::SevenZ => "7z",
             Self::Rar => "rar",
+            Self::Gz => "gz",
+            Self::Bz2 => "bz2",
+            Self::Xz => "xz",
+            Self::Zst => "zst",
         }
     }
 
@@ -117,6 +133,10 @@ impl FormatId {
             Self::TarZst => ".tar.zst",
             Self::SevenZ => ".7z",
             Self::Rar => ".rar",
+            Self::Gz => ".gz",
+            Self::Bz2 => ".bz2",
+            Self::Xz => ".xz",
+            Self::Zst => ".zst",
         }
     }
 
@@ -140,6 +160,13 @@ impl FormatId {
         (".tar", Self::Tar),
         (".rar", Self::Rar),
         (".7z", Self::SevenZ),
+        // Last, and after every `.tar.*` and `.t*z` row above: a bare
+        // compression suffix is a singly compressed file, and reading
+        // `.tar.gz` as one of those is the mistake the ordering prevents.
+        (".zst", Self::Zst),
+        (".bz2", Self::Bz2),
+        (".gz", Self::Gz),
+        (".xz", Self::Xz),
     ];
 
     /// The suffix of `name` that names a format, and which format that is.
@@ -177,6 +204,10 @@ impl FormatId {
             Self::TarZst => &super::tar::TAR_ZST,
             Self::SevenZ => &super::sevenz::SevenZFormat,
             Self::Rar => &super::rar::RarFormat,
+            Self::Gz => &super::single::GZ,
+            Self::Bz2 => &super::single::BZ2,
+            Self::Xz => &super::single::XZ,
+            Self::Zst => &super::single::ZST,
         }
     }
 }
@@ -717,6 +748,32 @@ fn sniff(head: &[u8]) -> Option<Container> {
     None
 }
 
+/// The single-stream row for a compression, the twin of [`tar_in`].
+const fn single_in(compression: Compression) -> FormatId {
+    match compression {
+        // A `Compression::None` stream is a plain tar and never reaches here;
+        // the arm exists because the enum is matched exhaustively everywhere.
+        Compression::None => FormatId::Tar,
+        Compression::Gzip => FormatId::Gz,
+        Compression::Bzip2 => FormatId::Bz2,
+        Compression::Xz => FormatId::Xz,
+        Compression::Zstd => FormatId::Zst,
+    }
+}
+
+/// Whether a head of bytes is a container this program can browse.
+///
+/// The question `Enter` cannot ask in `dispatch`, which may not read. It is
+/// deliberately narrower than [`detect`]: a definite container magic only, and
+/// not a compressed stream, because deciding whether a gzip holds a tar means
+/// decompressing it and that is more than a keystroke should spend guessing.
+/// A `.tgz` is recognised by its name on the earlier path, and `Ctrl+PgDn`
+/// remains the explicit answer for anything neither route catches.
+#[must_use]
+pub fn head_is_container(head: &[u8]) -> bool {
+    matches!(sniff(head), Some(Container::Format(_)))
+}
+
 /// Identify the archive at `path`: **content first, extension second**.
 ///
 ///
@@ -745,12 +802,12 @@ pub fn detect(path: &Path) -> Result<FormatId> {
             if compressed_holds_a_tar(path, compression)? {
                 Ok(tar_in(compression))
             } else {
-                Err(Error::msg(format!(
-                    "{}: a {} stream that does not contain a tar; hcmd browses \
- compressed tars, not singly compressed files",
-                    path.display(),
-                    compression_label(compression),
-                )))
+                // Not a refusal any more. A stream that is not a tar is one
+                // compressed file, and one compressed file is a container of
+                // exactly one member - which is what makes a `.img.xz` open,
+                // view and unpack like everything else. See
+                // [`super::single`].
+                Ok(single_in(compression))
             }
         }
         None => match FormatId::from_name(&name) {
@@ -771,17 +828,6 @@ pub fn detect(path: &Path) -> Result<FormatId> {
                     .join(", "),
             ))),
         },
-    }
-}
-
-/// A word for an error message.
-const fn compression_label(compression: Compression) -> &'static str {
-    match compression {
-        Compression::None => "raw",
-        Compression::Gzip => "gzip",
-        Compression::Bzip2 => "bzip2",
-        Compression::Xz => "xz",
-        Compression::Zstd => "zstd",
     }
 }
 
@@ -911,7 +957,14 @@ mod tests {
         assert_eq!(FormatId::from_name("a.7z"), Some(FormatId::SevenZ));
         assert_eq!(FormatId::from_name("a.rar"), Some(FormatId::Rar));
         assert_eq!(FormatId::from_name("a.txt"), None);
-        assert_eq!(FormatId::from_name("a.gz"), None, "not a tar");
+        // A bare compression suffix is a container now: one compressed file,
+        // presented as an archive of one member. The point of the ordering is
+        // that `a.tar.gz` above is still a tar and not one of these.
+        assert_eq!(FormatId::from_name("a.gz"), Some(FormatId::Gz));
+        assert_eq!(FormatId::from_name("a.xz"), Some(FormatId::Xz));
+        assert_eq!(FormatId::from_name("disk.img.xz"), Some(FormatId::Xz));
+        assert_eq!(FormatId::from_name("a.bz2"), Some(FormatId::Bz2));
+        assert_eq!(FormatId::from_name("a.zst"), Some(FormatId::Zst));
     }
 
     #[test]

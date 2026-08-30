@@ -46,6 +46,7 @@ pub mod rewrite;
 pub mod safety;
 pub mod session;
 pub mod sevenz;
+pub mod single;
 pub mod stream;
 pub mod tar;
 pub mod zip;

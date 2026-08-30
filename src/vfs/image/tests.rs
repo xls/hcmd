@@ -294,7 +294,7 @@ fn gpt_image(sectors: u64, parts: &[GptPart]) -> Vec<u8> {
 /// The one place this module uses `fatfs`'s write path, and it is
 /// `#[cfg(test)]`: a fixture written by the library that reads it is honest in
 /// a way a hand-rolled boot sector is not.
-fn fat_image(bytes: usize, files: &[(&str, &[u8])]) -> Vec<u8> {
+pub fn fat_image(bytes: usize, files: &[(&str, &[u8])]) -> Vec<u8> {
     let mut disk = std::io::Cursor::new(vec![0u8; bytes]);
     fatfs::format_volume(&mut disk, fatfs::FormatVolumeOptions::new()).expect("format");
     disk.seek(SeekFrom::Start(0)).expect("rewind");

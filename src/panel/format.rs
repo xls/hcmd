@@ -135,6 +135,45 @@ pub fn size_text_with(entry: &Entry, cfg: &PanelConfig, sized: Option<u64>) -> S
     }
 }
 
+/// The `size` column's text, narrowed to the width the column actually got.
+///
+/// A byte count is the one cell whose exact digits are worth more than its
+/// shape until it stops fitting, at which point they are worth nothing: an
+/// end-cropped `1,073,741,8...` reads as a smaller number than it is, which is
+/// worse than no number. So the plain or grouped form is used while it fits,
+/// and a file too large for the column falls back to `1.0 G`, which is what a
+/// reader wanted from a narrow column anyway.
+///
+/// Never widens: with `panel.human_sizes` on, the human form is already the
+/// first thing tried and this changes nothing.
+pub fn size_text_fitting(
+    entry: &Entry,
+    cfg: &PanelConfig,
+    sized: Option<u64>,
+    width: usize,
+) -> String {
+    let exact = size_text_with(entry, cfg, sized);
+    if crate::ui::text::width(&exact) <= width || cfg.human_sizes {
+        return exact;
+    }
+    // `<DIR>` and an empty cell are not numbers and have no shorter form.
+    let Some(bytes) = size_bytes(entry, sized) else {
+        return exact;
+    };
+    human_size(bytes)
+}
+
+/// The number a size cell is about, or `None` when the cell is not a number.
+fn size_bytes(entry: &Entry, sized: Option<u64>) -> Option<u64> {
+    if entry.is_parent {
+        return None;
+    }
+    if entry.is_dir() {
+        return sized;
+    }
+    Some(entry.size)
+}
+
 /// The `date` column's text, in the local time zone, using
 /// `panel.date_format`.
 ///

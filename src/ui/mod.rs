@@ -1679,16 +1679,15 @@ mod tests {
     }
 
     #[test]
-    fn a_cropped_name_is_recoverable_from_the_status_line() {
+    fn a_cropped_name_does_not_displace_the_panel_counts() {
         let mut a = app();
         a.move_cursor_to(3);
         let out = dump(&render(&a, 60, 15));
         let lines: Vec<&str> = out.lines().collect();
-        // The entry row crops the name; the status line starts with it in full,
-        // cropped only by the width of the status line itself. The row is
-        // found by the head of the name, which survives either crop direction -
-        // exactly where a middle crop splits is `panel::text`'s business, not
-        // this test's.
+        // The entry row crops the name in the middle, which is what keeps the
+        // extension. The row is found by the head of the name, which survives
+        // either crop direction - exactly where a middle crop splits is
+        // `panel::text`'s business, not this test's.
         let row = lines
             .iter()
             .find(|l| l.starts_with("\u{2502}a-really-quite"))
@@ -1699,18 +1698,20 @@ mod tests {
             row.contains(".txt"),
             "a middle crop keeps the extension: {row}"
         );
-        let status = lines
-            .iter()
-            .find(|l| l.starts_with("\u{2502}a-really-quite-extr"))
-            .copied()
-            .unwrap_or_default();
-        assert!(
-            status.contains("\u{2502}a-really-quite-extr"),
-            "the left panel's status line starts with the name: {status}"
+        // And the status line is not where the rest of it goes. It used to be,
+        // and a long name then filled the line end to end and pushed out the
+        // one thing only that line says. `Shift+F9` is where a full name is
+        // read, on a box built to hold one.
+        // Both panels' status lines sit side by side on one rendered row, so
+        // this counts occurrences rather than rows.
+        let counts = out.matches(" in 2 files, 1 dir").count();
+        assert_eq!(
+            counts, 2,
+            "both panels keep their counts with the cursor on a long name:\n{out}"
         );
         assert!(
-            status.contains(" in 2 files, 1 dir"),
-            "the right panel still shows its counts: {status}"
+            !out.contains("\u{2502}a-really-quite-extr"),
+            "the status line has been taken over by the filename:\n{out}"
         );
     }
 

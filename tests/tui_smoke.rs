@@ -1615,3 +1615,185 @@ fn ctrl_f2_says_where_two_files_stop_agreeing() {
         "the verdict does not say which two files it is about:\n{text}"
     );
 }
+
+/// A directory holding one very long name and one very large file.
+struct WideFixture {
+    root: PathBuf,
+}
+
+impl WideFixture {
+    fn new(tag: &str) -> Self {
+        let root = std::env::temp_dir().join(format!("hcmd-wide-{}-{tag}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("fixture dir");
+        std::fs::write(
+            root.join("a-name-so-long-that-it-cannot-possibly-fit-inside-one-panel-column.txt"),
+            b"x",
+        )
+        .expect("the long name");
+        // Sparse, so the fixture costs no disk: the listing reads the length.
+        let big = std::fs::File::create(root.join("huge.bin")).expect("the big file");
+        big.set_len(3_221_225_472).expect("a length of 3 GB");
+        Self { root }
+    }
+}
+
+impl Drop for WideFixture {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+
+#[test]
+fn a_long_name_does_not_take_over_the_panel_status_line() {
+    let fixture = WideFixture::new("status");
+    let mut run = Run::new(100, 30);
+    run.cwd = Some(fixture.root.clone());
+    // Onto the long-named file, which is where the status line used to be
+    // replaced by the name itself.
+    let input = keys(&[DOWN]);
+    run.input = &input;
+    let (parser, _) = run_in_pty(run);
+    let text = plain(&parser);
+    let status = text
+        .lines()
+        .find(|l| l.contains(" in ") && l.contains("file"))
+        .unwrap_or_else(|| panic!("no counts on either status line:\n{text}"));
+    assert!(
+        !status.contains("a-name-so-long"),
+        "the status line shows the filename instead of the counts:\n{text}"
+    );
+}
+
+#[test]
+fn a_size_too_wide_for_its_column_steps_down_to_a_human_one() {
+    let fixture = WideFixture::new("size");
+    let mut run = Run::new(100, 30);
+    run.cwd = Some(fixture.root.clone());
+    let (parser, _) = run_in_pty(run);
+    let text = plain(&parser);
+    let row = text
+        .lines()
+        .find(|l| l.contains("huge"))
+        .unwrap_or_else(|| panic!("no row for the big file:\n{text}"));
+    // 3,221,225,472 does not fit the size column, and an end-crop of it would
+    // read as a far smaller number.
+    assert!(
+        row.contains("3.0 G"),
+        "a size too wide for its column was not stepped down:\n{row}"
+    );
+}
+
+/// A zip under a name no extension table knows, which is the `.apkm` case.
+struct OddArchive {
+    root: PathBuf,
+}
+
+impl OddArchive {
+    fn new(tag: &str) -> Self {
+        let root = std::env::temp_dir().join(format!("hcmd-odd-{}-{tag}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("fixture dir");
+        // A store-only zip holding one file, written by hand so the fixture
+        // needs no zip tool on the machine running the test.
+        let name = b"inside-the-apkm.txt";
+        let body = b"hello from inside";
+        let crc = crc32(body);
+        let mut zip: Vec<u8> = Vec::new();
+        let mut local = Vec::new();
+        local.extend_from_slice(b"PK\x03\x04\x14\x00\x00\x00\x00\x00\x00\x00\x00\x00");
+        local.extend_from_slice(&crc.to_le_bytes());
+        local.extend_from_slice(&(body.len() as u32).to_le_bytes());
+        local.extend_from_slice(&(body.len() as u32).to_le_bytes());
+        local.extend_from_slice(&(name.len() as u16).to_le_bytes());
+        local.extend_from_slice(&0u16.to_le_bytes());
+        local.extend_from_slice(name);
+        local.extend_from_slice(body);
+        let offset = zip.len() as u32;
+        zip.extend_from_slice(&local);
+
+        let start = zip.len() as u32;
+        let mut central = Vec::new();
+        central.extend_from_slice(b"PK\x01\x02\x14\x00\x14\x00\x00\x00\x00\x00\x00\x00\x00\x00");
+        central.extend_from_slice(&crc.to_le_bytes());
+        central.extend_from_slice(&(body.len() as u32).to_le_bytes());
+        central.extend_from_slice(&(body.len() as u32).to_le_bytes());
+        central.extend_from_slice(&(name.len() as u16).to_le_bytes());
+        central.extend_from_slice(&[0u8; 8]);
+        central.extend_from_slice(&0u32.to_le_bytes());
+        central.extend_from_slice(&offset.to_le_bytes());
+        central.extend_from_slice(name);
+        let central_len = central.len() as u32;
+        zip.extend_from_slice(&central);
+
+        zip.extend_from_slice(b"PK\x05\x06\x00\x00\x00\x00\x01\x00\x01\x00");
+        zip.extend_from_slice(&central_len.to_le_bytes());
+        zip.extend_from_slice(&start.to_le_bytes());
+        zip.extend_from_slice(&0u16.to_le_bytes());
+
+        std::fs::write(root.join("chrome.apkm"), &zip).expect("the odd archive");
+        Self { root }
+    }
+}
+
+/// CRC-32, so the fixture's zip is well formed rather than merely zip-shaped.
+fn crc32(data: &[u8]) -> u32 {
+    let mut crc = 0xFFFF_FFFFu32;
+    for byte in data {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            let mask = (crc & 1).wrapping_neg();
+            crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+        }
+    }
+    !crc
+}
+
+impl Drop for OddArchive {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+
+#[test]
+fn enter_opens_an_archive_whose_extension_says_nothing() {
+    let fixture = OddArchive::new("apkm");
+    let mut run = Run::new(100, 30);
+    run.cwd = Some(fixture.root.clone());
+    let input = keys(&[DOWN, ENTER]);
+    run.input = &input;
+    run.settle = Duration::from_secs(5);
+    let (parser, _) = run_in_pty(run);
+    let text = plain(&parser);
+    assert!(
+        text.contains("inside-the-apkm"),
+        "Enter on a zip called .apkm did not open it:\n{text}"
+    );
+}
+
+#[test]
+fn alt_f6_asks_where_to_unpack_with_the_other_panel_prefilled() {
+    let fixture = OddArchive::new("unpackdlg");
+    let mut run = Run::new(100, 30);
+    run.cwd = Some(fixture.root.clone());
+    // Onto the archive, then Alt+F6.
+    let input = keys(&[DOWN, b"\x1b[17;3~"]);
+    run.input = &input;
+    run.settle = Duration::from_secs(5);
+    let (parser, _) = run_in_pty(run);
+    let text = plain(&parser);
+    assert!(
+        text.contains("Unpack chrome.apkm to"),
+        "Alt+F6 unpacked without asking where:\n{text}"
+    );
+    assert!(
+        text.contains(&fixture.root.display().to_string()),
+        "the destination is not prefilled with a directory:\n{text}"
+    );
+    // Nothing has read the archive, so there is no count to print, and
+    // `0 files, 0 folders` would be a wrong one rather than a missing one.
+    assert!(
+        !text.contains("0 files"),
+        "the dialog states a count nothing measured:\n{text}"
+    );
+}

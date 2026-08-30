@@ -1393,6 +1393,10 @@ fn criterion_7_alt_f6_unpacks_into_the_other_panels_directory() {
     s.focus_entry("bundle");
 
     s.send(keys::ALT_F6);
+    // `Alt+F6` asks where before it writes anything; the other panel's
+    // directory is already the answer, so this accepts it.
+    s.wait_for("the unpack destination prompt", |t| t.contains("Unpack "));
+    s.send(keys::ENTER);
     s.wait_for("the unpack to finish", |t| t.contains("copied 2 files"));
 
     assert_eq!(
@@ -1571,6 +1575,10 @@ fn criterion_9_a_zip_slip_entry_escapes_nothing_is_named_and_the_rest_extracts()
     });
     s.focus_entry("evil");
     s.send(keys::ALT_F6);
+    // `Alt+F6` asks where before it writes anything; the other panel's
+    // directory is already the answer, so this accepts it.
+    s.wait_for("the unpack destination prompt", |t| t.contains("Unpack "));
+    s.send(keys::ENTER);
     s.wait_for("the unpack to finish", |t| t.contains("copied 2 files"));
 
     assert_eq!(
@@ -1617,6 +1625,10 @@ fn criterion_10_a_symlink_leaving_the_destination_is_refused_and_named() {
     s.focus_entry("linky");
 
     s.send(keys::ALT_F6);
+    // `Alt+F6` asks where before it writes anything; the other panel's
+    // directory is already the answer, so this accepts it.
+    s.wait_for("the unpack destination prompt", |t| t.contains("Unpack "));
+    s.send(keys::ENTER);
     s.wait_for("the refusal", |t| t.contains("link target"));
 
     let shown = s.text();

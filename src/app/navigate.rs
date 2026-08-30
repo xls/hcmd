@@ -14,7 +14,6 @@
 
 use crate::app::{App, ContainerAttempt, OpenRequest, ViewRequest, ViewerStart};
 use crate::app::{container_kind, leaving_name};
-use crate::ops::{JobKind, JobSpec};
 use crate::panel::Side;
 use crate::vfs::BackendKind;
 
@@ -201,7 +200,11 @@ impl App {
     /// there was nothing under the cursor to enter and no attempt was made:
     /// the current generation belongs to some earlier read then, and marking
     /// that one would retry a container the user never asked about.
-    fn enter_container_under_cursor(&mut self, side: Side, kind: BackendKind) -> Option<u64> {
+    pub(super) fn enter_container_under_cursor(
+        &mut self,
+        side: Side,
+        kind: BackendKind,
+    ) -> Option<u64> {
         let tab = self.panel(side).active_tab();
         let entry = tab.current()?;
         if entry.is_parent {
@@ -254,46 +257,5 @@ impl App {
                 ..attempt
             },
         );
-    }
-
-    /// `Alt+F6`: "unpacks the archive under the cursor to the other panel's
-    /// directory".
-    ///
-    /// It is an ordinary `F5` with the archive's *root* as its source, which
-    /// is the whole point of the trait: extraction is
-    /// [`crate::ops`]'s copy engine reading through [`Vfs::open_read`], with
-    /// its progress dialog, its conflict handling and its
-    /// the design summary, and there is no archive-specific extraction
-    /// path to keep in step with it.
-    ///
-    /// The source is the archive root rather than its members because a
-    /// listing of the members is not available without reading the archive,
-    /// and `dispatch` may not. A root has no file name, which is precisely
-    /// what tells the copy engine to put its *contents* into the destination
-    /// rather than a directory named after it - the same rule `cp -r /`
-    /// follows.
-    pub fn unpack_under_cursor(&mut self) {
-        let side = self.active_side;
-        let tab = self.active_panel().active_tab();
-        let Some(entry) = tab.current() else {
-            self.message = Some("there is nothing under the cursor to unpack".to_string());
-            return;
-        };
-        if entry.is_parent || entry.is_dir() {
-            self.message = Some(format!(
-                "{} is a directory, not an archive; Alt+F5 packs, Alt+F6 unpacks",
-                entry.name
-            ));
-            return;
-        }
-        let name = entry.name.clone();
-        let Some(container) = tab.current_path() else {
-            self.message = Some(format!("{name} has no path to unpack"));
-            return;
-        };
-        let dest = self.panel(side.other()).active_tab().path.clone();
-        let root = container.with_segment(BackendKind::Archive, "/");
-        self.message = Some(format!("unpacking {name} into {dest}"));
-        self.request_job(JobSpec::new(JobKind::Copy, vec![root], Some(dest)));
     }
 }

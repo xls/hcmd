@@ -847,4 +847,4 @@ impl Vfs for ImageFs {
 }
 
 #[cfg(test)]
-mod tests;
+pub mod tests;

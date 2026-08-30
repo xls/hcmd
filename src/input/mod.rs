@@ -1209,7 +1209,7 @@ pub(crate) fn run_action(app: &mut App, action: Action, press: KeyPress) -> Resu
         // and "`Alt+F6` unpacks the archive under the cursor to the other
         // panel's directory".
         A::Pack => files::open_pack(app),
-        A::Unpack => app.unpack_under_cursor(),
+        A::Unpack => files::open_unpack(app),
 
         // ------------------------------- the design search rename ----
         // ------------------------------- the design remote connections ---

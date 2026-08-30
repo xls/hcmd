@@ -81,6 +81,37 @@ impl App {
         };
 
         let executable = crate::ops::open::is_executable(mode);
+
+        // A container whose *name* claimed nothing. `Enter` guesses by name in
+        // `dispatch`, because `dispatch` may not read; the head is in hand
+        // here, one frame later, so the guess can be corrected before the file
+        // is handed to an application that would only offer to unpack it. An
+        // `.apkm` is a zip, and so are a great many other extensions nobody
+        // will ever finish tabulating - which is the argument for asking the
+        // bytes rather than growing the table.
+        //
+        // An executable is left alone: a self-extracting archive is both, and
+        // `Enter` on it has always meant the execute policy.
+        //
+        // Only when the cursor is still on the file the request was about. It
+        // may have moved while this was queued, and entering an archive the
+        // user is no longer pointing at is worse than not entering one.
+        if self.config.archive.enter_on_click
+            && !executable
+            && crate::app::container_kind(&name).is_none()
+            && crate::vfs::archive::format::head_is_container(&head)
+        {
+            let side = self.active_side;
+            let still_there = self
+                .panel(side)
+                .active_tab()
+                .current_path()
+                .is_some_and(|at| at == path);
+            if still_there {
+                self.enter_container_under_cursor(side, crate::vfs::BackendKind::Archive);
+                return Ok(());
+            }
+        }
         // Steps 3 and 4. `never_execute` is `Shift+Enter`, which the design
         // says "**always** opens with the associated application, never
         // executes", and `execute = "never"` is the same answer as a setting -

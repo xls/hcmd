@@ -804,11 +804,21 @@ fn criterion_1_typing_navigates_with_the_first_letter_and_smart_case() {
         "`thu` selects `thunder`, got {on:?}"
     );
 
+    //
+    // Quick search refuses a character that would leave the buffer matching
+    // nothing, so *which* character is the dead end depends on the listing.
+    // Where `Thorin` survives, `T` and `Th` both match and `u` is the dead
+    // end. Where the filesystem folded the pair away there is no capitalised
+    // name at all, and the very first `T` is refused - which is the same rule
+    // reaching the same answer one character sooner, not a different one.
     let mut s = Session::start(Launch::new(120, 30, fix.path()));
     s.wait_for_listing();
-    s.press(b"Thu", "the no-match flash", |t| {
-        t.contains("no match: Thu")
-    });
+    let (typed, expected): (&[u8], &str) = if fix.has_case_pair() {
+        (b"Thu", "no match: Thu")
+    } else {
+        (b"T", "no match: T")
+    };
+    s.press(typed, "the no-match flash", |t| t.contains(expected));
     assert!(
         s.text().contains("[Aa]"),
         "the status line says why it did not match:\n{}",

@@ -191,6 +191,9 @@ fn row_width(labels: &[&str]) -> usize {
 /// the copy / move dialog.
 pub struct CopyMoveDialog {
     kind: JobKind,
+    /// A heading that replaces the one [`JobKind`] would give. `None` is the
+    /// ordinary `F5`/`F6` wording.
+    verb: Option<String>,
     count: usize,
     target: Field,
     mask: Field,
@@ -241,6 +244,7 @@ impl CopyMoveDialog {
     ) -> Self {
         let mut dialog = Self {
             kind,
+            verb: None,
             count,
             target: Field::with_mask_selected(target),
             mask: Field::with_text("*.*"),
@@ -261,6 +265,17 @@ impl CopyMoveDialog {
         };
         dialog.rebuild_ring(Control::Target);
         dialog
+    }
+
+    /// Head the box with `verb` instead of the one the [`JobKind`] implies.
+    ///
+    /// For an operation that is a copy underneath but is not called one:
+    /// `Alt+F6` unpacks, and saying "Copy 1 file(s)" about an archive root
+    /// describes the mechanism rather than the request.
+    #[must_use]
+    pub fn with_verb(mut self, verb: impl Into<String>) -> Self {
+        self.verb = Some(verb.into());
+        self
     }
 
     /// Take the checkbox defaults from `[ops]`.
@@ -351,6 +366,13 @@ impl CopyMoveDialog {
     /// The operation and the count, without the trailing preposition - the
     /// border's title.
     fn heading(&self) -> String {
+        // An override for an operation that is a copy underneath but is not
+        // called one: `Alt+F6` is a copy out of an archive root, and a box
+        // titled "Copy 1 file(s) to" would describe the mechanism instead of
+        // the thing the user asked for.
+        if let Some(verb) = self.verb.as_deref() {
+            return verb.to_string();
+        }
         let verb = match self.kind {
             JobKind::Copy => "Copy",
             JobKind::Move => "Rename/Move",
@@ -364,7 +386,15 @@ impl CopyMoveDialog {
     }
 
     /// the statistics line, spinner included while a walk runs.
+    ///
+    /// Empty when nothing has been measured. `Alt+F6` unpacks a container
+    /// root, and how much is inside it is not knowable without reading the
+    /// archive - which this dialog will not do to fill in a line. Printing
+    /// `0 files, 0 folders` there was not a missing figure but a wrong one.
     pub fn stats_line(&self, ascii: bool) -> String {
+        if !self.sizing && self.stats == SelectionStats::default() {
+            return String::new();
+        }
         let body = self.stats.describe(&self.size_text, ascii);
         if self.sizing {
             format!("{} {body}", spinner(self.opened.elapsed(), ascii))

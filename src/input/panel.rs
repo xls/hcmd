@@ -62,7 +62,14 @@ pub(super) fn type_into_quick_search(app: &mut App, c: char) {
         let case = app.config.panel.quick_search_case;
         let query = app.active_panel().quick.buffer.clone();
         app.message = Some(if query.is_empty() {
-            format!("no match: {c}")
+            // The indicator belongs here too: a capital as the first
+            // character is what flips smart case to sensitive, so it is
+            // exactly the case where "why did that not match" has an answer
+            // worth printing. Read off the candidate, which is what was tried.
+            format!(
+                "no match: {c} {}",
+                quicksearch::case_indicator(&candidate, case)
+            )
         } else {
             format!(
                 "no match: {candidate} - still {query} {}",

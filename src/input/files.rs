@@ -520,6 +520,65 @@ pub(super) fn open_copy_move(app: &mut App, kind: JobKind, same_dir: bool) {
     app.push_dialog(Box::new(dialog));
 }
 
+/// `Alt+F6`: unpack the container under the cursor, after asking where.
+///
+/// It used to unpack straight into the other panel with no question asked,
+/// which is the one operation in the program that wrote a whole archive's
+/// worth of files somewhere without showing the destination first. The
+/// destination is the other panel's directory, as `F5`'s is, and it is now a
+/// prefilled answer rather than an assumption.
+///
+/// The source is the container's *root*, so this is an ordinary `F5` and
+/// extraction is the copy engine reading through the [`Vfs`] - progress,
+/// conflicts and the failure summary all come for free.
+///
+/// Which backend the root is opened through comes from the name, exactly as
+/// `Enter` decides it: an `.iso` is a disk image and not a zip, and unpacking
+/// one used to fail with a message about archives because this hardcoded the
+/// archive backend.
+///
+/// [`Vfs`]: crate::vfs::Vfs
+pub(super) fn open_unpack(app: &mut App) {
+    let side = app.active_side;
+    let tab = app.active_panel().active_tab();
+    let Some(entry) = tab.current() else {
+        app.message = Some("there is nothing under the cursor to unpack".to_string());
+        return;
+    };
+    if entry.is_parent || entry.is_dir() {
+        app.message = Some(format!(
+            "{} is a directory, not an archive; Alt+F5 packs, Alt+F6 unpacks",
+            entry.name
+        ));
+        return;
+    }
+    let name = entry.name.clone();
+    let Some(container) = tab.current_path() else {
+        app.message = Some(format!("{name} has no path to unpack"));
+        return;
+    };
+    // The name is a hint, as everywhere else: what it cannot claim is opened
+    // as an archive, and the content decides, one frame later.
+    let kind = crate::app::container_backend(&name);
+    let root = container.with_segment(kind, "/");
+    let target_dir = app.panel(side.other()).active_tab().path.clone();
+
+    let dialog = CopyMoveDialog::new(
+        JobKind::Copy,
+        1,
+        target_dir.join(DEFAULT_TARGET_MASK).to_string(),
+        crate::ops::walk::SelectionStats::default(),
+        &app.config.panel,
+    )
+    .with_config(&app.config.ops)
+    .with_history(app.masks.offered.clone())
+    .with_verb(format!("Unpack {name}"));
+    app.draft.op = Some(JobKind::Copy);
+    app.draft.sources = vec![root];
+    app.draft.target = Some(target_dir);
+    app.push_dialog(Box::new(dialog));
+}
+
 /// `Alt+F5`.
 ///
 /// The target opens on the **other** panel's directory, as `F5`'s does, and on

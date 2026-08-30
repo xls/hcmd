@@ -552,14 +552,22 @@ fn entry_line(
         if i > 0 {
             out.push(' ');
         }
-        let body = columns::cell_text_with(
-            entry,
-            col.id,
-            row.cfg,
-            row.ext_rendered,
-            sized,
-            row.local_ids,
-        );
+        // The size cell is the one that is formatted against its own width:
+        // an exact count that does not fit is cropped into a wrong number,
+        // so it steps down to `1.0 G` instead. Every other cell is formatted
+        // once and cropped if it must be.
+        let body = if col.id == crate::panel::ColumnId::Size {
+            crate::panel::format::size_text_fitting(entry, row.cfg, sized, col.width)
+        } else {
+            columns::cell_text_with(
+                entry,
+                col.id,
+                row.cfg,
+                row.ext_rendered,
+                sized,
+                row.local_ids,
+            )
+        };
         let cell_crop = if col.id.is_flexible() {
             row.crop
         } else {
@@ -667,14 +675,12 @@ fn draw_status(
     let tag_w = text::width(&tag).min(usize::from(area.width));
     let left_w = usize::from(area.width).saturating_sub(tag_w);
 
-    let cropped = name_is_cropped(app, side, allocated);
-    let left = status_text(app, side, cropped);
+    let left = status_text(app, side);
     // A message is middle-cropped, everything else end-cropped. End-cropping a
     // message throws away its verdict and keeps only its subject - a narrow
     // panel would show `Copy the selection to the other panel: …` and hide the
     // `not implemented until v0.4` that is the entire reason for the line.
-    // Counts and a cropped filename read from the left, so they
-    // keep the end crop.
+    // Counts read from the left, so they keep the end crop.
     let crop = if status_is_message(app, side) {
         Crop::Middle
     } else {
@@ -695,35 +701,21 @@ fn draw_status(
     );
 }
 
-/// True when the entry under the cursor does not fit its `name` cell, which is
-/// what makes the status line show the full name instead.
-pub fn name_is_cropped(app: &App, side: Side, allocated: &[Allocated]) -> bool {
-    let tab = app.panel(side).active_tab();
-    let Some(entry) = tab.current() else {
-        return false;
-    };
-    let Some(col) = allocated.iter().find(|c| c.id.is_flexible()) else {
-        return false;
-    };
-    let ext_rendered = allocated
-        .iter()
-        .any(|c| c.id == crate::panel::ColumnId::Ext);
-    // A cropped remote row is measured with the same text it is drawn with,
-    // which is the numeric owner rather than a local name.
-    let local_ids = tab.path.local_path().is_some();
-    let body = columns::cell_text(entry, col.id, &app.config.panel, ext_rendered, local_ids);
-    text::width(&body) > col.width
-}
-
 /// The left-hand text of the panel status line, before the sort tag.
 ///
-/// Three overrides on the counts, highest priority first:
+/// Two overrides on the counts, highest priority first:
 ///
-/// 1. a transient message - an error, or `not implemented until v0.4` - on the
+/// 1. a transient message - an error, or a refusal with its reason - on the
 ///    active panel, since that is where the eye is;
-/// 2. an active quick search, showing the buffer and its case mode;
-/// 3. the full name of the entry under the cursor when its cell cropped it.
-pub fn status_text(app: &App, side: Side, name_cropped: bool) -> String {
+/// 2. an active quick search, showing the buffer and its case mode.
+///
+/// It never shows the name of the entry under the cursor. It used to, whenever
+/// the name cell had cropped it, and that was a bad trade: a long name is
+/// exactly the case where this line is worth the most, and it replaced the
+/// counts with a name the row above was already showing most of. A long enough
+/// name filled the line end to end and the panel reported nothing about itself
+/// at all.
+pub fn status_text(app: &App, side: Side) -> String {
     if app.active_side == side
         && let Some(message) = app.message.as_deref()
     {
@@ -744,9 +736,6 @@ pub fn status_text(app: &App, side: Side, name_cropped: bool) -> String {
     // cropped filename is a statement about one row.
     if let Some(text) = virtual_status(app, side) {
         return text;
-    }
-    if name_cropped && let Some(entry) = panel.active_tab().current() {
-        return entry.name.clone();
     }
     // **Entries** stream in and are drawn as they arrive; the
     // **counts** wait for the listing to finish.
@@ -853,16 +842,16 @@ mod tests {
         );
         app.navigate(Side::Left, crate::vfs::VfsPath::local("/somewhere"));
         assert!(app.left.active_tab().loading);
-        assert_eq!(status_text(&app, Side::Left, false), "reading\u{2026}");
+        assert_eq!(status_text(&app, Side::Left), "reading\u{2026}");
 
         // ...and the ASCII fallback, like every other glyph.
         app.config.ui.ascii_borders = true;
-        assert_eq!(status_text(&app, Side::Left, false), "reading...");
+        assert_eq!(status_text(&app, Side::Left), "reading...");
 
         // Once the read finishes the real counts appear.
         app.config.ui.ascii_borders = false;
         app.left.active_tab_mut().loading = false;
-        assert!(status_text(&app, Side::Left, false).contains("in "));
+        assert!(status_text(&app, Side::Left).contains("in "));
     }
 
     use super::*;
@@ -954,22 +943,19 @@ mod tests {
             crate::panel::VirtualKind::Search,
             "[search: * in /root]",
         );
-        assert_eq!(
-            status_text(&a, Side::Left, false),
-            "search: searching\u{2026}"
-        );
+        assert_eq!(status_text(&a, Side::Left), "search: searching\u{2026}");
         a.config.ui.ascii_borders = true;
-        assert_eq!(status_text(&a, Side::Left, false), "search: searching...");
+        assert_eq!(status_text(&a, Side::Left), "search: searching...");
         a.config.ui.ascii_borders = false;
 
         for i in 0..7u32 {
             assert!(sink.push(Entry::file(format!("f{i}"))));
         }
-        assert_eq!(status_text(&a, Side::Left, false), "search: 7 found");
+        assert_eq!(status_text(&a, Side::Left), "search: 7 found");
         // Even while a row's name is cropped: a search that is still filling is
         // a statement about the panel, and a cropped name about one row.
         a.left.active_tab_mut().entries = vec![Entry::file("a-very-long-name.txt")];
-        assert_eq!(status_text(&a, Side::Left, false), "search: 7 found");
+        assert_eq!(status_text(&a, Side::Left), "search: 7 found");
     }
 
     #[test]
@@ -978,20 +964,17 @@ mod tests {
         a.left.active_tab_mut().path = crate::vfs::VfsPath::local("/root");
         let sink = showing(&mut a, crate::panel::VirtualKind::Branch, "[branch: /root]");
         assert!(sink.push(Entry::file("one.rs")));
-        assert_eq!(status_text(&a, Side::Left, false), "branch: 1 found");
+        assert_eq!(status_text(&a, Side::Left), "branch: 1 found");
 
         // the `Esc`: what was found is kept, and the line says the
         // walk was stopped rather than finished.
         sink.cancel();
-        assert_eq!(
-            status_text(&a, Side::Left, false),
-            "branch: 1 found, stopped"
-        );
+        assert_eq!(status_text(&a, Side::Left), "branch: 1 found, stopped");
         // Once the read has drained, the ordinary counts come back with the
         // same note beside them.
         a.left.active_tab_mut().entries = vec![Entry::file("one.rs")];
         a.left.active_tab_mut().loading = false;
-        let line = status_text(&a, Side::Left, false);
+        let line = status_text(&a, Side::Left);
         assert!(line.contains("in 1 file"), "{line}");
         assert!(line.ends_with("stopped"), "{line}");
     }
@@ -1010,7 +993,7 @@ mod tests {
         sink.finish(crate::vfs::list::ListStatus::Complete);
         a.left.active_tab_mut().entries = vec![Entry::file("one.rs")];
         a.left.active_tab_mut().loading = false;
-        assert!(status_text(&a, Side::Left, false).contains("in 1 file"));
+        assert!(status_text(&a, Side::Left).contains("in 1 file"));
     }
 
     #[test]
@@ -1053,21 +1036,24 @@ mod tests {
     }
 
     #[test]
-    fn a_message_outranks_a_quick_search_which_outranks_a_cropped_name() {
+    fn a_message_outranks_a_quick_search_which_outranks_the_counts() {
         let mut a = app();
         let side = a.active_side;
         a.panel_mut(side).active_tab_mut().entries = vec![Entry::file("a-very-long-name.txt")];
-        assert!(status_text(&a, side, false).contains("in 1 file"));
-        assert_eq!(
-            status_text(&a, side, true),
-            "a-very-long-name.txt",
-            "a cropped name is shown in full"
+        // The counts, and only the counts. A long name in the listing does not
+        // take the line over: the row above already shows the name, and the
+        // line is the only place the panel says anything about itself.
+        assert!(status_text(&a, side).contains("in 1 file"));
+        assert!(
+            !status_text(&a, side).contains("a-very-long-name.txt"),
+            "the status line is not a place to repeat a filename: {}",
+            status_text(&a, side)
         );
         a.panel_mut(side).quick.buffer = "Tho".to_string();
-        assert_eq!(status_text(&a, side, true), "search: Tho [Aa]");
+        assert_eq!(status_text(&a, side), "search: Tho [Aa]");
         a.message = Some("View file: not implemented until v0.4".to_string());
         assert_eq!(
-            status_text(&a, side, true),
+            status_text(&a, side),
             "View file: not implemented until v0.4"
         );
     }
@@ -1077,7 +1063,7 @@ mod tests {
         let mut a = app();
         a.message = Some("boom".to_string());
         let other = a.active_side.other();
-        assert!(!status_text(&a, other, false).contains("boom"));
+        assert!(!status_text(&a, other).contains("boom"));
     }
 
     #[test]

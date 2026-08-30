@@ -713,10 +713,14 @@ fn enter_recognises_a_disk_image_by_name_and_lets_an_archive_name_win() {
         );
         assert_eq!(container_kind(name), Some(BackendKind::Image), "{name}");
     }
+    // A bare compression suffix is a container in its own right: one
+    // compressed file, holding one member. `disk.img.gz` is entered as the
+    // gzip, and the `disk.img` inside it goes on to open as a disk image,
+    // because the segment stack nests.
     assert_eq!(
         container_kind("disk.img.gz"),
-        None,
-        "a bare `.gz` is not in the table and `.gz` is not an image"
+        Some(BackendKind::Archive),
+        "a singly compressed file is a container of one member"
     );
     // And a name that claims neither is still the chain.
     let mut app = app_at(std::path::Path::new("/a"), &["image.png"]);
@@ -1061,36 +1065,73 @@ async fn a_member_reads_through_the_same_vfs_the_viewer_uses() {
     assert_eq!(body, "the whole point");
 }
 
+/// `Alt+F6`, through the action it is bound to.
+fn unpack(app: &mut App) {
+    crate::input::run_action(
+        app,
+        crate::input::Action::Unpack,
+        crate::input::KeyPress::plain(crate::input::KeyCode::F(6)),
+    )
+    .expect("unpack dispatches");
+}
+
 #[test]
-fn alt_f6_queues_a_copy_of_the_archive_root_into_the_other_panel() {
-    // "`Alt+F6` unpacks the archive under the cursor to the
-    // other panel's directory."
+fn alt_f6_asks_where_before_unpacking_anything() {
+    // It unpacks into the other panel's directory, but it says so first: this
+    // is the one operation that used to write a whole archive somewhere
+    // without showing the destination.
     let mut app = app_at(std::path::Path::new("/a"), &["bundle.zip"]);
     app.right.active_tab_mut().path = VfsPath::local("/dest");
-    app.unpack_under_cursor();
-    let jobs = app.take_pending_jobs();
-    assert_eq!(jobs.len(), 1, "one job, through the ordinary copy engine");
-    let spec = &jobs[0].spec;
-    assert_eq!(spec.kind, JobKind::Copy);
-    assert_eq!(spec.sources.len(), 1);
-    assert_eq!(spec.sources[0].to_string(), "/a/bundle.zip#/");
+    unpack(&mut app);
+    assert!(
+        app.take_pending_jobs().is_empty(),
+        "nothing runs until the destination has been shown"
+    );
+    assert_eq!(app.draft.op, Some(JobKind::Copy));
+    assert_eq!(app.draft.sources.len(), 1);
+    assert_eq!(app.draft.sources[0].to_string(), "/a/bundle.zip#/");
     assert_eq!(
-        spec.sources[0].backend(),
+        app.draft.sources[0].backend(),
         BackendKind::Archive,
         "the source is the archive's root, not the container file"
     );
     assert_eq!(
-        spec.dest.as_ref().map(ToString::to_string).as_deref(),
-        Some("/dest")
+        app.draft
+            .target
+            .as_ref()
+            .map(ToString::to_string)
+            .as_deref(),
+        Some("/dest"),
+        "the other panel's directory is the prefilled answer"
     );
 }
 
 #[test]
-fn alt_f6_refuses_a_directory_rather_than_starting_a_job() {
+fn alt_f6_unpacks_a_disk_image_through_the_image_backend() {
+    // An `.iso` is a container this program can read, and it is not a zip.
+    // Hardcoding the archive backend here failed on every disk image with a
+    // message about archives.
+    let mut app = app_at(std::path::Path::new("/a"), &["ubuntu.iso"]);
+    app.right.active_tab_mut().path = VfsPath::local("/dest");
+    unpack(&mut app);
+    assert_eq!(app.draft.sources.len(), 1);
+    assert_eq!(
+        app.draft.sources[0].backend(),
+        BackendKind::Image,
+        "an iso is unpacked as a disk image, not as an archive"
+    );
+}
+
+#[test]
+fn alt_f6_refuses_a_directory_rather_than_opening_a_dialog() {
     let mut app = app_at(std::path::Path::new("/a"), &[]);
     app.left.active_tab_mut().entries = vec![Entry::dir("src")];
-    app.unpack_under_cursor();
+    unpack(&mut app);
     assert!(app.take_pending_jobs().is_empty());
+    assert!(
+        app.draft.sources.is_empty(),
+        "a refusal leaves no draft behind for the next operation to inherit"
+    );
     assert!(
         app.message.is_some_and(|m| m.contains("not an archive")),
         "a refusal with a reason, never a silent no-op"

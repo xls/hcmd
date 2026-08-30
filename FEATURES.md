@@ -45,11 +45,20 @@ Browse into an archive as though it were a directory, and copy files back out.
 Archives nest: an archive inside an archive is extracted to a session cache and
 cleaned up on exit.
 
+The format is decided by the file's **content**, not its extension, so an
+archive under a name no table knows - an `.apkm`, an `.epub`, a `.jar` - opens
+on `Enter` like any other.
+
+A singly compressed file is a container holding exactly one member: `disk.img.xz`
+holds `disk.img`, which can be viewed, copied out, or stepped into as a disk
+image in its own right. The member's size is read from the container where the
+container states it, never by decompressing to find out.
+
 | Format | Read | Write |
 | --- | --- | --- |
 | `.zip` | yes | yes |
 | `.tar`, `.tar.gz`, `.tar.bz2`, `.tar.xz`, `.tar.zst` | yes | yes |
-| `.gz`, `.xz`, `.zst`, `.bz2` (single file) | yes | yes |
+| `.gz`, `.xz`, `.zst`, `.bz2` (single file) | yes | no (writing one means recompressing the whole file) |
 | `.7z` | yes | yes |
 | `.rar` | yes | no (the format is not ours to write) |
 
