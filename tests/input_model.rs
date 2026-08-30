@@ -803,14 +803,23 @@ fn ctrl_digits_sort_by_the_nth_configured_column() {
         SortKey::Column(ColumnId::Date)
     );
 
-    // A column position the layout does not have is a message, not a panic.
-    press(&mut app, KeyCode::Char('9'), CTRL);
+    // A position past the end of the configured order wraps to the start
+    // rather than refusing. With the default five columns that makes Ctrl+6 to
+    // Ctrl+9 a second set of keys for the first four - which is the fallback a
+    // terminal needs when it will not deliver Ctrl+1 to Ctrl+3, either because
+    // it cannot encode them or because it has taken them for its own tabs.
+    press(&mut app, KeyCode::Char('6'), CTRL);
     assert_eq!(
         app.left.active_tab().sort.key,
-        SortKey::Column(ColumnId::Date),
-        "unchanged"
+        SortKey::Column(ColumnId::Name),
+        "ctrl+6 is ctrl+1 again"
     );
-    assert!(app.message.is_some());
+    press(&mut app, KeyCode::Char('8'), CTRL);
+    assert_eq!(
+        app.left.active_tab().sort.key,
+        SortKey::Column(ColumnId::Size),
+        "ctrl+8 is ctrl+3 again"
+    );
 }
 
 #[test]
@@ -822,6 +831,14 @@ fn a_reordered_column_layout_moves_the_sort_keys_with_it() {
     assert_eq!(
         app.left.active_tab().sort.key,
         SortKey::Column(ColumnId::Size)
+    );
+    // And the wrap follows the layout: with three columns the fourth key is
+    // the first one again.
+    press(&mut app, KeyCode::Char('4'), CTRL);
+    assert_eq!(
+        app.left.active_tab().sort.key,
+        SortKey::Column(ColumnId::Name),
+        "ctrl+4 wraps to the first of three columns"
     );
 }
 

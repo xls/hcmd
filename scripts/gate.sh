@@ -375,8 +375,13 @@ install-sh)
 # The npm installer, run the same way. Same claim, different route, so both
 # are proven rather than one standing in for the other.
 install-npx)
-  ver=$(awk -F'"' '/^version/ { print $2; exit }' Cargo.toml)
-  [ -n "$ver" ] || { echo "cannot read the version from Cargo.toml"; exit 1; }
+  # The npm installer fetches the **latest published release**, not this
+  # tree's version - a pinned installer is a stale installer. So the version
+  # to expect is GitHub's answer, not Cargo.toml's, and asserting the latter
+  # would fail every time this tree is ahead of the last release, which is
+  # most of the time.
+  ver=$(gh release view --json tagName --jq '.tagName' 2>/dev/null | sed 's/^v//')
+  [ -n "$ver" ] || { echo "cannot ask github for the latest release"; exit 1; }
   command -v node >/dev/null || { echo "no node on this machine"; exit 1; }
   dir=$(mktemp -d) || exit 1
   out=$(HCMD_INSTALL_DIR="$dir" node packaging/npm/install.js 2>&1) || {

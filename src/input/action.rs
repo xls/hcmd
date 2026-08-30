@@ -261,6 +261,7 @@ actions! {
     SortByDate        = "sort_by_date",      V01,  "Sort by date, whatever the column layout";
     SortBySize        = "sort_by_size",      V01,  "Sort by size, whatever the column layout";
     SortUnsorted      = "sort_unsorted",     V01,  "Leave the listing unsorted";
+    SortDefault       = "sort_default",      V09,  "Sort by name ascending, the default order";
 
     // ------------------------------------------------------------- panel ----
     Open              = "open",              V01,  "Open the entry under the cursor";

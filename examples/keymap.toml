@@ -182,7 +182,12 @@ sort_by_name      = ["ctrl+f3"]
 sort_by_ext       = ["ctrl+f4"]
 sort_by_date      = ["ctrl+f5"]
 sort_by_size      = ["ctrl+f6"]
-sort_unsorted     = ["ctrl+f7"]
+# ctrl+f7 resets to the default order rather than removing the order: an
+# unsorted listing is not an arrangement, and the only way back from one was to
+# remember what had been sorted by. Unsorted keeps its place on the F9 sort
+# menu and moves to shift+f7.
+sort_default      = ["ctrl+f7"]
+sort_unsorted     = ["shift+f7"]
 
 [panel]
 # Printable characters are not bound here: they feed quick search.

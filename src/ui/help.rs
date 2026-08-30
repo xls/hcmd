@@ -155,22 +155,15 @@ pub fn page(app: &App, topic: HelpTopic) -> (String, Option<u64>) {
     };
     (body, at)
 }
-/// The positional sort actions [`sort_block`] will name a column for.
+/// The positional sort actions [`sort_block`] names a column for.
 ///
-/// It walks `panel.columns.order` and stops there, so a binding past the last
-/// configured column is not in the block and must stay in the tables.
-fn positional_sort_keys(app: &App) -> Vec<Action> {
-    let covered = app
-        .config
-        .panel
-        .columns
-        .order
-        .len()
-        .min(SORT_BY_COLUMN.len());
+/// All of them: a key past the end of the configured order wraps to the start
+/// rather than refusing, so every one of them resolves to a column and every
+/// one is documented there with the column it resolves to.
+fn positional_sort_keys(_app: &App) -> Vec<Action> {
     SORT_BY_COLUMN
         .iter()
-        .take(covered)
-        .chain(SORT_SECONDARY.iter().take(covered))
+        .chain(SORT_SECONDARY.iter())
         .copied()
         .collect()
 }
@@ -740,26 +733,45 @@ fn table(keymap: &Keymap, ctx: KeyContext, actions: &[Action], enhanced: bool) -
 fn sort_block(app: &App) -> String {
     let mut out = String::from("\nSorting by column\n\n");
     let order = &app.config.panel.columns.order;
-    let rows: Vec<(String, String)> = order
+    // Every positional key, not merely the configured ones: past the end of
+    // the order they wrap to the start, so with five columns `Ctrl+6` is
+    // `Ctrl+1` again. Those wrapped keys are the fallback for a terminal that
+    // does not deliver `Ctrl+1` to `Ctrl+3`, which makes them the rows most
+    // worth printing rather than the ones to leave out.
+    let rows: Vec<(String, String)> = SORT_BY_COLUMN
         .iter()
-        .take(SORT_BY_COLUMN.len())
         .enumerate()
-        .flat_map(|(index, column)| {
-            let primary = SORT_BY_COLUMN.get(index).copied();
+        .flat_map(|(index, primary)| {
+            let column = order
+                .get(index % order.len().max(1))
+                .copied()
+                .unwrap_or(crate::panel::ColumnId::Name);
+            let wrapped = index >= order.len();
+            let also = if wrapped { ", the same as " } else { "" };
+            let first = if wrapped {
+                app.keymap.describe(
+                    KeyContext::Panel,
+                    SORT_BY_COLUMN
+                        .get(index % order.len().max(1))
+                        .copied()
+                        .unwrap_or(*primary),
+                    app.keyboard.enhanced,
+                )
+            } else {
+                String::new()
+            };
             let secondary = SORT_SECONDARY.get(index).copied();
             [
-                primary.map(|action| {
-                    (
-                        app.keymap
-                            .describe(KeyContext::Panel, action, app.keyboard.enhanced),
-                        format!("Sort by {}", column.header()),
-                    )
-                }),
+                Some((
+                    app.keymap
+                        .describe(KeyContext::Panel, *primary, app.keyboard.enhanced),
+                    format!("Sort by {}{also}{first}", column.header()),
+                )),
                 secondary.map(|action| {
                     (
                         app.keymap
                             .describe(KeyContext::Panel, action, app.keyboard.enhanced),
-                        format!("Secondary sort by {}", column.header()),
+                        format!("Secondary sort by {}{also}{first}", column.header()),
                     )
                 }),
             ]

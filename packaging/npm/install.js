@@ -9,8 +9,15 @@
 // published SHA256SUMS, and installs to ~/.local/bin. It never needs root and
 // it writes nothing outside the install directory.
 //
+// Commands:
+//
+//   npx hcmd-installer            install the latest release
+//   npx hcmd-installer update     the same, but says so when there is nothing
+//                                 to do rather than reinstalling in silence
+//   npx hcmd-installer --version  what is installed, and what is current
+//
 //   HCMD_INSTALL_DIR   where to put the binary   (default ~/.local/bin)
-//   HCMD_VERSION       which release to fetch    (default this package's)
+//   HCMD_VERSION       which release to fetch    (default the latest)
 //
 // No dependencies on purpose. This is the first thing anyone runs, and a
 // installer that pulls a tree of packages to install one binary is not a
@@ -100,21 +107,92 @@ function fetch(url, hops = 0) {
   });
 }
 
-/// The version to install: what was asked for, else this package's own, whose
-/// version is kept in step with the release by the release workflow.
-function version() {
+/// The latest published release, asked of GitHub.
+///
+/// This is what `install.sh` has always done, and what this did **not**: it
+/// installed the version pinned in its own `package.json`, so `npx
+/// hcmd-installer` kept installing whatever was current on the day the npm
+/// package was last published. A pinned installer is a stale installer, and
+/// nobody types `npx` to get last month's build.
+async function latestVersion() {
+  const body = await fetch(
+    `https://api.github.com/repos/${REPO}/releases/latest`
+  );
+  const tag = JSON.parse(body.toString("utf8")).tag_name;
+  if (!tag) throw new Error("no tag_name in the latest release");
+  return String(tag).replace(/^v/, "");
+}
+
+/// The version to install: what was asked for, else the latest published.
+async function version() {
   if (process.env.HCMD_VERSION) return process.env.HCMD_VERSION;
   try {
-    return require("./package.json").version;
+    return await latestVersion();
+  } catch (err) {
+    die(
+      `could not ask github.com for the latest release (${err.message}); ` +
+        "set HCMD_VERSION to install a particular one"
+    );
+    return null;
+  }
+}
+
+/// What is installed already, or `null` when nothing is.
+///
+/// Runs the binary rather than remembering a number in a file: the file could
+/// describe a binary that has since been replaced by hand, and the binary
+/// cannot be wrong about itself.
+function installedVersion() {
+  const bin = path.join(INSTALL_DIR, "hcmd");
+  if (!fs.existsSync(bin)) return null;
+  try {
+    const out = execFileSync(bin, ["--version"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const found = out.match(/\b(\d+\.\d+\.\d+)\b/);
+    return found ? found[1] : null;
   } catch {
     return null;
   }
 }
 
 async function main() {
+  const argv = process.argv.slice(2);
+  const command = argv.find((a) => !a.startsWith("-"));
   const plat = target();
-  const ver = version();
-  if (!ver) die("could not work out which version to install; set HCMD_VERSION");
+
+  // `--version` answers and stops. Both numbers, because the question behind
+  // it is always "am I behind".
+  if (argv.includes("--version") || argv.includes("-v")) {
+    const here = installedVersion();
+    say(here ? `installed: ${here}` : "installed: nothing in " + INSTALL_DIR);
+    try {
+      say(`latest:    ${await latestVersion()}`);
+    } catch (err) {
+      say(`latest:    unknown (${err.message})`);
+    }
+    return;
+  }
+
+  if (command && command !== "install" && command !== "update") {
+    die(`unknown command: ${command} (there are "install" and "update")`);
+  }
+
+  const ver = await version();
+  if (!ver) return;
+
+  // `update` is the same install, with one thing added: it says when there is
+  // nothing to do. Reinstalling an identical binary works and wastes a
+  // download, and silence about it reads as though something happened.
+  if (command === "update" && !process.env.HCMD_VERSION) {
+    const here = installedVersion();
+    if (here === ver) {
+      say(`hcmd ${here} is already the latest release; nothing to do`);
+      return;
+    }
+    if (here) say(`hcmd ${here} installed, ${ver} is the latest`);
+  }
 
   const name = `hcmd-${ver}-${plat}`;
   const base = `https://github.com/${REPO}/releases/download/v${ver}`;

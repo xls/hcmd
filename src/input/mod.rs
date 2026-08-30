@@ -714,6 +714,30 @@ fn open_context_menu(app: &mut App) {
         .with_keys(&app.keymap, app.keyboard.enhanced);
     app.push_dialog(Box::new(dialog));
 }
+/// The column a positional sort key means: `Ctrl+<n>` and its secondary twin.
+///
+/// The n-th configured column, and **past the end of the order it wraps back
+/// to the start**: with the default five columns `Ctrl+6` is `Ctrl+1` again,
+/// `Ctrl+7` is `Ctrl+2`, `Ctrl+8` is `Ctrl+3` and `Ctrl+9` is `Ctrl+4`.
+///
+/// Wrapping rather than refusing, because the high keys were reachable and
+/// good for nothing: there are nine positional actions and at most eight
+/// columns to point them at, a default layout has five, and so `Ctrl+6` to
+/// `Ctrl+9` answered "there is no column 6" and did nothing else.
+///
+/// What they are now is the fallback for the low keys, which is the half of
+/// this that matters. `Ctrl+1` to `Ctrl+3` are exactly the ones a terminal is
+/// most likely not to deliver: without the Kitty keyboard protocol `Ctrl+1`
+/// encodes to nothing at all and `Ctrl+3` encodes to `Escape`, and a terminal
+/// emulator that uses `Ctrl+<n>` for its own tabs takes them before this
+/// program is asked. The fifth column has no fallback and cannot have one,
+/// there being four keys left over rather than five.
+fn sort_column(order: &[crate::panel::ColumnId], n: usize) -> Option<crate::panel::ColumnId> {
+    if order.is_empty() {
+        return None;
+    }
+    order.get(n.saturating_sub(1) % order.len()).copied()
+}
 
 /// Run a resolved action.
 ///
@@ -986,35 +1010,17 @@ pub(crate) fn run_action(app: &mut App, action: Action, press: KeyPress) -> Resu
         // column that is currently hidden.
         a if a.sort_column_index().is_some() => {
             let n = a.sort_column_index().unwrap_or(1);
-            match app
-                .config
-                .panel
-                .columns
-                .order
-                .get(n.saturating_sub(1))
-                .copied()
-            {
+            match sort_column(&app.config.panel.columns.order, n) {
                 Some(column) => app.sort_active(SortKey::Column(column)),
-                None => {
-                    app.message = Some(format!("there is no column {n} in the configured layout"));
-                }
+                None => app.message = Some("no columns are configured".to_string()),
             }
         }
         // the same positional mapping, setting the tiebreak.
         a if a.sort_secondary_index().is_some() => {
             let n = a.sort_secondary_index().unwrap_or(1);
-            match app
-                .config
-                .panel
-                .columns
-                .order
-                .get(n.saturating_sub(1))
-                .copied()
-            {
+            match sort_column(&app.config.panel.columns.order, n) {
                 Some(column) => app.sort_secondary(column),
-                None => {
-                    app.message = Some(format!("there is no column {n} in the configured layout"));
-                }
+                None => app.message = Some("no columns are configured".to_string()),
             }
         }
         A::SortByName => app.sort_active(SortKey::Column(ColumnId::Name)),
@@ -1022,6 +1028,11 @@ pub(crate) fn run_action(app: &mut App, action: Action, press: KeyPress) -> Resu
         A::SortByDate => app.sort_active(SortKey::Column(ColumnId::Date)),
         A::SortBySize => app.sort_active(SortKey::Column(ColumnId::Size)),
         A::SortUnsorted => app.sort_active(SortKey::Unsorted),
+        // `Ctrl+F7`. Total Commander puts "unsorted" here and it is the one
+        // sort nobody wants twice: a listing in whatever order the filesystem
+        // handed it over is not an order, and the way back from it was to
+        // remember which column had been sorted by. This is the way back.
+        A::SortDefault => app.sort_active(SortKey::default()),
 
         // ------------------------------------------------------ toggles -----
         A::ShowHidden => {

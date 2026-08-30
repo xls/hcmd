@@ -128,7 +128,9 @@ npx hcmd-installer
 
 Either one picks the right build for your platform, verifies it against the
 release's published `SHA256SUMS`, and installs to `~/.local/bin`. Neither needs
-root and neither writes anything outside the install directory.
+root and neither writes anything outside the install directory. Both install
+the **latest** release; run either again to update, or
+`npx hcmd-installer update`, which says when there is nothing to do.
 
 | Variable | Meaning |
 | --- | --- |
