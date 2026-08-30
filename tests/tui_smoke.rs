@@ -1786,8 +1786,17 @@ fn alt_f6_asks_where_to_unpack_with_the_other_panel_prefilled() {
         text.contains("Unpack chrome.apkm to"),
         "Alt+F6 unpacked without asking where:\n{text}"
     );
+    // The last component, not the whole path: a macOS `$TMPDIR` is
+    // `/private/var/folders/g3/...`, long enough that the dialog elides the
+    // middle of it, so waiting for the full path waits for text that is never
+    // painted.
+    let tail = fixture
+        .root
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .expect("the fixture directory has a name");
     assert!(
-        text.contains(&fixture.root.display().to_string()),
+        text.contains(&tail),
         "the destination is not prefilled with a directory:\n{text}"
     );
     // Nothing has read the archive, so there is no count to print, and
