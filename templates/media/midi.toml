@@ -1,0 +1,46 @@
+name   = "MIDI"
+endian = "big"
+magic  = { offset = 0, bytes = "4D546864" }
+
+[[field]]
+name   = "chunk_type"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "header_length"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "format"
+type   = "u16"
+offset = 8
+
+[[field]]
+name   = "track_count"
+type   = "u16"
+offset = 10
+
+[[field]]
+name   = "division"
+type   = "u16"
+offset = 12
+
+[summary]
+title = "MIDI file"
+
+[[summary.line]]
+label  = "Format"
+field  = "format"
+render = "enum"
+enum   = { 0 = "one track", 1 = "simultaneous tracks", 2 = "independent tracks" }
+
+[[summary.line]]
+label  = "Tracks"
+field  = "track_count"
+
+[[summary.line]]
+label  = "Division"
+field  = "division"

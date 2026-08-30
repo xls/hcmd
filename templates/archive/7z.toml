@@ -1,0 +1,58 @@
+name   = "7z"
+endian = "little"
+magic  = { offset = 0, bytes = "377ABCAF271C" }
+
+[[field]]
+name   = "signature"
+type   = "bytes"
+size   = 6
+offset = 0
+
+[[field]]
+name   = "version_major"
+type   = "u8"
+offset = 6
+
+[[field]]
+name   = "version_minor"
+type   = "u8"
+offset = 7
+
+[[field]]
+name   = "start_header_crc"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "next_header_offset"
+type   = "u64"
+offset = 12
+
+[[field]]
+name   = "next_header_size"
+type   = "u64"
+offset = 20
+
+[[field]]
+name   = "next_header_crc"
+type   = "u32"
+offset = 28
+
+[summary]
+title = "7z archive"
+
+[[summary.line]]
+label  = "Format version"
+field  = "version_major"
+with   = "version_minor"
+join   = "."
+
+[[summary.line]]
+label  = "Metadata size"
+field  = "next_header_size"
+render = "size"
+
+[[summary.line]]
+label  = "Metadata at"
+field  = "next_header_offset"
+render = "hex"

@@ -1,0 +1,16 @@
+# No magic: the only fixed rule is that bit 7 of the tag is set. Bit 6 says
+# which of the two length encodings follows, and neither is a single byte in
+# every case.
+
+name   = "PGP packet header"
+endian = "big"
+
+[[field]]
+name   = "packet_tag"
+type   = "u8"
+offset = 0
+
+[[field]]
+name   = "length"
+type   = "u8"
+offset = 1

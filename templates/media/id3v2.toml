@@ -1,0 +1,49 @@
+# The tag at the front of most MP3 files. The four size bytes are synchsafe:
+# seven bits of each are used, so the value is not a plain integer and is
+# left as bytes here.
+
+name   = "MP3 ID3v2 tag"
+endian = "big"
+magic  = { offset = 0, bytes = "494433" }
+
+[[field]]
+name   = "identifier"
+type   = "char"
+size   = 3
+offset = 0
+
+[[field]]
+name   = "version_major"
+type   = "u8"
+offset = 3
+
+[[field]]
+name   = "version_minor"
+type   = "u8"
+offset = 4
+
+[[field]]
+name   = "flags"
+type   = "u8"
+offset = 5
+
+[[field]]
+name   = "size"
+type   = "bytes"
+size   = 4
+offset = 6
+
+[summary]
+title = "MP3 with an ID3v2 tag"
+
+[[summary.line]]
+label  = "Tag version"
+field  = "version_major"
+with   = "version_minor"
+join   = "."
+
+[[summary.line]]
+label  = "Tag flags"
+field  = "flags"
+render = "flags"
+flags  = { 16 = "footer", 32 = "experimental", 64 = "extended header", 128 = "unsynchronised" }

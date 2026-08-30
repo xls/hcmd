@@ -1,0 +1,67 @@
+# One page header. The segment table follows it, page_segments bytes long,
+# and the payload after that.
+
+name   = "Ogg page"
+endian = "little"
+magic  = { offset = 0, bytes = "4F676753" }
+
+[[field]]
+name   = "capture_pattern"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "version"
+type   = "u8"
+offset = 4
+
+[[field]]
+name   = "header_type"
+type   = "u8"
+offset = 5
+
+[[field]]
+name   = "granule_position"
+type   = "u64"
+offset = 6
+
+[[field]]
+name   = "serial_number"
+type   = "u32"
+offset = 14
+
+[[field]]
+name   = "page_sequence"
+type   = "u32"
+offset = 18
+
+[[field]]
+name   = "checksum"
+type   = "u32"
+offset = 22
+
+[[field]]
+name   = "page_segments"
+type   = "u8"
+offset = 26
+
+[summary]
+title = "Ogg stream"
+
+[[summary.line]]
+label  = "Page"
+field  = "page_sequence"
+
+[[summary.line]]
+label  = "Stream serial"
+field  = "serial_number"
+render = "hex"
+
+[[summary.line]]
+label  = "Position"
+field  = "granule_position"
+
+[[summary.line]]
+label  = "Segments"
+field  = "page_segments"

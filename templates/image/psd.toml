@@ -1,0 +1,70 @@
+name   = "Photoshop PSD"
+endian = "big"
+magic  = { offset = 0, bytes = "38425053" }
+
+[[field]]
+name   = "signature"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "version"
+type   = "u16"
+offset = 4
+
+[[field]]
+name   = "reserved"
+type   = "bytes"
+size   = 6
+offset = 6
+
+[[field]]
+name   = "channels"
+type   = "u16"
+offset = 12
+
+[[field]]
+name   = "height"
+type   = "u32"
+offset = 14
+
+[[field]]
+name   = "width"
+type   = "u32"
+offset = 18
+
+[[field]]
+name   = "depth"
+type   = "u16"
+offset = 22
+
+[[field]]
+name   = "colour_mode"
+type   = "u16"
+offset = 24
+
+[summary]
+title = "Photoshop image"
+
+[[summary.line]]
+label  = "Dimensions"
+field  = "width"
+with   = "height"
+join   = " x "
+unit   = "px"
+
+[[summary.line]]
+label  = "Channels"
+field  = "channels"
+
+[[summary.line]]
+label  = "Bit depth"
+field  = "depth"
+unit   = "bits per channel"
+
+[[summary.line]]
+label  = "Colour mode"
+field  = "colour_mode"
+render = "enum"
+enum   = { 0 = "bitmap", 1 = "greyscale", 2 = "indexed", 3 = "RGB", 4 = "CMYK", 7 = "multichannel", 8 = "duotone", 9 = "Lab" }

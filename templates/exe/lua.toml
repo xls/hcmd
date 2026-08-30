@@ -1,0 +1,23 @@
+# The two bytes after the signature are all that every Lua version agrees
+# on; what follows differs between 5.1, 5.3 and 5.4. LuaJIT bytecode uses
+# 1B 4C 4A instead and is not matched.
+
+name   = "Lua bytecode"
+endian = "little"
+magic  = { offset = 0, bytes = "1B4C7561" }
+
+[[field]]
+name   = "signature"
+type   = "bytes"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "version"
+type   = "u8"
+offset = 4
+
+[[field]]
+name   = "format"
+type   = "u8"
+offset = 5

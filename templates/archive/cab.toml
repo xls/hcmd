@@ -1,0 +1,91 @@
+name   = "Microsoft CAB"
+endian = "little"
+magic  = { offset = 0, bytes = "4D534346" }
+
+[[field]]
+name   = "signature"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "reserved1"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "cabinet_size"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "reserved2"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "files_offset"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "reserved3"
+type   = "u32"
+offset = 20
+
+[[field]]
+name   = "version_minor"
+type   = "u8"
+offset = 24
+
+[[field]]
+name   = "version_major"
+type   = "u8"
+offset = 25
+
+[[field]]
+name   = "folder_count"
+type   = "u16"
+offset = 26
+
+[[field]]
+name   = "file_count"
+type   = "u16"
+offset = 28
+
+[[field]]
+name   = "flags"
+type   = "u16"
+offset = 30
+
+[[field]]
+name   = "set_id"
+type   = "u16"
+offset = 32
+
+[[field]]
+name   = "cabinet_index"
+type   = "u16"
+offset = 34
+
+[summary]
+title = "Microsoft cabinet"
+
+[[summary.line]]
+label  = "Format version"
+field  = "version_major"
+with   = "version_minor"
+join   = "."
+
+[[summary.line]]
+label  = "Files"
+field  = "file_count"
+
+[[summary.line]]
+label  = "Folders"
+field  = "folder_count"
+
+[[summary.line]]
+label  = "Cabinet size"
+field  = "cabinet_size"
+render = "size"

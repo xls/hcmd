@@ -1,0 +1,148 @@
+# The BIOS parameter block of a FAT12 or FAT16 volume, and the extended
+# block that follows it. The two are told apart by cluster count rather than
+# by anything in the header, which is why one template covers both. The
+# magic is the boot-sector signature at 510.
+
+name   = "FAT12/16 BPB"
+endian = "little"
+magic  = { offset = 510, bytes = "55AA" }
+
+[[field]]
+name   = "jump"
+type   = "bytes"
+size   = 3
+offset = 0
+
+[[field]]
+name   = "oem_name"
+type   = "char"
+size   = 8
+offset = 3
+
+[[field]]
+name   = "bytes_per_sector"
+type   = "u16"
+offset = 11
+
+[[field]]
+name   = "sectors_per_cluster"
+type   = "u8"
+offset = 13
+
+[[field]]
+name   = "reserved_sectors"
+type   = "u16"
+offset = 14
+
+[[field]]
+name   = "num_fats"
+type   = "u8"
+offset = 16
+
+[[field]]
+name   = "root_entries"
+type   = "u16"
+offset = 17
+
+[[field]]
+name   = "total_sectors_16"
+type   = "u16"
+offset = 19
+
+[[field]]
+name   = "media_descriptor"
+type   = "u8"
+offset = 21
+
+[[field]]
+name   = "sectors_per_fat_16"
+type   = "u16"
+offset = 22
+
+[[field]]
+name   = "sectors_per_track"
+type   = "u16"
+offset = 24
+
+[[field]]
+name   = "num_heads"
+type   = "u16"
+offset = 26
+
+[[field]]
+name   = "hidden_sectors"
+type   = "u32"
+offset = 28
+
+[[field]]
+name   = "total_sectors_32"
+type   = "u32"
+offset = 32
+
+[[field]]
+name   = "drive_number"
+type   = "u8"
+offset = 36
+
+[[field]]
+name   = "reserved"
+type   = "u8"
+offset = 37
+
+[[field]]
+name   = "extended_boot_signature"
+type   = "u8"
+offset = 38
+
+[[field]]
+name   = "volume_id"
+type   = "u32"
+offset = 39
+
+[[field]]
+name   = "volume_label"
+type   = "char"
+size   = 11
+offset = 43
+
+[[field]]
+name   = "fs_type"
+type   = "char"
+size   = 8
+offset = 54
+
+[summary]
+title = "FAT12 or FAT16 volume"
+
+[[summary.line]]
+label  = "Volume label"
+field  = "volume_label"
+render = "text"
+
+[[summary.line]]
+label  = "Declared type"
+field  = "fs_type"
+render = "text"
+
+[[summary.line]]
+label  = "Bytes per sector"
+field  = "bytes_per_sector"
+
+[[summary.line]]
+label  = "Sectors per cluster"
+field  = "sectors_per_cluster"
+
+[[summary.line]]
+label  = "Root directory entries"
+field  = "root_entries"
+
+[[summary.line]]
+label  = "Media descriptor"
+field  = "media_descriptor"
+render = "enum"
+enum   = { 240 = "3.5 inch floppy", 248 = "fixed disk", 249 = "5.25 inch floppy", 253 = "5.25 inch floppy", 255 = "5.25 inch floppy" }
+
+[[summary.line]]
+label  = "Serial number"
+field  = "volume_id"
+render = "hex"

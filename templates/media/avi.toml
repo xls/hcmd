@@ -1,0 +1,190 @@
+# The RIFF header, the hdrl list and the main AVI header inside it, which is
+# where an AVI keeps its frame rate and dimensions, followed by the first
+# stream's header. The main header is always 56 bytes of data, so the stream
+# list that follows it lands at 88 and its first stream header at 100; a file
+# with something else between the two has different offsets from 88 on, which
+# the two chunk ids at 88 and 100 will show.
+
+name   = "AVI (RIFF)"
+endian = "little"
+magic  = { offset = 8, bytes = "41564920" }
+
+[[field]]
+name   = "riff"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "file_size"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "form_type"
+type   = "char"
+size   = 4
+offset = 8
+
+[[field]]
+name   = "list_id"
+type   = "char"
+size   = 4
+offset = 12
+
+[[field]]
+name   = "list_size"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "list_type"
+type   = "char"
+size   = 4
+offset = 20
+
+[[field]]
+name   = "avih_id"
+type   = "char"
+size   = 4
+offset = 24
+
+[[field]]
+name   = "avih_size"
+type   = "u32"
+offset = 28
+
+[[field]]
+name   = "micro_sec_per_frame"
+type   = "u32"
+offset = 32
+
+[[field]]
+name   = "max_bytes_per_sec"
+type   = "u32"
+offset = 36
+
+[[field]]
+name   = "padding_granularity"
+type   = "u32"
+offset = 40
+
+[[field]]
+name   = "flags"
+type   = "u32"
+offset = 44
+
+[[field]]
+name   = "total_frames"
+type   = "u32"
+offset = 48
+
+[[field]]
+name   = "initial_frames"
+type   = "u32"
+offset = 52
+
+[[field]]
+name   = "streams"
+type   = "u32"
+offset = 56
+
+[[field]]
+name   = "suggested_buffer_size"
+type   = "u32"
+offset = 60
+
+[[field]]
+name   = "width"
+type   = "u32"
+offset = 64
+
+[[field]]
+name   = "height"
+type   = "u32"
+offset = 68
+
+[[field]]
+name   = "avih_reserved"
+type   = "bytes"
+size   = 16
+offset = 72
+
+[[field]]
+name   = "strl_list_id"
+type   = "char"
+size   = 4
+offset = 88
+
+[[field]]
+name   = "strl_list_size"
+type   = "u32"
+offset = 92
+
+[[field]]
+name   = "strl_type"
+type   = "char"
+size   = 4
+offset = 96
+
+[[field]]
+name   = "strh_id"
+type   = "char"
+size   = 4
+offset = 100
+
+[[field]]
+name   = "strh_size"
+type   = "u32"
+offset = 104
+
+[[field]]
+name   = "stream_type"
+type   = "char"
+size   = 4
+offset = 108
+
+[[field]]
+name   = "codec_fourcc"
+type   = "char"
+size   = 4
+offset = 112
+
+[summary]
+title = "AVI video"
+
+[[summary.line]]
+label  = "Dimensions"
+field  = "width"
+with   = "height"
+join   = " x "
+unit   = "px"
+
+[[summary.line]]
+label  = "Frames"
+field  = "total_frames"
+
+[[summary.line]]
+label  = "Streams"
+field  = "streams"
+
+[[summary.line]]
+label  = "Stream type"
+field  = "stream_type"
+render = "fourcc"
+
+[[summary.line]]
+label  = "Codec"
+field  = "codec_fourcc"
+render = "fourcc"
+
+[[summary.line]]
+label  = "Frame interval"
+field  = "micro_sec_per_frame"
+unit   = "microseconds"
+
+[[summary.line]]
+label  = "Peak data rate"
+field  = "max_bytes_per_sec"
+render = "si"
+unit   = "B/s"

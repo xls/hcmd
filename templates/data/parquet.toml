@@ -1,0 +1,12 @@
+# Parquet writes PAR1 at both ends of the file and keeps its metadata in a
+# footer before the trailing copy.
+
+name   = "Parquet"
+endian = "little"
+magic  = { offset = 0, bytes = "50415231" }
+
+[[field]]
+name   = "magic"
+type   = "char"
+size   = 4
+offset = 0

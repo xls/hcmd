@@ -1,0 +1,22 @@
+# The first 64 bytes are a human-readable creator string, so the signature
+# is at 64.
+
+name   = "VirtualBox VDI"
+endian = "little"
+magic  = { offset = 64, bytes = "7F10DABE" }
+
+[[field]]
+name   = "creator"
+type   = "char"
+size   = 64
+offset = 0
+
+[[field]]
+name   = "signature"
+type   = "u32"
+offset = 64
+
+[[field]]
+name   = "version"
+type   = "u32"
+offset = 68

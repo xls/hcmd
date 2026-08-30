@@ -1,0 +1,120 @@
+# The front of every .exe and .dll. e_lfanew at 60 is the file offset of the
+# PE header.
+
+name   = "DOS MZ header"
+endian = "little"
+magic  = { offset = 0, bytes = "4D5A" }
+
+[[field]]
+name   = "e_magic"
+type   = "char"
+size   = 2
+offset = 0
+
+[[field]]
+name   = "e_cblp"
+type   = "u16"
+offset = 2
+
+[[field]]
+name   = "e_cp"
+type   = "u16"
+offset = 4
+
+[[field]]
+name   = "e_crlc"
+type   = "u16"
+offset = 6
+
+[[field]]
+name   = "e_cparhdr"
+type   = "u16"
+offset = 8
+
+[[field]]
+name   = "e_minalloc"
+type   = "u16"
+offset = 10
+
+[[field]]
+name   = "e_maxalloc"
+type   = "u16"
+offset = 12
+
+[[field]]
+name   = "e_ss"
+type   = "u16"
+offset = 14
+
+[[field]]
+name   = "e_sp"
+type   = "u16"
+offset = 16
+
+[[field]]
+name   = "e_csum"
+type   = "u16"
+offset = 18
+
+[[field]]
+name   = "e_ip"
+type   = "u16"
+offset = 20
+
+[[field]]
+name   = "e_cs"
+type   = "u16"
+offset = 22
+
+[[field]]
+name   = "e_lfarlc"
+type   = "u16"
+offset = 24
+
+[[field]]
+name   = "e_ovno"
+type   = "u16"
+offset = 26
+
+[[field]]
+name   = "e_res"
+type   = "bytes"
+size   = 8
+offset = 28
+
+[[field]]
+name   = "e_oemid"
+type   = "u16"
+offset = 36
+
+[[field]]
+name   = "e_oeminfo"
+type   = "u16"
+offset = 38
+
+[[field]]
+name   = "e_res2"
+type   = "bytes"
+size   = 20
+offset = 40
+
+[[field]]
+name   = "e_lfanew"
+type   = "u32"
+offset = 60
+
+[summary]
+title = "DOS executable header"
+
+[[summary.line]]
+label  = "PE header at"
+field  = "e_lfanew"
+render = "hex"
+
+[[summary.line]]
+label  = "Pages"
+field  = "e_cp"
+
+[[summary.line]]
+label  = "Relocations"
+field  = "e_crlc"

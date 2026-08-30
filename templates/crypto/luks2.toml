@@ -1,0 +1,62 @@
+# The binary header; the rest of a LUKS2 header is a JSON area after it. Its
+# magic is the same as LUKS1's, so version at 6 is what tells the two apart.
+
+name   = "LUKS2 header"
+endian = "big"
+magic  = { offset = 0, bytes = "4C554B53BABE" }
+
+[[field]]
+name   = "magic"
+type   = "bytes"
+size   = 6
+offset = 0
+
+[[field]]
+name   = "version"
+type   = "u16"
+offset = 6
+
+[[field]]
+name   = "hdr_size"
+type   = "u64"
+offset = 8
+
+[[field]]
+name   = "seqid"
+type   = "u64"
+offset = 16
+
+[[field]]
+name   = "label"
+type   = "char"
+size   = 48
+offset = 24
+
+[[field]]
+name   = "checksum_alg"
+type   = "char"
+size   = 32
+offset = 72
+
+[[field]]
+name   = "salt"
+type   = "bytes"
+size   = 64
+offset = 104
+
+[[field]]
+name   = "uuid"
+type   = "char"
+size   = 40
+offset = 168
+
+[[field]]
+name   = "subsystem"
+type   = "char"
+size   = 48
+offset = 208
+
+[[field]]
+name   = "hdr_offset"
+type   = "u64"
+offset = 256

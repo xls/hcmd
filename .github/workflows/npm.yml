@@ -1,0 +1,102 @@
+name: npm installer
+
+# Its own workflow, because it has nothing to do with the binaries.
+#
+# The package downloads a release build at INSTALL time; it does not contain
+# one and does not need one to exist in order to be built, checked or
+# published. Living inside the release workflow meant a change to one Node
+# file could not be tested without first cross-compiling six targets, and a
+# typo in it kept six working binaries off the release page. Here it runs in
+# seconds and answers for itself.
+
+on:
+  push:
+    tags: ["v*"]
+    paths-ignore: ["**"]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "packaging/npm/**"
+      - ".github/workflows/npm.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: build, check and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      # The package's version IS the version it installs, so it comes from
+      # Cargo.toml rather than being maintained by hand in a second place.
+      - name: Take the version from Cargo.toml
+        id: v
+        run: |
+          set -eu
+          version=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+          cd packaging/npm
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = '${version}';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          cat package.json
+
+      - name: Check it parses and declares what it should
+        run: |
+          set -eu
+          cd packaging/npm
+          node --check install.js
+          # The bin entry is the whole interface: `npx hcmd-installer` is a
+          # lookup of this name, and a package that packs without it installs
+          # nothing.
+          node -e "
+            const pkg = require('./package.json');
+            if (!pkg.bin || !pkg.bin['hcmd-installer']) {
+              throw new Error('package.json declares no hcmd-installer bin');
+            }
+            if (pkg.version !== '${{ steps.v.outputs.version }}') {
+              throw new Error('version was not substituted');
+            }
+          "
+
+      # Runs the installer for real against whatever is published, into a
+      # throwaway directory, and executes what it installed. Skipped before the
+      # first release exists, and never silently: it says which.
+      - name: Install from the published release
+        run: |
+          set -eu
+          dir=$(mktemp -d)
+          if HCMD_INSTALL_DIR="$dir" node packaging/npm/install.js; then
+            "$dir/hcmd" --version
+            echo "the installer works against the published release"
+          else
+            echo "no published release to install from yet; the package is still built and checked"
+          fi
+
+      - name: Pack
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          cd packaging/npm && npm pack --pack-destination "$GITHUB_WORKSPACE/dist"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: dist/*.tgz
+
+      # Only on a tag, and only with a token. Without one the job above still
+      # proves the package builds, so a broken installer is caught either way.
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/v') && env.NODE_AUTH_TOKEN != ''
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: cd packaging/npm && npm publish --access public

@@ -1,0 +1,26 @@
+# No magic: a capsule is recognised by its GUID, which is different for
+# every vendor and payload.
+
+name   = "EFI capsule"
+endian = "little"
+
+[[field]]
+name   = "capsule_guid"
+type   = "bytes"
+size   = 16
+offset = 0
+
+[[field]]
+name   = "header_size"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "flags"
+type   = "u32"
+offset = 20
+
+[[field]]
+name   = "capsule_image_size"
+type   = "u32"
+offset = 24

@@ -1,0 +1,55 @@
+# The global header and the first member header. Every field of a member
+# header is ASCII text, space padded; header_end is the two bytes 0x60 0x0A.
+# This covers .a static libraries and .deb.
+
+name   = "ar archive"
+endian = "little"
+magic  = { offset = 0, bytes = "213C617263683E0A" }
+
+[[field]]
+name   = "signature"
+type   = "char"
+size   = 8
+offset = 0
+
+[[field]]
+name   = "member_name"
+type   = "char"
+size   = 16
+offset = 8
+
+[[field]]
+name   = "member_mtime"
+type   = "char"
+size   = 12
+offset = 24
+
+[[field]]
+name   = "member_uid"
+type   = "char"
+size   = 6
+offset = 36
+
+[[field]]
+name   = "member_gid"
+type   = "char"
+size   = 6
+offset = 42
+
+[[field]]
+name   = "member_mode"
+type   = "char"
+size   = 8
+offset = 48
+
+[[field]]
+name   = "member_size"
+type   = "char"
+size   = 10
+offset = 56
+
+[[field]]
+name   = "header_end"
+type   = "char"
+size   = 2
+offset = 66

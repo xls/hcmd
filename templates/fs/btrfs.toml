@@ -1,0 +1,121 @@
+# The primary superblock is at byte 65536, so its magic is at 65600. There
+# are further copies at 64 MiB and 256 GiB.
+
+name   = "btrfs superblock"
+endian = "little"
+offset = 65536
+magic  = { offset = 65600, bytes = "5F42485266535F4D" }
+
+[[field]]
+name   = "csum"
+type   = "bytes"
+size   = 32
+offset = 0
+
+[[field]]
+name   = "fsid"
+type   = "bytes"
+size   = 16
+offset = 32
+
+[[field]]
+name   = "bytenr"
+type   = "u64"
+offset = 48
+
+[[field]]
+name   = "flags"
+type   = "u64"
+offset = 56
+
+[[field]]
+name   = "magic"
+type   = "char"
+size   = 8
+offset = 64
+
+[[field]]
+name   = "generation"
+type   = "u64"
+offset = 72
+
+[[field]]
+name   = "root"
+type   = "u64"
+offset = 80
+
+[[field]]
+name   = "chunk_root"
+type   = "u64"
+offset = 88
+
+[[field]]
+name   = "log_root"
+type   = "u64"
+offset = 96
+
+[[field]]
+name   = "log_root_transid"
+type   = "u64"
+offset = 104
+
+[[field]]
+name   = "total_bytes"
+type   = "u64"
+offset = 112
+
+[[field]]
+name   = "bytes_used"
+type   = "u64"
+offset = 120
+
+[[field]]
+name   = "root_dir_objectid"
+type   = "u64"
+offset = 128
+
+[[field]]
+name   = "num_devices"
+type   = "u64"
+offset = 136
+
+[[field]]
+name   = "sectorsize"
+type   = "u32"
+offset = 144
+
+[[field]]
+name   = "nodesize"
+type   = "u32"
+offset = 148
+
+[summary]
+title = "btrfs volume"
+
+[[summary.line]]
+label  = "Size"
+field  = "total_bytes"
+render = "size"
+
+[[summary.line]]
+label  = "Used"
+field  = "bytes_used"
+render = "size"
+
+[[summary.line]]
+label  = "Devices"
+field  = "num_devices"
+
+[[summary.line]]
+label  = "Sector size"
+field  = "sectorsize"
+render = "size"
+
+[[summary.line]]
+label  = "Node size"
+field  = "nodesize"
+render = "size"
+
+[[summary.line]]
+label  = "Generation"
+field  = "generation"

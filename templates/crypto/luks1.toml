@@ -1,0 +1,68 @@
+# LUKS is big-endian on disk. version reads 1 here; a version of 2 is the
+# format below, which shares the magic and nothing after it.
+
+name   = "LUKS1 header"
+endian = "big"
+magic  = { offset = 0, bytes = "4C554B53BABE" }
+
+[[field]]
+name   = "magic"
+type   = "bytes"
+size   = 6
+offset = 0
+
+[[field]]
+name   = "version"
+type   = "u16"
+offset = 6
+
+[[field]]
+name   = "cipher_name"
+type   = "char"
+size   = 32
+offset = 8
+
+[[field]]
+name   = "cipher_mode"
+type   = "char"
+size   = 32
+offset = 40
+
+[[field]]
+name   = "hash_spec"
+type   = "char"
+size   = 32
+offset = 72
+
+[[field]]
+name   = "payload_offset"
+type   = "u32"
+offset = 104
+
+[[field]]
+name   = "key_bytes"
+type   = "u32"
+offset = 108
+
+[[field]]
+name   = "mk_digest"
+type   = "bytes"
+size   = 20
+offset = 112
+
+[[field]]
+name   = "mk_digest_salt"
+type   = "bytes"
+size   = 32
+offset = 132
+
+[[field]]
+name   = "mk_digest_iter"
+type   = "u32"
+offset = 164
+
+[[field]]
+name   = "uuid"
+type   = "char"
+size   = 40
+offset = 168

@@ -1,0 +1,155 @@
+# The magic includes ei_class = 2, which is what makes this the 64-bit
+# header. ei_data at 5 declares the byte order; this template assumes the
+# little-endian one that x86-64 and aarch64 use.
+
+name   = "ELF64 header"
+endian = "little"
+magic  = { offset = 0, bytes = "7F454C4602" }
+
+[[field]]
+name   = "ei_magic"
+type   = "bytes"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "ei_class"
+type   = "u8"
+offset = 4
+
+[[field]]
+name   = "ei_data"
+type   = "u8"
+offset = 5
+
+[[field]]
+name   = "ei_version"
+type   = "u8"
+offset = 6
+
+[[field]]
+name   = "ei_osabi"
+type   = "u8"
+offset = 7
+
+[[field]]
+name   = "ei_abiversion"
+type   = "u8"
+offset = 8
+
+[[field]]
+name   = "ei_pad"
+type   = "bytes"
+size   = 7
+offset = 9
+
+[[field]]
+name   = "e_type"
+type   = "u16"
+offset = 16
+
+[[field]]
+name   = "e_machine"
+type   = "u16"
+offset = 18
+
+[[field]]
+name   = "e_version"
+type   = "u32"
+offset = 20
+
+[[field]]
+name   = "e_entry"
+type   = "u64"
+offset = 24
+
+[[field]]
+name   = "e_phoff"
+type   = "u64"
+offset = 32
+
+[[field]]
+name   = "e_shoff"
+type   = "u64"
+offset = 40
+
+[[field]]
+name   = "e_flags"
+type   = "u32"
+offset = 48
+
+[[field]]
+name   = "e_ehsize"
+type   = "u16"
+offset = 52
+
+[[field]]
+name   = "e_phentsize"
+type   = "u16"
+offset = 54
+
+[[field]]
+name   = "e_phnum"
+type   = "u16"
+offset = 56
+
+[[field]]
+name   = "e_shentsize"
+type   = "u16"
+offset = 58
+
+[[field]]
+name   = "e_shnum"
+type   = "u16"
+offset = 60
+
+[[field]]
+name   = "e_shstrndx"
+type   = "u16"
+offset = 62
+
+[summary]
+title = "ELF 64-bit binary"
+
+[[summary.line]]
+label  = "Class"
+field  = "ei_class"
+render = "enum"
+enum   = { 1 = "32-bit", 2 = "64-bit" }
+
+[[summary.line]]
+label  = "Byte order"
+field  = "ei_data"
+render = "enum"
+enum   = { 1 = "little endian", 2 = "big endian" }
+
+[[summary.line]]
+label  = "OS/ABI"
+field  = "ei_osabi"
+render = "enum"
+enum   = { 0 = "System V", 1 = "HP-UX", 2 = "NetBSD", 3 = "Linux", 6 = "Solaris", 7 = "AIX", 8 = "IRIX", 9 = "FreeBSD", 12 = "OpenBSD", 64 = "ARM EABI", 97 = "ARM", 255 = "standalone" }
+
+[[summary.line]]
+label  = "Type"
+field  = "e_type"
+render = "enum"
+enum   = { 0 = "none", 1 = "relocatable", 2 = "executable", 3 = "shared object", 4 = "core dump" }
+
+[[summary.line]]
+label  = "Machine"
+field  = "e_machine"
+render = "enum"
+enum   = { 2 = "SPARC", 3 = "x86", 8 = "MIPS", 20 = "PowerPC", 21 = "PowerPC 64", 22 = "S/390", 40 = "ARM", 42 = "SuperH", 43 = "SPARC v9", 50 = "IA-64", 62 = "x86-64", 183 = "AArch64", 243 = "RISC-V", 247 = "BPF", 258 = "LoongArch" }
+
+[[summary.line]]
+label  = "Entry point"
+field  = "e_entry"
+render = "hex"
+
+[[summary.line]]
+label  = "Segments"
+field  = "e_phnum"
+
+[[summary.line]]
+label  = "Sections"
+field  = "e_shnum"

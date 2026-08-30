@@ -1,0 +1,62 @@
+# The superblock of a version 0 or 1 file. Version 2 and 3 replace
+# everything after the version byte at 8.
+
+name   = "HDF5"
+endian = "little"
+magic  = { offset = 0, bytes = "894844460D0A1A0A" }
+
+[[field]]
+name   = "signature"
+type   = "bytes"
+size   = 8
+offset = 0
+
+[[field]]
+name   = "superblock_version"
+type   = "u8"
+offset = 8
+
+[[field]]
+name   = "free_space_version"
+type   = "u8"
+offset = 9
+
+[[field]]
+name   = "root_group_version"
+type   = "u8"
+offset = 10
+
+[[field]]
+name   = "reserved"
+type   = "u8"
+offset = 11
+
+[[field]]
+name   = "shared_header_version"
+type   = "u8"
+offset = 12
+
+[[field]]
+name   = "size_of_offsets"
+type   = "u8"
+offset = 13
+
+[[field]]
+name   = "size_of_lengths"
+type   = "u8"
+offset = 14
+
+[[field]]
+name   = "reserved2"
+type   = "u8"
+offset = 15
+
+[[field]]
+name   = "group_leaf_node_k"
+type   = "u16"
+offset = 16
+
+[[field]]
+name   = "group_internal_node_k"
+type   = "u16"
+offset = 18

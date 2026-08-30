@@ -1,0 +1,67 @@
+# The magic includes compression_method = 8, deflate, which is the only
+# method the format has ever defined.
+
+name   = "GZIP"
+endian = "little"
+magic  = { offset = 0, bytes = "1F8B08" }
+
+[[field]]
+name   = "id1"
+type   = "u8"
+offset = 0
+
+[[field]]
+name   = "id2"
+type   = "u8"
+offset = 1
+
+[[field]]
+name   = "compression_method"
+type   = "u8"
+offset = 2
+
+[[field]]
+name   = "flags"
+type   = "u8"
+offset = 3
+
+[[field]]
+name   = "mtime"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "extra_flags"
+type   = "u8"
+offset = 8
+
+[[field]]
+name   = "operating_system"
+type   = "u8"
+offset = 9
+
+[summary]
+title = "GZIP archive"
+
+[[summary.line]]
+label  = "Compression"
+field  = "compression_method"
+render = "enum"
+enum   = { 8 = "deflate" }
+
+[[summary.line]]
+label  = "Compressed on"
+field  = "operating_system"
+render = "enum"
+enum   = { 0 = "FAT", 1 = "Amiga", 2 = "VMS", 3 = "Unix", 4 = "VM/CMS", 5 = "Atari TOS", 6 = "HPFS", 7 = "Macintosh", 8 = "Z-System", 9 = "CP/M", 10 = "TOPS-20", 11 = "NTFS", 12 = "QDOS", 13 = "Acorn RISC OS", 255 = "unknown" }
+
+[[summary.line]]
+label  = "Original modified"
+field  = "mtime"
+render = "time"
+
+[[summary.line]]
+label  = "Header"
+field  = "flags"
+render = "flags"
+flags  = { 1 = "text", 2 = "header CRC", 4 = "extra field", 8 = "original name", 16 = "comment" }

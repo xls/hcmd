@@ -1,0 +1,62 @@
+# The magic as it appears in a file written on a little-endian machine. A
+# capture with nanosecond timestamps writes 4D 3C B2 A1 instead and is not
+# matched.
+
+name   = "pcap (little endian)"
+endian = "little"
+magic  = { offset = 0, bytes = "D4C3B2A1" }
+
+[[field]]
+name   = "magic_number"
+type   = "u32"
+offset = 0
+
+[[field]]
+name   = "version_major"
+type   = "u16"
+offset = 4
+
+[[field]]
+name   = "version_minor"
+type   = "u16"
+offset = 6
+
+[[field]]
+name   = "thiszone"
+type   = "i32"
+offset = 8
+
+[[field]]
+name   = "sigfigs"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "snaplen"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "network"
+type   = "u32"
+offset = 20
+
+[summary]
+title = "Packet capture"
+
+[[summary.line]]
+label  = "Format version"
+field  = "version_major"
+with   = "version_minor"
+join   = "."
+
+[[summary.line]]
+label  = "Snapshot length"
+field  = "snaplen"
+render = "size"
+
+[[summary.line]]
+label  = "Link type"
+field  = "network"
+render = "enum"
+enum   = { 0 = "null", 1 = "Ethernet", 6 = "token ring", 9 = "PPP", 101 = "raw IP", 105 = "IEEE 802.11", 113 = "Linux cooked capture", 127 = "802.11 radiotap", 228 = "IPv4", 229 = "IPv6" }

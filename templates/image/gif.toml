@@ -1,0 +1,69 @@
+# The header and logical screen descriptor. The magic is the three letters
+# only, so both the 87a and the 89a versions match; the version field says
+# which one this is.
+
+name   = "GIF header"
+endian = "little"
+magic  = { offset = 0, bytes = "474946" }
+
+[[field]]
+name   = "signature"
+type   = "char"
+size   = 3
+offset = 0
+
+[[field]]
+name   = "version"
+type   = "char"
+size   = 3
+offset = 3
+
+[[field]]
+name   = "width"
+type   = "u16"
+offset = 6
+
+[[field]]
+name   = "height"
+type   = "u16"
+offset = 8
+
+[[field]]
+name   = "packed"
+type   = "u8"
+offset = 10
+
+[[field]]
+name   = "background_colour"
+type   = "u8"
+offset = 11
+
+[[field]]
+name   = "pixel_aspect_ratio"
+type   = "u8"
+offset = 12
+
+[summary]
+title = "GIF image"
+
+[[summary.line]]
+label  = "Version"
+field  = "version"
+render = "text"
+
+[[summary.line]]
+label  = "Dimensions"
+field  = "width"
+with   = "height"
+join   = " x "
+unit   = "px"
+
+[[summary.line]]
+label  = "Screen"
+field  = "packed"
+render = "flags"
+flags  = { 8 = "sorted", 128 = "global colour table" }
+
+[[summary.line]]
+label  = "Background colour"
+field  = "background_colour"

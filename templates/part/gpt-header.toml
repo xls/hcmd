@@ -1,0 +1,113 @@
+# The header is at LBA 1, which is byte 512 on a 512-byte-sector disk and
+# byte 4096 on a 4Kn one; the magic here assumes the former. A backup copy
+# is in the last sector.
+
+name   = "GPT header"
+endian = "little"
+offset = 512
+magic  = { offset = 512, bytes = "4546492050415254" }
+
+[[field]]
+name   = "signature"
+type   = "char"
+size   = 8
+offset = 0
+
+[[field]]
+name   = "revision"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "header_size"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "header_crc32"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "reserved"
+type   = "u32"
+offset = 20
+
+[[field]]
+name   = "current_lba"
+type   = "u64"
+offset = 24
+
+[[field]]
+name   = "backup_lba"
+type   = "u64"
+offset = 32
+
+[[field]]
+name   = "first_usable_lba"
+type   = "u64"
+offset = 40
+
+[[field]]
+name   = "last_usable_lba"
+type   = "u64"
+offset = 48
+
+[[field]]
+name   = "disk_guid"
+type   = "bytes"
+size   = 16
+offset = 56
+
+[[field]]
+name   = "partition_entry_lba"
+type   = "u64"
+offset = 72
+
+[[field]]
+name   = "number_of_partition_entries"
+type   = "u32"
+offset = 80
+
+[[field]]
+name   = "size_of_partition_entry"
+type   = "u32"
+offset = 84
+
+[[field]]
+name   = "partition_entry_array_crc32"
+type   = "u32"
+offset = 88
+
+[summary]
+title = "GPT partition table"
+
+[[summary.line]]
+label  = "Revision"
+field  = "revision"
+render = "hex"
+
+[[summary.line]]
+label  = "Header size"
+field  = "header_size"
+unit   = "bytes"
+
+[[summary.line]]
+label  = "First usable block"
+field  = "first_usable_lba"
+
+[[summary.line]]
+label  = "Last usable block"
+field  = "last_usable_lba"
+
+[[summary.line]]
+label  = "Entry array at block"
+field  = "partition_entry_lba"
+
+[[summary.line]]
+label  = "Entries"
+field  = "number_of_partition_entries"
+
+[[summary.line]]
+label  = "Bytes per entry"
+field  = "size_of_partition_entry"

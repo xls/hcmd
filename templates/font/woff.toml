@@ -1,0 +1,69 @@
+name   = "WOFF"
+endian = "big"
+magic  = { offset = 0, bytes = "774F4646" }
+
+[[field]]
+name   = "signature"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "flavor"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "length"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "num_tables"
+type   = "u16"
+offset = 12
+
+[[field]]
+name   = "reserved"
+type   = "u16"
+offset = 14
+
+[[field]]
+name   = "total_sfnt_size"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "major_version"
+type   = "u16"
+offset = 20
+
+[[field]]
+name   = "minor_version"
+type   = "u16"
+offset = 22
+
+[[field]]
+name   = "meta_offset"
+type   = "u32"
+offset = 24
+
+[[field]]
+name   = "meta_length"
+type   = "u32"
+offset = 28
+
+[[field]]
+name   = "meta_orig_length"
+type   = "u32"
+offset = 32
+
+[[field]]
+name   = "priv_offset"
+type   = "u32"
+offset = 36
+
+[[field]]
+name   = "priv_length"
+type   = "u32"
+offset = 40

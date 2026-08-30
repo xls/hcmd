@@ -1,0 +1,61 @@
+# One entry of the array the header's partition_entry_lba points at,
+# size_of_partition_entry bytes apart. partition_name is UTF-16, so in the
+# reading each character is followed by a dot for its zero high byte.
+
+name   = "GPT partition entry"
+endian = "little"
+
+[[field]]
+name   = "partition_type_guid"
+type   = "bytes"
+size   = 16
+offset = 0
+
+[[field]]
+name   = "unique_partition_guid"
+type   = "bytes"
+size   = 16
+offset = 16
+
+[[field]]
+name   = "first_lba"
+type   = "u64"
+offset = 32
+
+[[field]]
+name   = "last_lba"
+type   = "u64"
+offset = 40
+
+[[field]]
+name   = "attributes"
+type   = "u64"
+offset = 48
+
+[[field]]
+name   = "partition_name"
+type   = "char"
+size   = 72
+offset = 56
+
+[summary]
+title = "GPT partition entry"
+
+[[summary.line]]
+label  = "Name"
+field  = "partition_name"
+render = "text"
+
+[[summary.line]]
+label  = "First block"
+field  = "first_lba"
+
+[[summary.line]]
+label  = "Last block"
+field  = "last_lba"
+
+[[summary.line]]
+label  = "Attributes"
+field  = "attributes"
+render = "flags"
+flags  = { 1 = "required by the platform", 2 = "no block IO protocol", 4 = "legacy BIOS bootable" }

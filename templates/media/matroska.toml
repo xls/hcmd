@@ -1,0 +1,22 @@
+# The EBML header id every Matroska and WebM file begins with. Nothing after
+# it is at a fixed offset: EBML element ids and sizes are variable-length,
+# so this template recognises the format and stops rather than mislabelling
+# what follows.
+
+name   = "Matroska EBML"
+endian = "big"
+magic  = { offset = 0, bytes = "1A45DFA3" }
+
+[[field]]
+name   = "ebml_id"
+type   = "bytes"
+size   = 4
+offset = 0
+
+[summary]
+title = "Matroska or WebM"
+
+[[summary.line]]
+label  = "EBML id"
+field  = "ebml_id"
+render = "hex"

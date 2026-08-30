@@ -1,0 +1,24 @@
+# One 188-byte packet. The sync byte 0x47 repeats every 188 bytes, which is
+# how a stream is recognised; the three bytes after it pack the error, unit-
+# start and priority flags, a 13-bit PID, the scrambling control and a
+# continuity counter across byte boundaries.
+
+name   = "MPEG transport stream"
+endian = "big"
+magic  = { offset = 0, bytes = "47" }
+
+[[field]]
+name   = "sync_byte"
+type   = "u8"
+offset = 0
+
+[[field]]
+name   = "flags_and_pid"
+type   = "bytes"
+size   = 2
+offset = 1
+
+[[field]]
+name   = "scrambling_and_cc"
+type   = "u8"
+offset = 3

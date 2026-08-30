@@ -1,0 +1,96 @@
+# The signature and the IHDR chunk, which the format requires to be the
+# first chunk of every PNG.
+
+name   = "PNG"
+endian = "big"
+magic  = { offset = 0, bytes = "89504E470D0A1A0A" }
+
+[[field]]
+name   = "signature"
+type   = "bytes"
+size   = 8
+offset = 0
+
+[[field]]
+name   = "ihdr_length"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "ihdr_type"
+type   = "char"
+size   = 4
+offset = 12
+
+[[field]]
+name   = "width"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "height"
+type   = "u32"
+offset = 20
+
+[[field]]
+name   = "bit_depth"
+type   = "u8"
+offset = 24
+
+[[field]]
+name   = "colour_type"
+type   = "u8"
+offset = 25
+
+[[field]]
+name   = "compression"
+type   = "u8"
+offset = 26
+
+[[field]]
+name   = "filter"
+type   = "u8"
+offset = 27
+
+[[field]]
+name   = "interlace"
+type   = "u8"
+offset = 28
+
+[[field]]
+name   = "ihdr_crc"
+type   = "u32"
+offset = 29
+
+[summary]
+title = "PNG image"
+
+[[summary.line]]
+label  = "Dimensions"
+field  = "width"
+with   = "height"
+join   = " x "
+unit   = "px"
+
+[[summary.line]]
+label  = "Colour"
+field  = "colour_type"
+render = "enum"
+enum   = { 0 = "greyscale", 2 = "RGB", 3 = "indexed", 4 = "greyscale + alpha", 6 = "RGBA" }
+
+[[summary.line]]
+label  = "Bit depth"
+field  = "bit_depth"
+unit   = "bits per channel"
+
+[[summary.line]]
+label  = "Compression"
+field  = "compression"
+render = "enum"
+enum   = { 0 = "deflate" }
+
+[[summary.line]]
+label  = "Interlacing"
+field  = "interlace"
+render = "enum"
+enum   = { 0 = "none", 1 = "Adam7" }

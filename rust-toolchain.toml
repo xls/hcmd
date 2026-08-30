@@ -1,0 +1,5 @@
+# Pinned deliberately; Rust has no LTS channel.
+[toolchain]
+channel    = "1.98.0"
+components = ["rustfmt", "clippy"]
+profile    = "minimal"

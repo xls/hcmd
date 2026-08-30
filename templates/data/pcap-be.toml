@@ -1,0 +1,61 @@
+# The same header written on a big-endian machine, which is how the byte
+# order of a capture is declared.
+
+name   = "pcap (big endian)"
+endian = "big"
+magic  = { offset = 0, bytes = "A1B2C3D4" }
+
+[[field]]
+name   = "magic_number"
+type   = "u32"
+offset = 0
+
+[[field]]
+name   = "version_major"
+type   = "u16"
+offset = 4
+
+[[field]]
+name   = "version_minor"
+type   = "u16"
+offset = 6
+
+[[field]]
+name   = "thiszone"
+type   = "i32"
+offset = 8
+
+[[field]]
+name   = "sigfigs"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "snaplen"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "network"
+type   = "u32"
+offset = 20
+
+[summary]
+title = "Packet capture"
+
+[[summary.line]]
+label  = "Format version"
+field  = "version_major"
+with   = "version_minor"
+join   = "."
+
+[[summary.line]]
+label  = "Snapshot length"
+field  = "snaplen"
+render = "size"
+
+[[summary.line]]
+label  = "Link type"
+field  = "network"
+render = "enum"
+enum   = { 0 = "null", 1 = "Ethernet", 6 = "token ring", 9 = "PPP", 101 = "raw IP", 105 = "IEEE 802.11", 113 = "Linux cooked capture", 127 = "802.11 radiotap", 228 = "IPv4", 229 = "IPv6" }

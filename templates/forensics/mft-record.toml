@@ -1,0 +1,69 @@
+# One FILE record of the master file table. Bit 0 of flags means the record
+# is in use and bit 1 means it is a directory. The last two bytes of every
+# 512-byte sector of the record are held in the fixup array and have to be
+# put back before the attributes can be read.
+
+name   = "NTFS MFT record"
+endian = "little"
+magic  = { offset = 0, bytes = "46494C45" }
+
+[[field]]
+name   = "signature"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "fixup_offset"
+type   = "u16"
+offset = 4
+
+[[field]]
+name   = "fixup_count"
+type   = "u16"
+offset = 6
+
+[[field]]
+name   = "log_file_sequence_number"
+type   = "u64"
+offset = 8
+
+[[field]]
+name   = "sequence_number"
+type   = "u16"
+offset = 16
+
+[[field]]
+name   = "hard_link_count"
+type   = "u16"
+offset = 18
+
+[[field]]
+name   = "first_attribute_offset"
+type   = "u16"
+offset = 20
+
+[[field]]
+name   = "flags"
+type   = "u16"
+offset = 22
+
+[[field]]
+name   = "used_size"
+type   = "u32"
+offset = 24
+
+[[field]]
+name   = "allocated_size"
+type   = "u32"
+offset = 28
+
+[[field]]
+name   = "base_record"
+type   = "u64"
+offset = 32
+
+[[field]]
+name   = "next_attribute_id"
+type   = "u16"
+offset = 40

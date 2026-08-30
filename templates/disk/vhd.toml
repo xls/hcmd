@@ -1,0 +1,87 @@
+# The footer is the last 512 bytes of the file. A dynamic or differencing
+# VHD also keeps a copy of it at the front, which is what the magic at 0
+# recognises; a fixed VHD has it only at the end and will not match.
+
+name   = "VHD footer"
+endian = "big"
+magic  = { offset = 0, bytes = "636F6E6563746978" }
+
+[[field]]
+name   = "cookie"
+type   = "char"
+size   = 8
+offset = 0
+
+[[field]]
+name   = "features"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "file_format_version"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "data_offset"
+type   = "u64"
+offset = 16
+
+[[field]]
+name   = "time_stamp"
+type   = "u32"
+offset = 24
+
+[[field]]
+name   = "creator_application"
+type   = "char"
+size   = 4
+offset = 28
+
+[[field]]
+name   = "creator_version"
+type   = "u32"
+offset = 32
+
+[[field]]
+name   = "creator_host_os"
+type   = "char"
+size   = 4
+offset = 36
+
+[[field]]
+name   = "original_size"
+type   = "u64"
+offset = 40
+
+[[field]]
+name   = "current_size"
+type   = "u64"
+offset = 48
+
+[[field]]
+name   = "disk_geometry"
+type   = "bytes"
+size   = 4
+offset = 56
+
+[[field]]
+name   = "disk_type"
+type   = "u32"
+offset = 60
+
+[[field]]
+name   = "checksum"
+type   = "u32"
+offset = 64
+
+[[field]]
+name   = "unique_id"
+type   = "bytes"
+size   = 16
+offset = 68
+
+[[field]]
+name   = "saved_state"
+type   = "u8"
+offset = 84

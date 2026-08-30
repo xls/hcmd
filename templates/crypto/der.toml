@@ -1,0 +1,17 @@
+# The two bytes an X.509 certificate and most other DER structures begin
+# with: the SEQUENCE tag 0x30 and a length. A length above 127 is itself
+# multi-byte, which is why nothing after these two is at a fixed offset.
+
+name   = "DER sequence"
+endian = "big"
+magic  = { offset = 0, bytes = "30" }
+
+[[field]]
+name   = "tag"
+type   = "u8"
+offset = 0
+
+[[field]]
+name   = "length"
+type   = "u8"
+offset = 1

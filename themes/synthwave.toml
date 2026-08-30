@@ -1,0 +1,93 @@
+# Holos Commander - the synthwave theme.
+# Location: ~/.config/holoscommander/themes/synthwave.toml
+#
+# Generated from a semantic palette so every slot is covered and no two themes
+# disagree about what a slot means. Colours are RGB; the renderer quantizes to
+# 256 or 16 as the terminal allows.
+
+name = "synthwave"
+
+[panel]
+bg              = "#241b2f"
+fg              = "#f8f8f2"
+dir_fg          = "#ffffff"
+exec_fg         = "#72f1b8"
+link_fg         = "#03edf9"
+archive_fg      = "#ff7edb"
+marked_fg       = "#fede5d"
+cursor_bg       = "#ff7edb"
+cursor_fg       = "#241b2f"
+# Drawn when the command line has focus: still clearly visible, one step back.
+cursor_bg_unfocused = "#34294f"
+cursor_fg_unfocused = "#f8f8f2"
+# The cursor bar on the panel that is not active at all.
+inactive_cursor_bg  = "#2c223f"
+inactive_cursor_fg  = "#848bbd"
+border          = "#ff7edb"
+inactive_border = "#848bbd"
+header_bg       = "#241b2f"
+header_fg       = "#fede5d"
+status_bg       = "#241b2f"
+status_fg       = "#03edf9"
+
+[cmdline]
+bg        = "#17121f"
+fg        = "#f8f8f2"
+prompt_fg = "#72f1b8"
+caret     = "#ffffff"
+# The caret is always drawn, focused or not.
+caret_unfocused = "#848bbd"
+
+[keybar]
+number_fg = "#f8f8f2"
+label_bg  = "#ff7edb"
+label_fg  = "#241b2f"
+
+[dialog]
+bg           = "#34294f"
+fg           = "#f8f8f2"
+title        = "#ff7edb"
+border       = "#848bbd"
+button       = "#ff7edb"
+button_focus = "#fe4450"
+input_bg     = "#17121f"
+input_fg     = "#ffffff"
+
+[viewer]
+bg            = "#241b2f"
+fg            = "#f8f8f2"
+line_numbers  = "#848bbd"
+match         = "#fede5d"
+current_match = "#fe4450"
+hex_offset    = "#03edf9"
+hex_ascii     = "#72f1b8"
+selection_bg  = "#ff7edb"
+selection_fg  = "#241b2f"
+
+[syn]
+keyword     = "#ff7edb"
+string      = "#72f1b8"
+comment     = "#848bbd"
+type        = "#03edf9"
+function    = "#03edf9"
+number      = "#fe9156"
+constant    = "#fe9156"
+operator    = "#f8f8f2"
+punctuation = "#848bbd"
+variable    = "#f8f8f2"
+
+# Mapping used when the terminal has only 16 colors.
+[fallback_16]
+"#241b2f" = "black"
+"#17121f" = "black"
+"#f8f8f2" = "white"
+"#ffffff" = "bright_white"
+"#ff7edb" = "bright_cyan"
+"#34294f" = "bright_black"
+"#2c223f" = "bright_black"
+"#848bbd" = "bright_black"
+"#fe4450" = "bright_red"
+"#72f1b8" = "bright_green"
+"#fede5d" = "bright_yellow"
+"#03edf9" = "bright_blue"
+"#fe9156" = "bright_red"

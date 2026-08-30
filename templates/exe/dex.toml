@@ -1,0 +1,152 @@
+# header_size is 112, which is the whole of this template. The magic is dex
+# plus a newline; the three digits after it are the format version.
+
+name   = "Android DEX"
+endian = "little"
+magic  = { offset = 0, bytes = "6465780A" }
+
+[[field]]
+name   = "magic"
+type   = "char"
+size   = 8
+offset = 0
+
+[[field]]
+name   = "checksum"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "signature"
+type   = "bytes"
+size   = 20
+offset = 12
+
+[[field]]
+name   = "file_size"
+type   = "u32"
+offset = 32
+
+[[field]]
+name   = "header_size"
+type   = "u32"
+offset = 36
+
+[[field]]
+name   = "endian_tag"
+type   = "u32"
+offset = 40
+
+[[field]]
+name   = "link_size"
+type   = "u32"
+offset = 44
+
+[[field]]
+name   = "link_off"
+type   = "u32"
+offset = 48
+
+[[field]]
+name   = "map_off"
+type   = "u32"
+offset = 52
+
+[[field]]
+name   = "string_ids_size"
+type   = "u32"
+offset = 56
+
+[[field]]
+name   = "string_ids_off"
+type   = "u32"
+offset = 60
+
+[[field]]
+name   = "type_ids_size"
+type   = "u32"
+offset = 64
+
+[[field]]
+name   = "type_ids_off"
+type   = "u32"
+offset = 68
+
+[[field]]
+name   = "proto_ids_size"
+type   = "u32"
+offset = 72
+
+[[field]]
+name   = "proto_ids_off"
+type   = "u32"
+offset = 76
+
+[[field]]
+name   = "field_ids_size"
+type   = "u32"
+offset = 80
+
+[[field]]
+name   = "field_ids_off"
+type   = "u32"
+offset = 84
+
+[[field]]
+name   = "method_ids_size"
+type   = "u32"
+offset = 88
+
+[[field]]
+name   = "method_ids_off"
+type   = "u32"
+offset = 92
+
+[[field]]
+name   = "class_defs_size"
+type   = "u32"
+offset = 96
+
+[[field]]
+name   = "class_defs_off"
+type   = "u32"
+offset = 100
+
+[[field]]
+name   = "data_size"
+type   = "u32"
+offset = 104
+
+[[field]]
+name   = "data_off"
+type   = "u32"
+offset = 108
+
+[summary]
+title = "Android DEX bytecode"
+
+[[summary.line]]
+label  = "Version"
+field  = "magic"
+render = "text"
+
+[[summary.line]]
+label  = "File size"
+field  = "file_size"
+render = "size"
+
+[[summary.line]]
+label  = "Classes"
+field  = "class_defs_size"
+
+[[summary.line]]
+label  = "Methods"
+field  = "method_ids_size"
+
+[[summary.line]]
+label  = "Fields"
+field  = "field_ids_size"
+
+[[summary.line]]
+label  = "Strings"
+field  = "string_ids_size"

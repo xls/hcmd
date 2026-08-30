@@ -1,0 +1,81 @@
+# One entry of the program header table, which is at e_phoff and is
+# e_phentsize bytes per entry. No magic: it is not at a fixed place in the
+# file.
+
+name   = "ELF64 program header"
+endian = "little"
+
+[[field]]
+name   = "p_type"
+type   = "u32"
+offset = 0
+
+[[field]]
+name   = "p_flags"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "p_offset"
+type   = "u64"
+offset = 8
+
+[[field]]
+name   = "p_vaddr"
+type   = "u64"
+offset = 16
+
+[[field]]
+name   = "p_paddr"
+type   = "u64"
+offset = 24
+
+[[field]]
+name   = "p_filesz"
+type   = "u64"
+offset = 32
+
+[[field]]
+name   = "p_memsz"
+type   = "u64"
+offset = 40
+
+[[field]]
+name   = "p_align"
+type   = "u64"
+offset = 48
+
+[summary]
+title = "ELF program header"
+
+[[summary.line]]
+label  = "Type"
+field  = "p_type"
+render = "enum"
+enum   = { 0 = "unused", 1 = "loadable", 2 = "dynamic linking", 3 = "interpreter", 4 = "note", 6 = "program headers", 7 = "thread-local storage" }
+
+[[summary.line]]
+label  = "Permissions"
+field  = "p_flags"
+render = "flags"
+flags  = { 1 = "execute", 2 = "write", 4 = "read" }
+
+[[summary.line]]
+label  = "In the file at"
+field  = "p_offset"
+render = "hex"
+
+[[summary.line]]
+label  = "In memory at"
+field  = "p_vaddr"
+render = "hex"
+
+[[summary.line]]
+label  = "Size in file"
+field  = "p_filesz"
+render = "size"
+
+[[summary.line]]
+label  = "Size in memory"
+field  = "p_memsz"
+render = "size"

@@ -1,0 +1,142 @@
+# One 512-byte header block. Every numeric field is ASCII octal, not a
+# binary number, which is why they are all char here. The size, checksum and
+# typeflag offsets are the ones src/vfs/archive/tar.rs reads.
+
+name   = "TAR (ustar)"
+endian = "big"
+magic  = { offset = 257, bytes = "7573746172" }
+
+[[field]]
+name   = "name"
+type   = "char"
+size   = 100
+offset = 0
+
+[[field]]
+name   = "mode"
+type   = "char"
+size   = 8
+offset = 100
+
+[[field]]
+name   = "uid"
+type   = "char"
+size   = 8
+offset = 108
+
+[[field]]
+name   = "gid"
+type   = "char"
+size   = 8
+offset = 116
+
+[[field]]
+name   = "size"
+type   = "char"
+size   = 12
+offset = 124
+
+[[field]]
+name   = "mtime"
+type   = "char"
+size   = 12
+offset = 136
+
+[[field]]
+name   = "checksum"
+type   = "char"
+size   = 8
+offset = 148
+
+[[field]]
+name   = "typeflag"
+type   = "char"
+size   = 1
+offset = 156
+
+[[field]]
+name   = "linkname"
+type   = "char"
+size   = 100
+offset = 157
+
+[[field]]
+name   = "magic"
+type   = "char"
+size   = 6
+offset = 257
+
+[[field]]
+name   = "version"
+type   = "char"
+size   = 2
+offset = 263
+
+[[field]]
+name   = "uname"
+type   = "char"
+size   = 32
+offset = 265
+
+[[field]]
+name   = "gname"
+type   = "char"
+size   = 32
+offset = 297
+
+[[field]]
+name   = "devmajor"
+type   = "char"
+size   = 8
+offset = 329
+
+[[field]]
+name   = "devminor"
+type   = "char"
+size   = 8
+offset = 337
+
+[[field]]
+name   = "prefix"
+type   = "char"
+size   = 155
+offset = 345
+
+[summary]
+title = "TAR archive"
+
+[[summary.line]]
+label  = "First member"
+field  = "name"
+render = "text"
+
+[[summary.line]]
+label  = "Its size"
+field  = "size"
+render = "size"
+base   = 8
+
+[[summary.line]]
+label  = "Its type"
+field  = "typeflag"
+render = "enum"
+base   = 10
+enum   = { 0 = "regular file", 1 = "hard link", 2 = "symbolic link", 3 = "character device", 4 = "block device", 5 = "directory", 6 = "FIFO", 7 = "contiguous file" }
+
+[[summary.line]]
+label  = "Its mode"
+field  = "mode"
+render = "text"
+
+[[summary.line]]
+label  = "Owner"
+field  = "uname"
+with   = "gname"
+join   = "/"
+render = "text"
+
+[[summary.line]]
+label  = "Modified"
+field  = "mtime"
+render = "time"
+base   = 8

@@ -1,0 +1,47 @@
+# The last record of a ZIP, whose signature is 50 4B 05 06. No magic here:
+# this record is at the end of the file, at a position that depends on the
+# comment length, so there is no fixed offset to recognise it at.
+
+name   = "ZIP end of central directory"
+endian = "little"
+
+[[field]]
+name   = "signature"
+type   = "bytes"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "disk_number"
+type   = "u16"
+offset = 4
+
+[[field]]
+name   = "disk_with_central_dir"
+type   = "u16"
+offset = 6
+
+[[field]]
+name   = "entries_on_this_disk"
+type   = "u16"
+offset = 8
+
+[[field]]
+name   = "entries_total"
+type   = "u16"
+offset = 10
+
+[[field]]
+name   = "central_directory_size"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "central_directory_offset"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "comment_length"
+type   = "u16"
+offset = 20

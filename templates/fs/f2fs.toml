@@ -1,0 +1,61 @@
+# The superblock is at byte 1024, with a second copy one block later.
+
+name   = "F2FS superblock"
+endian = "little"
+offset = 1024
+magic  = { offset = 1024, bytes = "1020F5F2" }
+
+[[field]]
+name   = "magic"
+type   = "u32"
+offset = 0
+
+[[field]]
+name   = "major_version"
+type   = "u16"
+offset = 4
+
+[[field]]
+name   = "minor_version"
+type   = "u16"
+offset = 6
+
+[[field]]
+name   = "log_sectorsize"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "log_sectors_per_block"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "log_blocksize"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "log_blocks_per_seg"
+type   = "u32"
+offset = 20
+
+[[field]]
+name   = "segs_per_sec"
+type   = "u32"
+offset = 24
+
+[[field]]
+name   = "secs_per_zone"
+type   = "u32"
+offset = 28
+
+[[field]]
+name   = "checksum_offset"
+type   = "u32"
+offset = 32
+
+[[field]]
+name   = "block_count"
+type   = "u64"
+offset = 36

@@ -1,0 +1,100 @@
+# QCOW2 is big-endian on disk. cluster_bits is a power of two, usually 16
+# for 64 KiB clusters.
+
+name   = "QCOW2"
+endian = "big"
+magic  = { offset = 0, bytes = "514649FB" }
+
+[[field]]
+name   = "magic"
+type   = "bytes"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "version"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "backing_file_offset"
+type   = "u64"
+offset = 8
+
+[[field]]
+name   = "backing_file_size"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "cluster_bits"
+type   = "u32"
+offset = 20
+
+[[field]]
+name   = "size"
+type   = "u64"
+offset = 24
+
+[[field]]
+name   = "crypt_method"
+type   = "u32"
+offset = 32
+
+[[field]]
+name   = "l1_size"
+type   = "u32"
+offset = 36
+
+[[field]]
+name   = "l1_table_offset"
+type   = "u64"
+offset = 40
+
+[[field]]
+name   = "refcount_table_offset"
+type   = "u64"
+offset = 48
+
+[[field]]
+name   = "refcount_table_clusters"
+type   = "u32"
+offset = 56
+
+[[field]]
+name   = "nb_snapshots"
+type   = "u32"
+offset = 60
+
+[[field]]
+name   = "snapshots_offset"
+type   = "u64"
+offset = 64
+
+[summary]
+title = "QCOW2 disk image"
+
+[[summary.line]]
+label  = "Format version"
+field  = "version"
+
+[[summary.line]]
+label  = "Virtual size"
+field  = "size"
+render = "size"
+
+[[summary.line]]
+label  = "Cluster size"
+field  = "cluster_bits"
+render = "enum"
+enum   = { 9 = "512 bytes", 12 = "4 KB", 16 = "64 KB", 17 = "128 KB", 21 = "2 MB" }
+
+[[summary.line]]
+label  = "Encryption"
+field  = "crypt_method"
+render = "enum"
+enum   = { 0 = "none", 1 = "AES", 2 = "LUKS" }
+
+[[summary.line]]
+label  = "Snapshots"
+field  = "nb_snapshots"

@@ -1,0 +1,68 @@
+# The signature is the eight bytes ElfFile followed by a zero.
+
+name   = "Windows EVTX"
+endian = "little"
+magic  = { offset = 0, bytes = "456C6646696C6500" }
+
+[[field]]
+name   = "signature"
+type   = "char"
+size   = 8
+offset = 0
+
+[[field]]
+name   = "first_chunk_number"
+type   = "u64"
+offset = 8
+
+[[field]]
+name   = "last_chunk_number"
+type   = "u64"
+offset = 16
+
+[[field]]
+name   = "next_record_id"
+type   = "u64"
+offset = 24
+
+[[field]]
+name   = "header_size"
+type   = "u32"
+offset = 32
+
+[[field]]
+name   = "minor_version"
+type   = "u16"
+offset = 36
+
+[[field]]
+name   = "major_version"
+type   = "u16"
+offset = 38
+
+[[field]]
+name   = "header_block_size"
+type   = "u16"
+offset = 40
+
+[[field]]
+name   = "number_of_chunks"
+type   = "u16"
+offset = 42
+
+[summary]
+title = "Windows event log"
+
+[[summary.line]]
+label  = "Format version"
+field  = "major_version"
+with   = "minor_version"
+join   = "."
+
+[[summary.line]]
+label  = "Chunks"
+field  = "number_of_chunks"
+
+[[summary.line]]
+label  = "Next record"
+field  = "next_record_id"

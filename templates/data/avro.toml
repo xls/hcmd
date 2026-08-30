@@ -1,0 +1,12 @@
+# The four-byte magic. What follows is a schema map encoded in Avro's own
+# binary format, which has no fixed offsets.
+
+name   = "Avro object container"
+endian = "big"
+magic  = { offset = 0, bytes = "4F626A01" }
+
+[[field]]
+name   = "magic"
+type   = "bytes"
+size   = 4
+offset = 0

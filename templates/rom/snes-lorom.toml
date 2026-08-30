@@ -1,0 +1,59 @@
+# The header of a LoROM cartridge, at 0x7FC0. A HiROM keeps the same
+# structure at 0xFFC0 instead, and a dump with a 512-byte copier header
+# shifts both. No magic: the only check is that the checksum and its
+# complement add up to 0xFFFF.
+
+name   = "SNES header (LoROM)"
+endian = "little"
+offset = 32704
+
+[[field]]
+name   = "title"
+type   = "char"
+size   = 21
+offset = 0
+
+[[field]]
+name   = "rom_makeup"
+type   = "u8"
+offset = 21
+
+[[field]]
+name   = "rom_type"
+type   = "u8"
+offset = 22
+
+[[field]]
+name   = "rom_size"
+type   = "u8"
+offset = 23
+
+[[field]]
+name   = "sram_size"
+type   = "u8"
+offset = 24
+
+[[field]]
+name   = "country"
+type   = "u8"
+offset = 25
+
+[[field]]
+name   = "licensee"
+type   = "u8"
+offset = 26
+
+[[field]]
+name   = "version"
+type   = "u8"
+offset = 27
+
+[[field]]
+name   = "checksum_complement"
+type   = "u16"
+offset = 28
+
+[[field]]
+name   = "checksum"
+type   = "u16"
+offset = 30

@@ -1,0 +1,71 @@
+# The flattened device tree header, big-endian whatever the machine is.
+
+name   = "Device tree blob"
+endian = "big"
+magic  = { offset = 0, bytes = "D00DFEED" }
+
+[[field]]
+name   = "magic"
+type   = "u32"
+offset = 0
+
+[[field]]
+name   = "totalsize"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "off_dt_struct"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "off_dt_strings"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "off_mem_rsvmap"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "version"
+type   = "u32"
+offset = 20
+
+[[field]]
+name   = "last_comp_version"
+type   = "u32"
+offset = 24
+
+[[field]]
+name   = "boot_cpuid_phys"
+type   = "u32"
+offset = 28
+
+[[field]]
+name   = "size_dt_strings"
+type   = "u32"
+offset = 32
+
+[[field]]
+name   = "size_dt_struct"
+type   = "u32"
+offset = 36
+
+[summary]
+title = "Device tree blob"
+
+[[summary.line]]
+label  = "Format version"
+field  = "version"
+
+[[summary.line]]
+label  = "Total size"
+field  = "totalsize"
+render = "size"
+
+[[summary.line]]
+label  = "Boot CPU"
+field  = "boot_cpuid_phys"

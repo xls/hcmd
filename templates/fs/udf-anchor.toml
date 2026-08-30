@@ -1,0 +1,67 @@
+# The anchor volume descriptor pointer, at sector 256 of a 2048-byte-sector
+# volume, which is byte 524288. No magic: UDF recognises a descriptor by
+# tag_identifier, which is 2 here, rather than by a byte string.
+
+name   = "UDF anchor descriptor"
+endian = "little"
+offset = 524288
+
+[[field]]
+name   = "tag_identifier"
+type   = "u16"
+offset = 0
+
+[[field]]
+name   = "descriptor_version"
+type   = "u16"
+offset = 2
+
+[[field]]
+name   = "tag_checksum"
+type   = "u8"
+offset = 4
+
+[[field]]
+name   = "reserved"
+type   = "u8"
+offset = 5
+
+[[field]]
+name   = "tag_serial_number"
+type   = "u16"
+offset = 6
+
+[[field]]
+name   = "descriptor_crc"
+type   = "u16"
+offset = 8
+
+[[field]]
+name   = "descriptor_crc_length"
+type   = "u16"
+offset = 10
+
+[[field]]
+name   = "tag_location"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "main_extent_length"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "main_extent_location"
+type   = "u32"
+offset = 20
+
+[[field]]
+name   = "reserve_extent_length"
+type   = "u32"
+offset = 24
+
+[[field]]
+name   = "reserve_extent_location"
+type   = "u32"
+offset = 28

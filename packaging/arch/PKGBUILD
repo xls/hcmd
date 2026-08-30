@@ -1,0 +1,45 @@
+# Maintainer: holoscommander
+pkgname=hcmd
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="A Total Commander alternative for the terminal, for fingers that learned F5 in 1998"
+arch=('x86_64' 'aarch64')
+url="https://github.com/xls/hcmd"
+license=('MIT')
+depends=('gcc-libs')
+makedepends=('rust' 'cargo')
+options=('!lto')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "$srcdir/$pkgname-$pkgver"
+  # Vendor up front so build() needs no network, which is what makes this
+  # reproducible in a clean chroot.
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$srcdir/$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release
+}
+
+check() {
+  cd "$srcdir/$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo test --frozen --release
+}
+
+package() {
+  cd "$srcdir/$pkgname-$pkgver"
+  install -Dm0755 "target/release/hcmd" "$pkgdir/usr/bin/hcmd"
+  install -Dm0644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm0644 FEATURES.md "$pkgdir/usr/share/doc/$pkgname/FEATURES.md"
+  install -Dm0644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  # The shipped defaults, for a user who wants to start from them rather than
+  # from the commented-out file the program writes on first run.
+  find examples themes -type f -exec install -Dm0644 "{}" "$pkgdir/usr/share/$pkgname/{}" \;
+}

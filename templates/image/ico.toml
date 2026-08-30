@@ -1,0 +1,86 @@
+# The directory and its first entry. A width or height of zero means 256.
+# The magic is image_type = 1; a .cur file has 2 there.
+
+name   = "ICO"
+endian = "little"
+magic  = { offset = 0, bytes = "00000100" }
+
+[[field]]
+name   = "reserved"
+type   = "u16"
+offset = 0
+
+[[field]]
+name   = "image_type"
+type   = "u16"
+offset = 2
+
+[[field]]
+name   = "image_count"
+type   = "u16"
+offset = 4
+
+[[field]]
+name   = "width"
+type   = "u8"
+offset = 6
+
+[[field]]
+name   = "height"
+type   = "u8"
+offset = 7
+
+[[field]]
+name   = "colour_count"
+type   = "u8"
+offset = 8
+
+[[field]]
+name   = "entry_reserved"
+type   = "u8"
+offset = 9
+
+[[field]]
+name   = "planes"
+type   = "u16"
+offset = 10
+
+[[field]]
+name   = "bit_count"
+type   = "u16"
+offset = 12
+
+[[field]]
+name   = "bytes_in_res"
+type   = "u32"
+offset = 14
+
+[[field]]
+name   = "image_offset"
+type   = "u32"
+offset = 18
+
+[summary]
+title = "Windows icon"
+
+[[summary.line]]
+label  = "Kind"
+field  = "image_type"
+render = "enum"
+enum   = { 1 = "icon", 2 = "cursor" }
+
+[[summary.line]]
+label  = "Images"
+field  = "image_count"
+
+[[summary.line]]
+label  = "First image"
+field  = "width"
+with   = "height"
+join   = " x "
+unit   = "px"
+
+[[summary.line]]
+label  = "Colour depth"
+field  = "bit_count"
+unit   = "bit"

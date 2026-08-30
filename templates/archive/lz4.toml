@@ -1,0 +1,22 @@
+# The two descriptor bytes are all that is at a fixed offset: whether a
+# content size and a dictionary id follow is decided by bits in flg.
+
+name   = "LZ4 frame"
+endian = "little"
+magic  = { offset = 0, bytes = "04224D18" }
+
+[[field]]
+name   = "magic"
+type   = "bytes"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "flg"
+type   = "u8"
+offset = 4
+
+[[field]]
+name   = "bd"
+type   = "u8"
+offset = 5

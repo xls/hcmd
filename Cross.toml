@@ -1,0 +1,13 @@
+# `cross` runs each target's build in its own container, and does not forward
+# arbitrary environment variables into it. These have to be named.
+#
+# The aarch64-gnu image's g++ does not pull <cstddef> in transitively, and
+# unrar's vendored cmddata.cpp uses `ptrdiff_t` without including it, so the
+# build fails there and nowhere else. Forcing the include is a compiler flag
+# rather than a patched dependency: the crate is not ours and the omission is
+# in its vendored C++, not in how it is used.
+[build.env]
+passthrough = [
+    "CXXFLAGS_aarch64_unknown_linux_gnu",
+    "CFLAGS_aarch64_unknown_linux_gnu",
+]

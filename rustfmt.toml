@@ -1,0 +1,36 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# BORING RUST: Rustfmt Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Stable-channel options ONLY. Unstable options on stable rustfmt print a
+# warning per option per run: noise that drowns real gate output. Every key
+# here is validated against stable rustfmt.
+#
+# Boring = defaults. rustfmt's defaults are the ecosystem standard; we pin
+# only what removes ambiguity across machines.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Formatting style edition (independent of the language edition in Cargo.toml)
+style_edition = "2024"
+
+# Ecosystem-default line width; agents reason better over vertical code
+max_width = 100
+
+# Consistent line endings regardless of contributor OS
+newline_style = "Unix"
+
+# Foo { bar } not Foo { bar: bar }
+use_field_init_shorthand = true
+
+# ? not try!
+use_try_shorthand = true
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# NIGHTLY-ONLY OPTIONS (uncomment only if the project formats with nightly:
+# `cargo +nightly fmt`). On stable these are ignored with a warning per run.
+# ─────────────────────────────────────────────────────────────────────────────────
+# imports_granularity = "Module"        # use foo::{bar, baz}
+# group_imports = "StdExternalCrate"    # std / external / crate groups
+# wrap_comments = true
+# comment_width = 100
+# format_code_in_doc_comments = true

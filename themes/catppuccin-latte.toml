@@ -1,0 +1,94 @@
+# Holos Commander - the catppuccin-latte theme.
+# Location: ~/.config/holoscommander/themes/catppuccin-latte.toml
+#
+# Generated from a semantic palette so every slot is covered and no two themes
+# disagree about what a slot means. Colours are RGB; the renderer quantizes to
+# 256 or 16 as the terminal allows.
+
+name = "catppuccin-latte"
+
+[panel]
+bg              = "#eff1f5"
+fg              = "#4c4f69"
+dir_fg          = "#000000"
+exec_fg         = "#40a02b"
+link_fg         = "#179299"
+archive_fg      = "#8839ef"
+marked_fg       = "#df8e1d"
+cursor_bg       = "#1e66f5"
+cursor_fg       = "#eff1f5"
+# Drawn when the command line has focus: still clearly visible, one step back.
+cursor_bg_unfocused = "#ccd0da"
+cursor_fg_unfocused = "#4c4f69"
+# The cursor bar on the panel that is not active at all.
+inactive_cursor_bg  = "#dee0e8"
+inactive_cursor_fg  = "#9ca0b0"
+border          = "#1e66f5"
+inactive_border = "#9ca0b0"
+header_bg       = "#eff1f5"
+header_fg       = "#df8e1d"
+status_bg       = "#eff1f5"
+status_fg       = "#179299"
+
+[cmdline]
+bg        = "#f5f6f8"
+fg        = "#4c4f69"
+prompt_fg = "#40a02b"
+caret     = "#000000"
+# The caret is always drawn, focused or not.
+caret_unfocused = "#9ca0b0"
+
+[keybar]
+number_fg = "#4c4f69"
+label_bg  = "#1e66f5"
+label_fg  = "#eff1f5"
+
+[dialog]
+bg           = "#ccd0da"
+fg           = "#4c4f69"
+title        = "#1e66f5"
+border       = "#9ca0b0"
+button       = "#1e66f5"
+button_focus = "#d20f39"
+input_bg     = "#f5f6f8"
+input_fg     = "#000000"
+
+[viewer]
+bg            = "#eff1f5"
+fg            = "#4c4f69"
+line_numbers  = "#9ca0b0"
+match         = "#df8e1d"
+current_match = "#d20f39"
+hex_offset    = "#179299"
+hex_ascii     = "#40a02b"
+selection_bg  = "#8839ef"
+selection_fg  = "#eff1f5"
+
+[syn]
+keyword     = "#8839ef"
+string      = "#40a02b"
+comment     = "#9ca0b0"
+type        = "#179299"
+function    = "#1e66f5"
+number      = "#d84e2b"
+constant    = "#d84e2b"
+operator    = "#4c4f69"
+punctuation = "#9ca0b0"
+variable    = "#4c4f69"
+
+# Mapping used when the terminal has only 16 colors.
+[fallback_16]
+"#eff1f5" = "white"
+"#f5f6f8" = "white"
+"#4c4f69" = "black"
+"#000000" = "bright_white"
+"#1e66f5" = "bright_cyan"
+"#ccd0da" = "bright_white"
+"#dee0e8" = "bright_white"
+"#9ca0b0" = "bright_black"
+"#d20f39" = "bright_red"
+"#40a02b" = "bright_green"
+"#df8e1d" = "bright_yellow"
+"#8839ef" = "bright_magenta"
+"#179299" = "bright_cyan"
+"#d84e2b" = "bright_red"

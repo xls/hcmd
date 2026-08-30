@@ -1,0 +1,92 @@
+# SOI followed by an APP0/JFIF segment. A JPEG whose first segment is
+# APP1/Exif shares the first three bytes but not the fields from 4 on.
+
+name   = "JPEG (JFIF)"
+endian = "big"
+magic  = { offset = 0, bytes = "FFD8FF" }
+
+[[field]]
+name   = "soi"
+type   = "bytes"
+size   = 2
+offset = 0
+
+[[field]]
+name   = "app0_marker"
+type   = "bytes"
+size   = 2
+offset = 2
+
+[[field]]
+name   = "app0_length"
+type   = "u16"
+offset = 4
+
+[[field]]
+name   = "identifier"
+type   = "char"
+size   = 5
+offset = 6
+
+[[field]]
+name   = "version_major"
+type   = "u8"
+offset = 11
+
+[[field]]
+name   = "version_minor"
+type   = "u8"
+offset = 12
+
+[[field]]
+name   = "density_units"
+type   = "u8"
+offset = 13
+
+[[field]]
+name   = "x_density"
+type   = "u16"
+offset = 14
+
+[[field]]
+name   = "y_density"
+type   = "u16"
+offset = 16
+
+[[field]]
+name   = "thumbnail_width"
+type   = "u8"
+offset = 18
+
+[[field]]
+name   = "thumbnail_height"
+type   = "u8"
+offset = 19
+
+[summary]
+title = "JPEG image"
+
+[[summary.line]]
+label  = "JFIF version"
+field  = "version_major"
+with   = "version_minor"
+join   = "."
+
+[[summary.line]]
+label  = "Density"
+field  = "x_density"
+with   = "y_density"
+join   = " x "
+
+[[summary.line]]
+label  = "Density units"
+field  = "density_units"
+render = "enum"
+enum   = { 0 = "aspect ratio only", 1 = "per inch", 2 = "per centimetre" }
+
+[[summary.line]]
+label  = "Thumbnail"
+field  = "thumbnail_width"
+with   = "thumbnail_height"
+join   = " x "
+unit   = "px"

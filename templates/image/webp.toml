@@ -1,0 +1,52 @@
+# A RIFF container. The magic is the WEBP form type at 8 rather than the
+# RIFF tag at 0, which AVI and WAV share.
+
+name   = "WebP"
+endian = "little"
+magic  = { offset = 8, bytes = "57454250" }
+
+[[field]]
+name   = "riff"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "file_size"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "form_type"
+type   = "char"
+size   = 4
+offset = 8
+
+[[field]]
+name   = "chunk_fourcc"
+type   = "char"
+size   = 4
+offset = 12
+
+[[field]]
+name   = "chunk_size"
+type   = "u32"
+offset = 16
+
+[summary]
+title = "WebP image"
+
+[[summary.line]]
+label  = "Chunk"
+field  = "chunk_fourcc"
+render = "fourcc"
+
+[[summary.line]]
+label  = "File size"
+field  = "file_size"
+render = "size"
+
+[[summary.line]]
+label  = "Chunk size"
+field  = "chunk_size"
+render = "size"

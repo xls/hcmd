@@ -1,0 +1,189 @@
+# FAT32 keeps the common BPB and replaces everything from 36 on.
+# root_entries and sectors_per_fat_16 are zero on a FAT32 volume, which is
+# one way to recognise one.
+
+name   = "FAT32 BPB"
+endian = "little"
+magic  = { offset = 510, bytes = "55AA" }
+
+[[field]]
+name   = "jump"
+type   = "bytes"
+size   = 3
+offset = 0
+
+[[field]]
+name   = "oem_name"
+type   = "char"
+size   = 8
+offset = 3
+
+[[field]]
+name   = "bytes_per_sector"
+type   = "u16"
+offset = 11
+
+[[field]]
+name   = "sectors_per_cluster"
+type   = "u8"
+offset = 13
+
+[[field]]
+name   = "reserved_sectors"
+type   = "u16"
+offset = 14
+
+[[field]]
+name   = "num_fats"
+type   = "u8"
+offset = 16
+
+[[field]]
+name   = "root_entries"
+type   = "u16"
+offset = 17
+
+[[field]]
+name   = "total_sectors_16"
+type   = "u16"
+offset = 19
+
+[[field]]
+name   = "media_descriptor"
+type   = "u8"
+offset = 21
+
+[[field]]
+name   = "sectors_per_fat_16"
+type   = "u16"
+offset = 22
+
+[[field]]
+name   = "sectors_per_track"
+type   = "u16"
+offset = 24
+
+[[field]]
+name   = "num_heads"
+type   = "u16"
+offset = 26
+
+[[field]]
+name   = "hidden_sectors"
+type   = "u32"
+offset = 28
+
+[[field]]
+name   = "total_sectors_32"
+type   = "u32"
+offset = 32
+
+[[field]]
+name   = "sectors_per_fat_32"
+type   = "u32"
+offset = 36
+
+[[field]]
+name   = "ext_flags"
+type   = "u16"
+offset = 40
+
+[[field]]
+name   = "fs_version"
+type   = "u16"
+offset = 42
+
+[[field]]
+name   = "root_cluster"
+type   = "u32"
+offset = 44
+
+[[field]]
+name   = "fs_info_sector"
+type   = "u16"
+offset = 48
+
+[[field]]
+name   = "backup_boot_sector"
+type   = "u16"
+offset = 50
+
+[[field]]
+name   = "reserved"
+type   = "bytes"
+size   = 12
+offset = 52
+
+[[field]]
+name   = "drive_number"
+type   = "u8"
+offset = 64
+
+[[field]]
+name   = "reserved1"
+type   = "u8"
+offset = 65
+
+[[field]]
+name   = "extended_boot_signature"
+type   = "u8"
+offset = 66
+
+[[field]]
+name   = "volume_id"
+type   = "u32"
+offset = 67
+
+[[field]]
+name   = "volume_label"
+type   = "char"
+size   = 11
+offset = 71
+
+[[field]]
+name   = "fs_type"
+type   = "char"
+size   = 8
+offset = 82
+
+[summary]
+title = "FAT32 volume"
+
+[[summary.line]]
+label  = "Volume label"
+field  = "volume_label"
+render = "text"
+
+[[summary.line]]
+label  = "Declared type"
+field  = "fs_type"
+render = "text"
+
+[[summary.line]]
+label  = "Bytes per sector"
+field  = "bytes_per_sector"
+
+[[summary.line]]
+label  = "Sectors per cluster"
+field  = "sectors_per_cluster"
+
+[[summary.line]]
+label  = "Total sectors"
+field  = "total_sectors_32"
+
+[[summary.line]]
+label  = "Sectors per FAT"
+field  = "sectors_per_fat_32"
+
+[[summary.line]]
+label  = "FATs"
+field  = "num_fats"
+
+[[summary.line]]
+label  = "Root directory cluster"
+field  = "root_cluster"
+
+[[summary.line]]
+label  = "Serial number"
+field  = "volume_id"
+render = "hex"

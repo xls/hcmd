@@ -1,0 +1,405 @@
+# Holos Commander - key bindings
+# Location: ~/.config/holoscommander/keymap.toml
+#
+# Each action takes a list of bindings; the first that the terminal can actually
+# deliver wins. The second entry on several actions below is the fallback for
+# terminals without the Kitty keyboard protocol.
+# Run `hcmd --keytest` to see how your terminal encodes a key.
+
+[global]
+help              = ["f1"]   # keyboard reference, generated from this file
+# On a normal panel this refreshes. On a virtual listing (search results,
+# branch view) ctrl+r clears the listing instead.
+# f2 is NOT bound here: it is pure rename. A reread
+# re-sorts and can move the cursor, which reads as the panel jumping about, and
+# it is not what a key next to F3 View should do.
+reread            = ["ctrl+r"]
+view              = ["f3"]
+edit              = ["f4"]
+copy              = ["f5"]
+move              = ["f6"]
+mkdir             = ["f7"]
+# The Delete key does what F8 does, and Shift+Delete what Shift+F8 does - the
+# pairing every desktop file manager has, and the one people reach for before
+# they learn the function keys.
+delete            = ["f8", "delete"]
+menu              = ["f9"]
+# alt+q is the reliable one; alt+f4 is usually grabbed by the window manager.
+# f10 is the NC/mc convention -- remove it if you want TC's F10 = main menu.
+quit              = ["alt+q", "alt+f4", "f10"]
+console_toggle    = ["ctrl+o"]
+swap_panels       = ["ctrl+u"]
+other_panel       = ["tab"]
+
+view_single       = ["shift+f3"]
+edit_new          = ["shift+f4"]
+copy_same_dir     = ["shift+f5"]
+# f2 is the reliable one: shift+F<n> is among the keys a legacy terminal
+# cannot deliver at all.
+rename_in_place   = ["f2", "shift+f6"]
+delete_permanent  = ["shift+f8", "shift+delete"]
+# shift+f10 is in the undeliverable set, so it carries an
+# alt+letter. `k` is simply free: c is the Commands menu, m is Mark, x is cut
+# and e reads as edit.
+context_menu      = ["shift+f10", "alt+k"]
+compare_dirs      = ["shift+f2"]
+compare_files     = ["ctrl+f2"]
+
+# The second binding on each of these is the legacy-terminal fallback:
+# alt+F<n> is physically undeliverable on a plain terminal.
+# They are plain alt+<letter> - an ESC-prefixed byte, which every terminal
+# sends - and deliberately NOT ctrl+x chords: ctrl+x is cut, and
+# a chord prefix is an mc idiom this project does not inherit.
+drive_left        = ["alt+f1", "alt+d"]
+drive_right       = ["alt+f2", "alt+g"]
+view_external     = ["alt+f3"]
+pack              = ["alt+f5"]
+unpack            = ["alt+f6"]
+search            = ["alt+f7", "alt+s"]
+history_dialog    = ["alt+f8"]
+# The theme picker previews as it moves, so it is worth a key of its own
+# rather than a trip through the menu: alt+t is free and reads as "theme".
+theme_picker      = ["alt+t"]
+# The background job queue. Enter on a running job brings
+# its progress dialog back to the foreground; F2 in that dialog sends it back.
+job_queue         = ["alt+f9", "alt+j"]
+
+# Inside a dialog, alt+<letter> is that dialog's own accelerator and beats
+# every binding above: alt+s is `Search for` while the Find Files dialog is
+# open and `search` when it is not (the dialog's accelerators, and context
+# precedence doing what it already does). The letter is drawn underlined in the control's
+# label, so the whole set is readable off the screen rather than memorised.
+#
+# There is no [dialog] entry for those letters and they cannot be rebound: a
+# mnemonic is a property of a label, not an action, and a rebound alt+t would
+# leave an underline that lied about what the key does. alt+<digit> is the tab
+# strip of a tabbed dialog, which is why mnemonics are letters - the two sets
+# never collide.
+
+hotlist           = ["ctrl+d"]
+# ctrl+shift+d needs the enhanced keyboard protocol, so it carries an
+# alt+letter fallback like every other undeliverable key.
+hotlist_add       = ["ctrl+shift+d", "alt+a"]
+# ctrl+h IS ascii 0x08, the same byte as backspace, on legacy terminals.
+# With the kitty keyboard protocol they are distinct and both work; without it
+# backspace wins (parent dir) and alt+. is the fallback.
+show_hidden       = ["ctrl+h", "alt+period"]
+# Toggle: connects a local panel, prompts to disconnect a connected one.
+connect_toggle    = ["ctrl+f"]
+dir_size          = ["ctrl+l"]
+branch_view       = ["ctrl+b"]
+multi_rename      = ["ctrl+m"]
+# search results are a panel, so alt+shift+f7 searches within
+# them - a second alt+f7 on a virtual listing would otherwise have to choose
+# between narrowing and starting again, and choosing silently is the one
+# outcome worse than two keys.
+search_in_panel   = ["alt+shift+f7"]
+# The `Result list` button, reachable without reopening ctrl+m.
+rename_result     = ["alt+shift+m"]
+quick_view        = ["ctrl+q"]
+path_to_cmdline   = ["ctrl+p"]
+select_all        = ["ctrl+a"]
+
+# The clipboard. ctrl+c remembers what is under the cursor,
+# ctrl+x remembers it to be moved, ctrl+v puts it down in the active panel.
+# ctrl+c keeps its interrupt meaning inside the ctrl+o console: keys resolve
+# per context, so the two never meet.
+clipboard_copy    = ["ctrl+c"]
+clipboard_cut     = ["ctrl+x"]
+clipboard_paste   = ["ctrl+v"]
+reload_config     = ["ctrl+alt+r"]
+# Configuration opens config.toml in the external editor and
+# reloads on exit. Beside ctrl+alt+r, which is the reload on its own.
+edit_config       = ["ctrl+alt+e"]
+# Asks GitHub for the latest release and says so once per version, with the
+# command that installs it. It never writes a binary. alt+u is free - u is not
+# a menu mnemonic and ctrl+u is swap panels, which is a different context's key.
+check_update      = ["alt+u"]
+
+# The six menus. The underlined letter opens one directly, which is the
+# dialog mnemonic rule applied outside a dialog. `Show` is `h` and not `s`
+# because alt+s is already `search`'s legacy fallback for alt+f7, and the
+# requirement that every undeliverable key have a fallback outranks a
+# mnemonic preference.
+menu_files        = ["alt+f"]
+menu_mark         = ["alt+m"]
+menu_commands     = ["alt+c"]
+menu_net          = ["alt+n"]
+menu_show         = ["alt+h"]
+menu_config       = ["alt+o"]
+
+# Tabs: max 9 per panel. Bare digits feed quick search, so tabs live on
+# alt+<digit> - a plain ESC-prefixed digit, so it works on legacy terminals
+# too.
+tab_new           = ["ctrl+t"]
+tab_close         = ["ctrl+w"]
+# Cycle within the active panel, wrapping. Both need the enhanced keyboard
+# protocol - ctrl+tab is 0x09 on a legacy terminal, indistinguishable from tab
+# itself - so each carries an alt+arrow fallback.
+tab_next          = ["ctrl+tab", "alt+right"]
+tab_prev          = ["ctrl+shift+tab", "alt+left"]
+tab_1             = ["alt+1"]
+tab_2             = ["alt+2"]
+tab_3             = ["alt+3"]
+tab_4             = ["alt+4"]
+tab_5             = ["alt+5"]
+tab_6             = ["alt+6"]
+tab_7             = ["alt+7"]
+tab_8             = ["alt+8"]
+tab_9             = ["alt+9"]
+
+# Positional sort: ctrl+<n> sorts the active panel by its n-th column, left to
+# right, following panel.columns.order. Same key again reverses.
+sort_by_column_1  = ["ctrl+1"]
+sort_by_column_2  = ["ctrl+2"]
+sort_by_column_3  = ["ctrl+3"]
+sort_by_column_4  = ["ctrl+4"]
+sort_by_column_5  = ["ctrl+5"]
+sort_by_column_6  = ["ctrl+6"]
+sort_by_column_7  = ["ctrl+7"]
+sort_by_column_8  = ["ctrl+8"]
+sort_by_column_9  = ["ctrl+9"]
+
+# The secondary sort: the field deciding the order of entries the primary key
+# ties. Same positional mapping, so with the default column order ctrl+2 sorts
+# by extension and ctrl+shift+3 makes size the tiebreak. Needs the enhanced
+# keyboard protocol; on a legacy terminal use the F9 sort menu.
+sort_secondary_1  = ["ctrl+shift+1"]
+sort_secondary_2  = ["ctrl+shift+2"]
+sort_secondary_3  = ["ctrl+shift+3"]
+sort_secondary_4  = ["ctrl+shift+4"]
+sort_secondary_5  = ["ctrl+shift+5"]
+sort_secondary_6  = ["ctrl+shift+6"]
+sort_secondary_7  = ["ctrl+shift+7"]
+sort_secondary_8  = ["ctrl+shift+8"]
+sort_secondary_9  = ["ctrl+shift+9"]
+# ctrl+shift+0 clears the secondary sort. ctrl+f7 (unsorted)
+# clears it too, which is the route that survives a legacy terminal.
+sort_secondary_clear = ["ctrl+shift+0"]
+
+# Fixed-field sorts, independent of column position (TC muscle memory).
+sort_by_name      = ["ctrl+f3"]
+sort_by_ext       = ["ctrl+f4"]
+sort_by_date      = ["ctrl+f5"]
+sort_by_size      = ["ctrl+f6"]
+sort_unsorted     = ["ctrl+f7"]
+
+[panel]
+# Printable characters are not bound here: they feed quick search.
+open              = ["enter"]
+# The cursor. Bound in code until now, which made these the only keys in the
+# program you could not find by reading this file. The values are the ones the
+# code already gave them, so nothing moves; change them here.
+cursor_up         = ["up"]
+cursor_down       = ["down"]
+cursor_page_up    = ["pgup"]
+cursor_page_down  = ["pgdn"]
+cursor_top        = ["home"]
+cursor_bottom     = ["end"]
+put_selected_path = ["ctrl+shift+enter", "alt+y"]
+# Always opens with the associated application, never executes -- so
+# shift+enter on a script opens it in an editor instead of running it.
+open_with         = ["shift+enter"]
+parent            = ["backspace", "ctrl+pgup"]
+enter_as_dir      = ["ctrl+pgdn"]
+root              = ["ctrl+backslash"]
+home              = ["ctrl+home", "ctrl+shift+g"]
+# Prompt for a path and go there. An empty field means home, which is what
+# keeps this usable where ctrl+shift+g cannot be delivered.
+goto_path         = ["ctrl+g"]
+other_panel_cd    = ["ctrl+left", "ctrl+right"]
+focus_cmdline     = ["left", "right"]
+put_selected      = ["ctrl+enter", "alt+enter"]
+toggle_select     = ["insert"]
+select_and_size   = ["space"]
+# The file under the cursor, described: its own facts, and what its contents
+# turn out to be.
+#
+# `shift+space` was tried and cannot be offered. A terminal reports it as a
+# bare `space`, and this program normalises it to one before resolving, so it
+# is not a second key at all - it is `space`, which already marks the file and
+# sizes a directory. The keymap loader says so rather than letting one of them
+# quietly win.
+file_info         = ["shift+f9"]
+# Resize or convert the marked images, writing into the other panel's
+# directory the way every other file operation here does.
+resize            = ["shift+r"]
+# The full path of what is selected, as text, on the system clipboard - not the
+# file clipboard `ctrl+c` fills, and not the command line `ctrl+p` writes to.
+#
+# `alt+l` is not decoration. Many terminals take `ctrl+shift+c` for their own
+# copy and never deliver it to the program, which is the same reason
+# `copy_interpretation` in the viewer ships with `alt+c` beside it. Without a
+# second key this reads as broken on exactly the terminals most people use.
+copy_path         = ["ctrl+shift+c", "alt+l"]
+select_mask       = ["plus"]
+unselect_mask     = ["minus"]
+invert_selection  = ["asterisk"]
+clear_search      = ["esc"]
+start_quick_search = ["ctrl+s"]   # reach filenames that begin with a digit
+# leave_virtual        = []   <- deliberately not bindable, see below.
+#
+# `leave_virtual` is a state-dependent *meaning* of ctrl+r and
+# esc, not a binding of its own: on a normal panel ctrl+r rereads and esc
+# clears the search, and on a virtual listing the same two keys leave it.
+# Binding it here instead shadowed both, because a context binding beats a
+# global one and a table is walked alphabetically.
+
+# With a shell running, the command line IS the shell's own input line:
+# the editing actions below become descriptions of what your
+# shell already does, because the keys are forwarded to it rather than run here.
+# Everything else in this table still acts -- rebind an action that is not one
+# of the twelve editing ones and it keeps working.
+[cmdline]
+leave_to_panel    = ["up", "down"]
+history_prev      = ["ctrl+up", "alt+p"]
+history_next      = ["ctrl+down", "alt+n"]
+run               = ["enter"]
+clear             = ["esc"]
+complete          = ["tab"]
+put_selected      = ["ctrl+enter", "alt+enter"]
+kill_word         = ["ctrl+w"]
+kill_line         = ["ctrl+u"]
+kill_to_end       = ["ctrl+k"]
+line_start        = ["ctrl+a"]
+line_end          = ["ctrl+e"]
+# The caret itself. Bound in code until now, which made them the only keys in
+# the program you could not find by reading this file. Listed with the values
+# the code already gave them, so nothing moves; change them here.
+caret_left        = ["left"]
+caret_right       = ["right"]
+caret_backspace   = ["backspace"]
+caret_delete      = ["delete"]
+toggle_overwrite  = ["insert"]
+put_selected_path = ["ctrl+shift+enter", "alt+y"]
+
+# Ctrl+O hides the panels and gives the shell the whole screen.
+# Almost nothing is bound here on purpose: a program running in there -- vim,
+# less, top -- gets every key, including the function keys. Ctrl+O is how you
+# come back.
+#
+# Scrollback is on SHIFT+PgUp/PgDn, not on PgUp/PgDn, for exactly that reason:
+# plain PgUp belongs to the pager that may be running. Typing anything returns
+# the view to the live screen, as it does in any terminal.
+[console]
+console_scroll_up   = ["shift+pgup"]
+console_scroll_down = ["shift+pgdn"]
+
+# The viewer consumes all input: a key that is not
+# bound here or in [global] does nothing, because there is no panel behind it to
+# fall through to.
+#
+# f1 is not repeated here: [global] already binds it, and it is
+# context-sensitive -- inside the viewer it opens the viewer's own key page.
+# f4 likewise resolves to `edit` from [global] and toggles text/hex here, which
+# is the rule that one key may bind to different actions per context, and
+# f4's toggle-mode meaning inside the viewer.
+# Movement reuses the panel's cursor actions and the command line's caret ones,
+# which is that same one-key-per-context rule:
+# in here they move the viewer's cursor and the view follows.
+# home/end are the line's edges and ctrl+home/ctrl+end the file's first and last
+# page.
+#
+# Shift with any of them extends the selection and ctrl+shift extends it as a
+# column block. Those are not bindings and cannot be rebound here: they are read
+# as a modifier on whatever these keys are bound to, so moving `right` moves
+# shift+right with it. ctrl+shift+home and ctrl+shift+end stay linear, because
+# ctrl+home and ctrl+end are movements in their own right. alt+b and alt+c are
+# the fallbacks for terminals that cannot send ctrl+shift with an arrow at all.
+[viewer]
+# f3 is find-next here, not a second way out. esc and q close.
+# What you most often want after opening a file out of a search is the next hit
+# inside it, and with no pattern set f3 opens the find bar so it is never inert.
+close             = ["esc", "q"]
+cursor_up         = ["up"]
+cursor_down       = ["down"]
+cursor_page_up    = ["pgup"]
+cursor_page_down  = ["pgdn"]
+caret_left        = ["left"]
+caret_right       = ["right"]
+cursor_top        = ["ctrl+home"]
+cursor_bottom     = ["ctrl+end"]
+# ctrl with a movement scrolls the view and leaves the cursor and the selection
+# where they are. The next cursor move brings the view back.
+view_scroll_up        = ["ctrl+up"]
+view_scroll_down      = ["ctrl+down"]
+view_scroll_page_up   = ["ctrl+pgup"]
+view_scroll_page_down = ["ctrl+pgdn"]
+view_scroll_left      = ["ctrl+left"]
+view_scroll_right     = ["ctrl+right"]
+# The file-manager meanings of these keys do not follow into the viewer:
+# ctrl+a selects the whole file rather than marking every entry, f2 RELOADS
+# rather than renaming, and w wraps. Context resolves each of them, and the
+# viewer's own F1 page is the full list.
+select_all        = ["ctrl+a"]
+toggle_wrap       = ["w"]
+viewer_reload     = ["f2"]
+# grouping, display and byte order. Keys as well as settings,
+# because trying one and then another against an unfamiliar file is the whole
+# activity.
+# size, base, sign, byte order. Sign is its own key because it
+# is an independent question from base - hex digits have no sign - and cycling
+# all three through one key left two of the four combinations unreachable
+# without passing through a third.
+hex_group         = ["g"]
+hex_format        = ["d"]
+hex_sign          = ["s"]
+hex_endian        = ["e"]
+# Every reading of the bytes under the cursor at once: widths, signs, both
+# byte orders, floats and a timestamp where the number is one. The status
+# line answers "what is this selection"; this answers "what is here", which
+# is the question being asked while walking a header with the arrow keys.
+inspect           = ["i"]
+# The same dialog the panel opens, for the file already being viewed.
+file_info         = ["f9"]
+# A binary struct template names the fields of a known format, and applying one
+# colours the bytes it explains at the cursor. t rather than a function key
+# because it is a hex-mode tool sitting beside g, d, s and e, and because
+# nothing else in any context wants a bare t. The picker's first row removes
+# the template again; Esc leaves whatever is applied alone.
+viewer_template   = ["t"]
+mode_text         = ["1"]
+mode_hex          = ["2"]
+# 3 is the rendered view: a JSON tree, a page's text, a Markdown file with its
+# headings made rather than spelled. It reads the whole file, which is why it
+# has a size ceiling the other two do not - see viewer.render.max_size. A file
+# nothing renders falls back to text and says so.
+mode_render       = ["3"]
+# Folding, in mode 3 only. enter and space both collapse the region under the
+# cursor because both are what a person reaches for on a tree.
+#
+# minus and plus collapse and expand the lot. NOT shift+left and shift+right,
+# which every editor uses for folding and which this viewer cannot spare: shift
+# with a movement extends the selection here, and taking two of those away in
+# one mode would make the selection keys mean different things in different
+# modes. minus and plus are free in every context but the panel's mark keys,
+# which the viewer does not have.
+fold_toggle       = ["enter", "space"]
+fold_all          = ["minus"]
+unfold_all        = ["plus"]
+quick_find        = ["f7", "slash", "ctrl+f"]
+# f3 closes the viewer; it is not also find-next.
+# f3 too: the key that opened the file walks the matches in it.
+find_next         = ["n", "f3"]
+find_prev         = ["shift+n"]
+goto_offset       = ["ctrl+g"]
+cycle_encoding    = ["f8"]
+# tab is a focus switch between the two hex sides, and nothing
+# else changes -- the cursor stays on the same byte and the selection over the
+# same bytes. It is other_panel in [global]; context resolves that by
+# context, and there is no other panel to move to from a full-screen viewer.
+hex_side          = ["tab"]
+# ctrl+c copies the selection here rather than remembering a file. Listed
+# so the F1 page shows it under the viewer; naming the
+# action in [viewer] replaces only this table's bindings for it, and the
+# [global] one still resolves everywhere else.
+clipboard_copy    = ["ctrl+c"]
+# ctrl+shift+c copies the interpretation instead. Many terminals
+# take ctrl+shift+c for their own copy and never deliver it, so alt+c is the
+# documented alternate binding every undeliverable key carries.
+copy_interpretation = ["ctrl+shift+c", "alt+c"]
+# The fallback for ctrl+shift+arrow, which a legacy terminal cannot deliver:
+# alt+b makes the live selection a block, after which plain shift+arrow extends
+# it rectangularly. That same fallback rule again -- and it is useful on its
+# own, because it turns a selection already made into a column block.
+select_block      = ["alt+b"]

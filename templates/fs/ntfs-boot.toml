@@ -1,0 +1,150 @@
+# clusters_per_mft_record is signed on purpose: a negative value n means the
+# record is 2 to the power -n bytes rather than n clusters, which is how the
+# usual 1024-byte record is written.
+
+name   = "NTFS boot sector"
+endian = "little"
+magic  = { offset = 3, bytes = "4E54465320202020" }
+
+[[field]]
+name   = "jump"
+type   = "bytes"
+size   = 3
+offset = 0
+
+[[field]]
+name   = "oem_id"
+type   = "char"
+size   = 8
+offset = 3
+
+[[field]]
+name   = "bytes_per_sector"
+type   = "u16"
+offset = 11
+
+[[field]]
+name   = "sectors_per_cluster"
+type   = "u8"
+offset = 13
+
+[[field]]
+name   = "reserved_sectors"
+type   = "u16"
+offset = 14
+
+[[field]]
+name   = "zero1"
+type   = "bytes"
+size   = 5
+offset = 16
+
+[[field]]
+name   = "media_descriptor"
+type   = "u8"
+offset = 21
+
+[[field]]
+name   = "zero2"
+type   = "u16"
+offset = 22
+
+[[field]]
+name   = "sectors_per_track"
+type   = "u16"
+offset = 24
+
+[[field]]
+name   = "num_heads"
+type   = "u16"
+offset = 26
+
+[[field]]
+name   = "hidden_sectors"
+type   = "u32"
+offset = 28
+
+[[field]]
+name   = "zero3"
+type   = "u32"
+offset = 32
+
+[[field]]
+name   = "zero4"
+type   = "u32"
+offset = 36
+
+[[field]]
+name   = "total_sectors"
+type   = "u64"
+offset = 40
+
+[[field]]
+name   = "mft_cluster"
+type   = "u64"
+offset = 48
+
+[[field]]
+name   = "mft_mirror_cluster"
+type   = "u64"
+offset = 56
+
+[[field]]
+name   = "clusters_per_mft_record"
+type   = "i8"
+offset = 64
+
+[[field]]
+name   = "reserved1"
+type   = "bytes"
+size   = 3
+offset = 65
+
+[[field]]
+name   = "clusters_per_index_buffer"
+type   = "i8"
+offset = 68
+
+[[field]]
+name   = "reserved2"
+type   = "bytes"
+size   = 3
+offset = 69
+
+[[field]]
+name   = "volume_serial_number"
+type   = "u64"
+offset = 72
+
+[[field]]
+name   = "checksum"
+type   = "u32"
+offset = 80
+
+[summary]
+title = "NTFS volume"
+
+[[summary.line]]
+label  = "Bytes per sector"
+field  = "bytes_per_sector"
+
+[[summary.line]]
+label  = "Sectors per cluster"
+field  = "sectors_per_cluster"
+
+[[summary.line]]
+label  = "Total sectors"
+field  = "total_sectors"
+
+[[summary.line]]
+label  = "MFT at cluster"
+field  = "mft_cluster"
+
+[[summary.line]]
+label  = "MFT mirror at cluster"
+field  = "mft_mirror_cluster"
+
+[[summary.line]]
+label  = "Serial number"
+field  = "volume_serial_number"
+render = "hex"

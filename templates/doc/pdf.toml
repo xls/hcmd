@@ -1,0 +1,26 @@
+# The whole of a PDF header: a five-byte signature and a version like 1.7 or
+# 2.0. Everything else in the file is found from the trailer at the end.
+
+name   = "PDF header"
+endian = "big"
+magic  = { offset = 0, bytes = "255044462D" }
+
+[[field]]
+name   = "signature"
+type   = "char"
+size   = 5
+offset = 0
+
+[[field]]
+name   = "version"
+type   = "char"
+size   = 3
+offset = 5
+
+[summary]
+title = "PDF document"
+
+[[summary.line]]
+label  = "Version"
+field  = "version"
+render = "text"

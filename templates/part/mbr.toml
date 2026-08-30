@@ -1,0 +1,198 @@
+# The four primary entries, each 16 bytes from 446. A protective MBR in
+# front of a GPT is this same structure with one entry whose type is 0xEE
+# spanning the disk; there is nothing else to tell them apart by.
+
+name   = "MBR"
+endian = "little"
+magic  = { offset = 510, bytes = "55AA" }
+
+[[field]]
+name   = "bootstrap"
+type   = "bytes"
+size   = 446
+offset = 0
+
+[[field]]
+name   = "p1_status"
+type   = "u8"
+offset = 446
+
+[[field]]
+name   = "p1_chs_first"
+type   = "bytes"
+size   = 3
+offset = 447
+
+[[field]]
+name   = "p1_type"
+type   = "u8"
+offset = 450
+
+[[field]]
+name   = "p1_chs_last"
+type   = "bytes"
+size   = 3
+offset = 451
+
+[[field]]
+name   = "p1_lba_first"
+type   = "u32"
+offset = 454
+
+[[field]]
+name   = "p1_sectors"
+type   = "u32"
+offset = 458
+
+[[field]]
+name   = "p2_status"
+type   = "u8"
+offset = 462
+
+[[field]]
+name   = "p2_chs_first"
+type   = "bytes"
+size   = 3
+offset = 463
+
+[[field]]
+name   = "p2_type"
+type   = "u8"
+offset = 466
+
+[[field]]
+name   = "p2_chs_last"
+type   = "bytes"
+size   = 3
+offset = 467
+
+[[field]]
+name   = "p2_lba_first"
+type   = "u32"
+offset = 470
+
+[[field]]
+name   = "p2_sectors"
+type   = "u32"
+offset = 474
+
+[[field]]
+name   = "p3_status"
+type   = "u8"
+offset = 478
+
+[[field]]
+name   = "p3_chs_first"
+type   = "bytes"
+size   = 3
+offset = 479
+
+[[field]]
+name   = "p3_type"
+type   = "u8"
+offset = 482
+
+[[field]]
+name   = "p3_chs_last"
+type   = "bytes"
+size   = 3
+offset = 483
+
+[[field]]
+name   = "p3_lba_first"
+type   = "u32"
+offset = 486
+
+[[field]]
+name   = "p3_sectors"
+type   = "u32"
+offset = 490
+
+[[field]]
+name   = "p4_status"
+type   = "u8"
+offset = 494
+
+[[field]]
+name   = "p4_chs_first"
+type   = "bytes"
+size   = 3
+offset = 495
+
+[[field]]
+name   = "p4_type"
+type   = "u8"
+offset = 498
+
+[[field]]
+name   = "p4_chs_last"
+type   = "bytes"
+size   = 3
+offset = 499
+
+[[field]]
+name   = "p4_lba_first"
+type   = "u32"
+offset = 502
+
+[[field]]
+name   = "p4_sectors"
+type   = "u32"
+offset = 506
+
+[[field]]
+name   = "signature"
+type   = "bytes"
+size   = 2
+offset = 510
+
+[summary]
+title = "Master boot record"
+
+[[summary.line]]
+label  = "Partition 1"
+field  = "p1_type"
+render = "enum"
+enum   = { 0 = "empty", 1 = "FAT12", 4 = "FAT16 under 32 MB", 5 = "extended", 6 = "FAT16", 7 = "NTFS or exFAT", 11 = "FAT32 CHS", 12 = "FAT32 LBA", 14 = "FAT16 LBA", 15 = "extended LBA", 130 = "Linux swap", 131 = "Linux", 133 = "Linux extended", 142 = "Linux LVM", 165 = "FreeBSD", 168 = "macOS", 169 = "NetBSD", 175 = "HFS+", 191 = "Solaris", 238 = "GPT protective", 239 = "EFI system", 253 = "Linux RAID" }
+
+[[summary.line]]
+label  = "Partition 1 size"
+field  = "p1_sectors"
+render = "size"
+scale  = 512
+
+[[summary.line]]
+label  = "Partition 2"
+field  = "p2_type"
+render = "enum"
+enum   = { 0 = "empty", 1 = "FAT12", 4 = "FAT16 under 32 MB", 5 = "extended", 6 = "FAT16", 7 = "NTFS or exFAT", 11 = "FAT32 CHS", 12 = "FAT32 LBA", 14 = "FAT16 LBA", 15 = "extended LBA", 130 = "Linux swap", 131 = "Linux", 133 = "Linux extended", 142 = "Linux LVM", 165 = "FreeBSD", 168 = "macOS", 169 = "NetBSD", 175 = "HFS+", 191 = "Solaris", 238 = "GPT protective", 239 = "EFI system", 253 = "Linux RAID" }
+
+[[summary.line]]
+label  = "Partition 2 size"
+field  = "p2_sectors"
+render = "size"
+scale  = 512
+
+[[summary.line]]
+label  = "Partition 3"
+field  = "p3_type"
+render = "enum"
+enum   = { 0 = "empty", 1 = "FAT12", 4 = "FAT16 under 32 MB", 5 = "extended", 6 = "FAT16", 7 = "NTFS or exFAT", 11 = "FAT32 CHS", 12 = "FAT32 LBA", 14 = "FAT16 LBA", 15 = "extended LBA", 130 = "Linux swap", 131 = "Linux", 133 = "Linux extended", 142 = "Linux LVM", 165 = "FreeBSD", 168 = "macOS", 169 = "NetBSD", 175 = "HFS+", 191 = "Solaris", 238 = "GPT protective", 239 = "EFI system", 253 = "Linux RAID" }
+
+[[summary.line]]
+label  = "Partition 3 size"
+field  = "p3_sectors"
+render = "size"
+scale  = 512
+
+[[summary.line]]
+label  = "Partition 4"
+field  = "p4_type"
+render = "enum"
+enum   = { 0 = "empty", 1 = "FAT12", 4 = "FAT16 under 32 MB", 5 = "extended", 6 = "FAT16", 7 = "NTFS or exFAT", 11 = "FAT32 CHS", 12 = "FAT32 LBA", 14 = "FAT16 LBA", 15 = "extended LBA", 130 = "Linux swap", 131 = "Linux", 133 = "Linux extended", 142 = "Linux LVM", 165 = "FreeBSD", 168 = "macOS", 169 = "NetBSD", 175 = "HFS+", 191 = "Solaris", 238 = "GPT protective", 239 = "EFI system", 253 = "Linux RAID" }
+
+[[summary.line]]
+label  = "Partition 4 size"
+field  = "p4_sectors"
+render = "size"
+scale  = 512
