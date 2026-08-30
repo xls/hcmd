@@ -1,0 +1,169 @@
+# Every number in a SQLite file is big-endian. A page_size of 1 means 65536,
+# which is the one size that does not fit in the field.
+
+name   = "SQLite 3"
+endian = "big"
+magic  = { offset = 0, bytes = "53514C69746520666F726D6174203300" }
+
+[[field]]
+name   = "header_string"
+type   = "char"
+size   = 16
+offset = 0
+
+[[field]]
+name   = "page_size"
+type   = "u16"
+offset = 16
+
+[[field]]
+name   = "write_version"
+type   = "u8"
+offset = 18
+
+[[field]]
+name   = "read_version"
+type   = "u8"
+offset = 19
+
+[[field]]
+name   = "reserved_space"
+type   = "u8"
+offset = 20
+
+[[field]]
+name   = "max_embedded_payload"
+type   = "u8"
+offset = 21
+
+[[field]]
+name   = "min_embedded_payload"
+type   = "u8"
+offset = 22
+
+[[field]]
+name   = "leaf_payload_fraction"
+type   = "u8"
+offset = 23
+
+[[field]]
+name   = "file_change_counter"
+type   = "u32"
+offset = 24
+
+[[field]]
+name   = "database_size_pages"
+type   = "u32"
+offset = 28
+
+[[field]]
+name   = "first_freelist_page"
+type   = "u32"
+offset = 32
+
+[[field]]
+name   = "freelist_page_count"
+type   = "u32"
+offset = 36
+
+[[field]]
+name   = "schema_cookie"
+type   = "u32"
+offset = 40
+
+[[field]]
+name   = "schema_format"
+type   = "u32"
+offset = 44
+
+[[field]]
+name   = "default_page_cache_size"
+type   = "u32"
+offset = 48
+
+[[field]]
+name   = "largest_root_btree_page"
+type   = "u32"
+offset = 52
+
+[[field]]
+name   = "text_encoding"
+type   = "u32"
+offset = 56
+
+[[field]]
+name   = "user_version"
+type   = "u32"
+offset = 60
+
+[[field]]
+name   = "incremental_vacuum"
+type   = "u32"
+offset = 64
+
+[[field]]
+name   = "application_id"
+type   = "u32"
+offset = 68
+
+[[field]]
+name   = "reserved"
+type   = "bytes"
+size   = 20
+offset = 72
+
+[[field]]
+name   = "version_valid_for"
+type   = "u32"
+offset = 92
+
+[[field]]
+name   = "sqlite_version_number"
+type   = "u32"
+offset = 96
+
+[summary]
+title = "SQLite database"
+
+[[summary.line]]
+label  = "Page size"
+field  = "page_size"
+unit   = "bytes"
+
+[[summary.line]]
+label  = "Pages"
+field  = "database_size_pages"
+
+[[summary.line]]
+label  = "Text encoding"
+field  = "text_encoding"
+render = "enum"
+enum   = { 1 = "UTF-8", 2 = "UTF-16 little endian", 3 = "UTF-16 big endian" }
+
+[[summary.line]]
+label  = "Write mode"
+field  = "write_version"
+render = "enum"
+enum   = { 1 = "rollback journal", 2 = "write-ahead log" }
+
+[[summary.line]]
+label  = "Schema format"
+field  = "schema_format"
+
+[[summary.line]]
+label  = "Written by SQLite"
+field  = "sqlite_version_number"
+
+[[summary.line]]
+label  = "Application id"
+field  = "application_id"
+render = "hex"
+
+[[summary.line]]
+label  = "User version"
+field  = "user_version"
+
+[[summary.line]]
+label  = "Reserved per page"
+field  = "reserved_space"
+unit   = "bytes"

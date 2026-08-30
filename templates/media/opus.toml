@@ -1,0 +1,64 @@
+# The identification header, which is the payload of the first Ogg page.
+# That page's own header is 27 bytes plus a one-byte segment table, so in an
+# ordinary .opus file this lands at byte 28.
+
+name   = "Opus head"
+endian = "little"
+offset = 28
+magic  = { offset = 28, bytes = "4F70757348656164" }
+
+[[field]]
+name   = "magic"
+type   = "char"
+size   = 8
+offset = 0
+
+[[field]]
+name   = "version"
+type   = "u8"
+offset = 8
+
+[[field]]
+name   = "channel_count"
+type   = "u8"
+offset = 9
+
+[[field]]
+name   = "pre_skip"
+type   = "u16"
+offset = 10
+
+[[field]]
+name   = "input_sample_rate"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "output_gain"
+type   = "i16"
+offset = 16
+
+[[field]]
+name   = "mapping_family"
+type   = "u8"
+offset = 18
+
+[summary]
+title = "Opus audio"
+
+[[summary.line]]
+label  = "Channels"
+field  = "channel_count"
+render = "enum"
+enum   = { 1 = "mono", 2 = "stereo" }
+
+[[summary.line]]
+label  = "Original sample rate"
+field  = "input_sample_rate"
+render = "si"
+unit   = "Hz"
+
+[[summary.line]]
+label  = "Pre-skip"
+field  = "pre_skip"
+unit   = "samples"

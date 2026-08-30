@@ -1,0 +1,28 @@
+name   = "XZ"
+endian = "little"
+magic  = { offset = 0, bytes = "FD377A585A00" }
+
+[[field]]
+name   = "magic"
+type   = "bytes"
+size   = 6
+offset = 0
+
+[[field]]
+name   = "stream_flags"
+type   = "bytes"
+size   = 2
+offset = 6
+
+[[field]]
+name   = "crc32"
+type   = "u32"
+offset = 8
+
+[summary]
+title = "XZ archive"
+
+[[summary.line]]
+label  = "Stream flags"
+field  = "stream_flags"
+render = "value"

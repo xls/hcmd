@@ -1,0 +1,21 @@
+name   = "WebAssembly"
+endian = "little"
+magic  = { offset = 0, bytes = "0061736D" }
+
+[[field]]
+name   = "magic"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "version"
+type   = "u32"
+offset = 4
+
+[summary]
+title = "WebAssembly module"
+
+[[summary.line]]
+label  = "Binary format version"
+field  = "version"

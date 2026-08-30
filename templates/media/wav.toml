@@ -1,0 +1,113 @@
+# The canonical 44-byte header. A file with an extra chunk before fmt or
+# between fmt and data has the same first twelve bytes and different offsets
+# after them, which the chunk ids at 12 and 36 will show.
+
+name   = "WAV (RIFF)"
+endian = "little"
+magic  = { offset = 8, bytes = "57415645" }
+
+[[field]]
+name   = "riff"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "file_size"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "form_type"
+type   = "char"
+size   = 4
+offset = 8
+
+[[field]]
+name   = "fmt_chunk_id"
+type   = "char"
+size   = 4
+offset = 12
+
+[[field]]
+name   = "fmt_chunk_size"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "audio_format"
+type   = "u16"
+offset = 20
+
+[[field]]
+name   = "num_channels"
+type   = "u16"
+offset = 22
+
+[[field]]
+name   = "sample_rate"
+type   = "u32"
+offset = 24
+
+[[field]]
+name   = "byte_rate"
+type   = "u32"
+offset = 28
+
+[[field]]
+name   = "block_align"
+type   = "u16"
+offset = 32
+
+[[field]]
+name   = "bits_per_sample"
+type   = "u16"
+offset = 34
+
+[[field]]
+name   = "data_chunk_id"
+type   = "char"
+size   = 4
+offset = 36
+
+[[field]]
+name   = "data_chunk_size"
+type   = "u32"
+offset = 40
+
+[summary]
+title = "WAV audio"
+
+[[summary.line]]
+label  = "Format"
+field  = "audio_format"
+render = "enum"
+enum   = { 1 = "PCM", 2 = "Microsoft ADPCM", 3 = "IEEE float", 6 = "A-law", 7 = "mu-law", 17 = "IMA ADPCM", 85 = "MP3", 65534 = "extensible" }
+
+[[summary.line]]
+label  = "Channels"
+field  = "num_channels"
+render = "enum"
+enum   = { 1 = "mono", 2 = "stereo" }
+
+[[summary.line]]
+label  = "Sample rate"
+field  = "sample_rate"
+render = "si"
+unit   = "Hz"
+
+[[summary.line]]
+label  = "Bit depth"
+field  = "bits_per_sample"
+unit   = "bit"
+
+[[summary.line]]
+label  = "Data rate"
+field  = "byte_rate"
+render = "si"
+unit   = "B/s"
+
+[[summary.line]]
+label  = "Audio data"
+field  = "data_chunk_size"
+render = "size"

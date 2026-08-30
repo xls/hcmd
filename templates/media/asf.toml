@@ -1,0 +1,29 @@
+name   = "ASF / WMV"
+endian = "little"
+magic  = { offset = 0, bytes = "3026B2758E66CF11A6D900AA0062CE6C" }
+
+[[field]]
+name   = "header_object_guid"
+type   = "bytes"
+size   = 16
+offset = 0
+
+[[field]]
+name   = "object_size"
+type   = "u64"
+offset = 16
+
+[[field]]
+name   = "number_of_header_objects"
+type   = "u32"
+offset = 24
+
+[[field]]
+name   = "reserved1"
+type   = "u8"
+offset = 28
+
+[[field]]
+name   = "reserved2"
+type   = "u8"
+offset = 29

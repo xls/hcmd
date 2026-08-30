@@ -1,0 +1,14 @@
+{
+  "name": "hcmd-installer",
+  "version": "0.1.0",
+  "description": "Install hcmd, a Total Commander alternative for the terminal",
+  "bin": { "hcmd-installer": "install.js" },
+  "files": ["install.js", "README.md"],
+  "keywords": ["file-manager", "tui", "terminal", "total-commander", "hcmd"],
+  "homepage": "https://github.com/xls/hcmd",
+  "repository": { "type": "git", "url": "git+https://github.com/xls/hcmd.git" },
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "os": ["linux", "darwin"],
+  "cpu": ["x64", "arm64"]
+}

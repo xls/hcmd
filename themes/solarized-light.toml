@@ -1,0 +1,94 @@
+# Holos Commander - the solarized-light theme.
+# Location: ~/.config/holoscommander/themes/solarized-light.toml
+#
+# Generated from a semantic palette so every slot is covered and no two themes
+# disagree about what a slot means. Colours are RGB; the renderer quantizes to
+# 256 or 16 as the terminal allows.
+
+name = "solarized-light"
+
+[panel]
+bg              = "#fdf6e3"
+fg              = "#657b83"
+dir_fg          = "#002b36"
+exec_fg         = "#859900"
+link_fg         = "#2aa198"
+archive_fg      = "#d33682"
+marked_fg       = "#b58900"
+cursor_bg       = "#268bd2"
+cursor_fg       = "#fdf6e3"
+# Drawn when the command line has focus: still clearly visible, one step back.
+cursor_bg_unfocused = "#eee8d5"
+cursor_fg_unfocused = "#657b83"
+# The cursor bar on the panel that is not active at all.
+inactive_cursor_bg  = "#f6efdc"
+inactive_cursor_fg  = "#93a1a1"
+border          = "#268bd2"
+inactive_border = "#93a1a1"
+header_bg       = "#fdf6e3"
+header_fg       = "#b58900"
+status_bg       = "#fdf6e3"
+status_fg       = "#2aa198"
+
+[cmdline]
+bg        = "#fef9ed"
+fg        = "#657b83"
+prompt_fg = "#859900"
+caret     = "#002b36"
+# The caret is always drawn, focused or not.
+caret_unfocused = "#93a1a1"
+
+[keybar]
+number_fg = "#657b83"
+label_bg  = "#268bd2"
+label_fg  = "#fdf6e3"
+
+[dialog]
+bg           = "#eee8d5"
+fg           = "#657b83"
+title        = "#268bd2"
+border       = "#93a1a1"
+button       = "#268bd2"
+button_focus = "#dc322f"
+input_bg     = "#fef9ed"
+input_fg     = "#002b36"
+
+[viewer]
+bg            = "#fdf6e3"
+fg            = "#657b83"
+line_numbers  = "#93a1a1"
+match         = "#b58900"
+current_match = "#dc322f"
+hex_offset    = "#2aa198"
+hex_ascii     = "#859900"
+selection_bg  = "#d33682"
+selection_fg  = "#fdf6e3"
+
+[syn]
+keyword     = "#d33682"
+string      = "#859900"
+comment     = "#93a1a1"
+type        = "#2aa198"
+function    = "#268bd2"
+number      = "#c85e18"
+constant    = "#c85e18"
+operator    = "#657b83"
+punctuation = "#93a1a1"
+variable    = "#657b83"
+
+# Mapping used when the terminal has only 16 colors.
+[fallback_16]
+"#fdf6e3" = "white"
+"#fef9ed" = "white"
+"#657b83" = "black"
+"#002b36" = "bright_white"
+"#268bd2" = "bright_cyan"
+"#eee8d5" = "bright_white"
+"#f6efdc" = "bright_white"
+"#93a1a1" = "bright_black"
+"#dc322f" = "bright_red"
+"#859900" = "bright_green"
+"#b58900" = "bright_yellow"
+"#d33682" = "bright_magenta"
+"#2aa198" = "bright_cyan"
+"#c85e18" = "bright_red"

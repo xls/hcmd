@@ -1,0 +1,32 @@
+name   = "TIFF (little endian)"
+endian = "little"
+magic  = { offset = 0, bytes = "49492A00" }
+
+[[field]]
+name   = "byte_order"
+type   = "char"
+size   = 2
+offset = 0
+
+[[field]]
+name   = "magic"
+type   = "u16"
+offset = 2
+
+[[field]]
+name   = "ifd_offset"
+type   = "u32"
+offset = 4
+
+[summary]
+title = "TIFF image"
+
+[[summary.line]]
+label  = "Byte order"
+field  = "byte_order"
+render = "text"
+
+[[summary.line]]
+label  = "First directory at"
+field  = "ifd_offset"
+render = "hex"

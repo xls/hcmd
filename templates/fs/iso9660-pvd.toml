@@ -1,0 +1,200 @@
+# The primary volume descriptor, at sector 16 of a 2048-byte-sector volume,
+# which is byte 32768. src/vfs/image/iso.rs reads the same CD001 at offset 1
+# of the descriptor. Most numbers appear twice, once each way round; the
+# per-field endian overrides here are what says which is which.
+
+name   = "ISO 9660 PVD"
+endian = "little"
+offset = 32768
+magic  = { offset = 32769, bytes = "4344303031" }
+
+[[field]]
+name   = "type"
+type   = "u8"
+offset = 0
+
+[[field]]
+name   = "standard_identifier"
+type   = "char"
+size   = 5
+offset = 1
+
+[[field]]
+name   = "version"
+type   = "u8"
+offset = 6
+
+[[field]]
+name   = "unused1"
+type   = "u8"
+offset = 7
+
+[[field]]
+name   = "system_identifier"
+type   = "char"
+size   = 32
+offset = 8
+
+[[field]]
+name   = "volume_identifier"
+type   = "char"
+size   = 32
+offset = 40
+
+[[field]]
+name   = "unused2"
+type   = "bytes"
+size   = 8
+offset = 72
+
+[[field]]
+name   = "volume_space_size_le"
+type   = "u32"
+offset = 80
+
+[[field]]
+name   = "volume_space_size_be"
+type   = "u32"
+endian = "big"
+offset = 84
+
+[[field]]
+name   = "unused3"
+type   = "bytes"
+size   = 32
+offset = 88
+
+[[field]]
+name   = "volume_set_size_le"
+type   = "u16"
+offset = 120
+
+[[field]]
+name   = "volume_set_size_be"
+type   = "u16"
+endian = "big"
+offset = 122
+
+[[field]]
+name   = "volume_sequence_le"
+type   = "u16"
+offset = 124
+
+[[field]]
+name   = "volume_sequence_be"
+type   = "u16"
+endian = "big"
+offset = 126
+
+[[field]]
+name   = "logical_block_size_le"
+type   = "u16"
+offset = 128
+
+[[field]]
+name   = "logical_block_size_be"
+type   = "u16"
+endian = "big"
+offset = 130
+
+[[field]]
+name   = "path_table_size_le"
+type   = "u32"
+offset = 132
+
+[[field]]
+name   = "path_table_size_be"
+type   = "u32"
+endian = "big"
+offset = 136
+
+[[field]]
+name   = "type_l_path_table"
+type   = "u32"
+offset = 140
+
+[[field]]
+name   = "opt_type_l_path_table"
+type   = "u32"
+offset = 144
+
+[[field]]
+name   = "type_m_path_table"
+type   = "u32"
+endian = "big"
+offset = 148
+
+[[field]]
+name   = "opt_type_m_path_table"
+type   = "u32"
+endian = "big"
+offset = 152
+
+[[field]]
+name   = "root_directory_record"
+type   = "bytes"
+size   = 34
+offset = 156
+
+[[field]]
+name   = "volume_set_identifier"
+type   = "char"
+size   = 128
+offset = 190
+
+[[field]]
+name   = "publisher_identifier"
+type   = "char"
+size   = 128
+offset = 318
+
+[[field]]
+name   = "data_preparer_identifier"
+type   = "char"
+size   = 128
+offset = 446
+
+[[field]]
+name   = "application_identifier"
+type   = "char"
+size   = 128
+offset = 574
+
+[summary]
+title = "ISO 9660 disc image"
+
+[[summary.line]]
+label  = "Volume"
+field  = "volume_identifier"
+render = "text"
+
+[[summary.line]]
+label  = "System"
+field  = "system_identifier"
+render = "text"
+
+[[summary.line]]
+label  = "Publisher"
+field  = "publisher_identifier"
+render = "text"
+
+[[summary.line]]
+label  = "Prepared by"
+field  = "data_preparer_identifier"
+render = "text"
+
+[[summary.line]]
+label  = "Application"
+field  = "application_identifier"
+render = "text"
+
+[[summary.line]]
+label  = "Size"
+field  = "volume_space_size_le"
+render = "size"
+scale  = 2048
+
+[[summary.line]]
+label  = "Block size"
+field  = "logical_block_size_le"
+unit   = "bytes"

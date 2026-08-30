@@ -1,0 +1,69 @@
+# The signature is at 4, after the version, which is why the magic is there
+# rather than at 0. The version says which Windows wrote it: 17 for XP, 23
+# for Vista and 7, 26 for 8.1, 30 for 10. executable_name is UTF-16 and
+# holds up to thirty characters.
+
+name   = "Windows Prefetch"
+endian = "little"
+magic  = { offset = 4, bytes = "53434341" }
+
+[[field]]
+name   = "format_version"
+type   = "u32"
+offset = 0
+
+[[field]]
+name   = "signature"
+type   = "char"
+size   = 4
+offset = 4
+
+[[field]]
+name   = "unknown"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "file_size"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "executable_name"
+type   = "char"
+size   = 60
+offset = 16
+
+[[field]]
+name   = "prefetch_hash"
+type   = "u32"
+offset = 76
+
+[[field]]
+name   = "flags"
+type   = "u32"
+offset = 80
+
+[summary]
+title = "Windows prefetch file"
+
+[[summary.line]]
+label  = "Program"
+field  = "executable_name"
+render = "text"
+
+[[summary.line]]
+label  = "Written by"
+field  = "format_version"
+render = "enum"
+enum   = { 17 = "Windows XP or 2003", 23 = "Windows Vista or 7", 26 = "Windows 8.1", 30 = "Windows 10 or 11" }
+
+[[summary.line]]
+label  = "File size"
+field  = "file_size"
+render = "size"
+
+[[summary.line]]
+label  = "Hash"
+field  = "prefetch_hash"
+render = "hex"

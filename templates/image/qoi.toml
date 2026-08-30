@@ -1,0 +1,51 @@
+name   = "QOI"
+endian = "big"
+magic  = { offset = 0, bytes = "716F6966" }
+
+[[field]]
+name   = "magic"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "width"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "height"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "channels"
+type   = "u8"
+offset = 12
+
+[[field]]
+name   = "colourspace"
+type   = "u8"
+offset = 13
+
+[summary]
+title = "QOI image"
+
+[[summary.line]]
+label  = "Dimensions"
+field  = "width"
+with   = "height"
+join   = " x "
+unit   = "px"
+
+[[summary.line]]
+label  = "Channels"
+field  = "channels"
+render = "enum"
+enum   = { 3 = "RGB", 4 = "RGBA" }
+
+[[summary.line]]
+label  = "Colour space"
+field  = "colourspace"
+render = "enum"
+enum   = { 0 = "sRGB with linear alpha", 1 = "all channels linear" }

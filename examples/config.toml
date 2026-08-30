@@ -1,0 +1,364 @@
+# Holos Commander - general configuration
+# Location: ~/.config/holoscommander/config.toml
+# This file is a tour of what is configurable, not a dump of the defaults --
+# some values here are set to show the option off rather than to match the
+# built-in default. Each setting's own comment names its default.
+# Delete anything you do not want to override; every key is optional.
+
+[ui]
+# Twenty-one themes ship compiled in, so a name here works with no files at
+# all. A themes/<name>.toml in this directory overrides one of the same name.
+#   blue (default, Norton Commander)  dracula        tokyo-night   nord
+#   gruvbox        gruvbox-light      catppuccin     catppuccin-latte
+#   solarized-dark solarized-light    everforest     kanagawa
+#   one-dark       monokai            rose-pine      night-owl
+#   ayu-dark       ayu-light          material       hackerman     synthwave
+theme          = "blue"      # themes/<name>.toml, or a shipped name above
+# Box-drawing glyphs only. The underline under a dialog's alt+<letter>
+# accelerator is an SGR attribute, not a glyph, and is drawn
+# either way; it takes its label's colours and has no theme slot of its own.
+ascii_borders  = false       # true for terminals with broken box drawing
+show_menubar   = false       # F9 summons it either way
+show_keybar    = true
+mouse          = false
+split_ratio    = 0.5         # left panel share of the width
+confirm_exit   = true
+
+[panel]
+show_hidden        = true
+directories_first  = true
+human_sizes        = true
+date_format        = "%d-%m-%y %H:%M"
+# What matches: leading chars / anywhere in the name / subsequence.
+quick_search       = "prefix"        # prefix | substring | fuzzy
+# How case is handled while type-navigating the panel:
+#   insensitive - "tho" matches Thorin and thorin
+#   sensitive   - "tho" matches thorin only
+#   smart       - insensitive until you type an uppercase letter
+quick_search_case  = "smart"         # insensitive | sensitive | smart
+# Bare digits feed quick search; tabs are on alt+1..alt+9. Set to "tabs" to
+# swap that round (digits switch tabs, ctrl+s starts a search).
+digit_keys         = "quick_search"  # quick_search | tabs
+max_tabs           = 9
+show_tab_bar       = "auto"          # auto (hide with one tab) | always | never
+
+[panel.columns]
+# name is the flexible column and absorbs the leftover width; every other
+# column holds its configured width so rows stay aligned.
+# Left to right. This order also defines the sort keys: ctrl+1 sorts by the
+# 1st column, ctrl+2 by the 2nd, and so on -- and it keeps working for a column
+# that is currently hidden.
+order = ["name", "ext", "size", "date", "attr"]
+
+# Percentage of the panel's inner width. "name" is not listed: it is the
+# flexible column and absorbs whatever is left.
+width = { ext = 6, size = 12, date = 20, attr = 8 }
+
+# Characters below which a column is not worth drawing at all -- it is hidden
+# rather than shown truncated.
+# `attr` needs ten for the default attr_style = "unix" (`drwxr-xr-x`);
+# use 4 alongside attr_style = "dos".
+min_chars = { ext = 3, size = 7, date = 16, attr = 10 }
+
+# Hidden first when the panel gets narrow; first entry goes first. Sorting by a
+# hidden column still works, and the panel footer shows which sort is active.
+hide_priority = ["attr", "ext", "size", "date"]
+
+# How an over-long filename is cropped:
+#   auto   - end-crop when "ext" is a visible column, middle-crop when it is not
+#            (middle keeps the extension, which would otherwise be lost)
+#   middle - always keep the tail
+#   end    - always keep the head
+name_truncate  = "auto"
+name_min_width = 16     # below this, columns drop from the right instead
+
+[console]
+# Start a shell at all. Off leaves the built-in command line
+# in place -- this application owns the text and the caret -- which is also what
+# happens when the configured shell cannot be started.
+enabled        = true
+shell          = ""      # empty = $SHELL
+# Whether Enter on the command line puts the shell on screen.
+#   auto   - the panels stay; switch only if the command is still holding the
+#            terminal after switch_delay (a build, a pager, an editor)
+#   always - switch on every Enter
+#   never  - never switch; Ctrl+O is the only way in
+switch_on_run  = "auto"
+switch_delay   = "250ms"
+scrollback     = 10000
+# Command-history entries kept by the built-in command line -- the one
+# used when there is no shell. With a shell the history is the shell's own.
+history_size   = 5000
+# The command line at the foot of the panels IS the shell's own input line,
+# rendered from the pty -- your prompt, your colours, your history and your key
+# bindings. A two-line prompt gets two rows; set 1 for one row.
+cmdline_rows   = 2
+# Keep the shell's directory and the active panel's in step, both ways.
+sync_cwd       = true
+# Install the OSC 7 / OSC 133 prompt hooks in bash and zsh at startup, as one
+# line typed into the shell after it has read your rc files -- so it composes
+# with your PROMPT_COMMAND / precmd_functions and your prompt framework rather
+# than replacing either. It costs one line in the shell's own history (a leading
+# space keeps even that out under HISTCONTROL=ignorespace / histignorespace).
+#
+# Three sequences go in. Any shell that can run something before each prompt can
+# emit them itself, and then this can be off:
+#
+#   ESC ] 7 ; file://<host>/<$PWD, with % as %25>  BEL   -> the panel follows the
+#                                                          shell
+#   ESC ] 133 ; A BEL   at the prompt's first cell  -> where the prompt begins
+#   ESC ] 133 ; B BEL   at the input's first cell   -> where your typing begins,
+#                                                      which is what lets this
+#                                                      application see that the
+#                                                      line is empty before it
+#                                                      writes a `cd`, and read a
+#                                                      command back for its own
+#                                                      history
+#   ESC ] 133 ; C BEL   after a command is read,    -> a command has started, so
+#                       before it runs                 what it prints is news:
+#                                                      the completion indicator
+#                                                      in the key bar (9.1). In
+#                                                      bash this is PS0; in zsh
+#                                                      it is preexec_functions.
+#                                                      It is NOT part of the
+#                                                      prompt, so it needs no
+#                                                      non-printing markers.
+#
+# Put the OSC 133 A/B pair inside the prompt string, wrapped in whatever your shell
+# spells "these bytes take no space" -- \[...\] in bash, %{...%} in zsh -- or the
+# shell will misplace its own cursor.
+#
+# fish already emits OSC 7 on every prompt (3.0 and later), so the panel follows
+# a fish shell with no help at all and gets no snippet from us. For the other
+# half -- the `cd` written when you change directory in the panel, and the
+# command history -- fish needs the marks, and fish 4 emits those itself. If
+# yours does not, in ~/.config/fish/config.fish:
+#
+#   functions -q __hcmd_prompt; or functions -c fish_prompt __hcmd_prompt
+#   function fish_prompt
+#       printf '\e]133;A\a'
+#       __hcmd_prompt
+#       printf '\e]133;B\a'
+#   end
+#   function __hcmd_preexec --on-event fish_preexec
+#       printf '\e]133;C\a'
+#   end
+#
+# A shell that emits none of them -- dash, a container's sh -- is not warned
+# about and not nagged at: the two halves of the sync simply do not run.
+inject_hooks   = true
+
+[open]
+# Enter on a file with the executable bit set. Executability comes from the
+# mode bits only, never the extension.
+#   ask    - prompt: Execute / Open with... / View / Cancel
+#   always - run it
+#   never  - treat it as data and open it with its association
+execute    = "ask"
+# console  - run in the Ctrl+O console, output visible, stdin works, TUIs work
+# detached - fork and detach, suits GUI programs, discards output
+execute_in = "console"
+
+# Your associations win over the desktop's. First match is used; if nothing
+# matches, the desktop default is used, then the internal viewer.
+# Shift+Enter always uses these and never executes.
+# [[open.handlers]]
+# match   = { ext = ["png", "jpg", "webp"] }
+# command = ["imv", "{file}"]
+#
+# [[open.handlers]]
+# match   = { mime = "text/*" }
+# command = ["$EDITOR", "{file}"]
+
+[editor]
+command = ""             # empty (the default) = $VISUAL, then $EDITOR, then nano
+args    = ["{file}"]     # e.g. nvim: ["+{line}", "{file}"]
+
+[viewer]
+wrap          = false
+line_numbers  = true
+# the arrow keys move a cursor and the view follows when it
+# reaches an edge. false restores pure scrolling, which is less(1)'s behaviour
+# and a reasonable thing to prefer -- but there is then nothing to select from.
+cursor        = true
+tab_width     = 4        # clamped to 1..16: a stop is a column count, and
+                         # expansion costs one space per column
+default_mode  = "text"   # text | hex
+hex_width     = 16       # bytes per row, clamped to 1..64. A width that is not
+                         # a whole number of [viewer.hex] words is rounded down
+                         # to one and the status line says so,
+                         # so 16 is whole at every grouping and 12 is not at 64
+index_chunk   = "1MiB"   # granularity of the background line index
+# The largest selection Ctrl+C will copy. An OSC 52 payload is
+# base64 through the terminal's input path and some terminals cap it, so a
+# larger selection is refused with its size rather than truncated -- a clipboard
+# holding the first megabyte of what you asked for is worse than an empty one.
+copy_max      = "1MiB"
+# The quick view (Ctrl+Q): how long the cursor must rest on a file
+# before it is opened in the other panel. Held Down through a directory
+# replaces the pending file rather than queueing it, so only the file the
+# cursor stops on is ever read.
+quick_view_delay = "150ms"
+
+# How the bytes are grouped and read in hex mode. A dump of
+# single bytes is the right view for a string table and the wrong one for an
+# array of 32-bit integers, so both are settings and both have a key: g cycles
+# the grouping, d the display format, e the byte order.
+[viewer.hex]
+group  = 8               # bits per column: 8 | 16 | 32 | 64
+format = "hex"           # hex | unsigned | signed
+endian = "little"        # little | big -- only matters above 8 bits
+
+[viewer.encoding]
+default  = "auto"        # auto | utf-8 | latin1 | cp1252 | cp437 | utf-16le | ...
+detect   = true          # chardetng sniff when default = "auto"
+fallback = "windows-1252"
+bom      = true          # honour a BOM over both of the above
+# The F8 ring. "auto" stands for whatever this file was detected
+# as, and is spliced back in if a configured list leaves it out -- a ring you
+# cannot get back to the start of is worse than no ring. Any encoding_rs label
+# works, so a KOI8-R or a Big5 corpus is one config line and one keystroke away.
+shortlist = ["utf-8", "auto", "windows-1252", "cp437", "utf-16le"]
+
+[viewer.highlight]
+# Highlighting is syntect. "tree-sitter" still loads, as a
+# deprecated alias with a warning, so an older config file keeps working.
+engine   = "syntect"       # syntect | none
+max_size = "8MiB"          # above this, highlighting is off and the file still opens
+
+# [viewer.highlight.lsp]
+# rust = "rust-analyzer"
+
+[viewer.render]
+# Mode 3, the rendered view: 3 in the viewer shows a JSON file as a foldable
+# tree, an HTML page as the text it renders to, and a Markdown file with its
+# headings and lists made rather than spelled.
+#
+# It is the one view that cannot stream, which is why it alone has a ceiling.
+# Everything else in the viewer is bounded by the window - a 40 GB file opens
+# as fast as a 4 kB one - and a rendered view breaks that: there is no way to
+# show a JSON document's tree, or to know that an object has twelve keys,
+# without having read as far as the closing brace. So mode 3 reads the whole
+# file, and a file over this refuses by name instead of rendering the first
+# part and calling it the document. 1 and 2 open it as they always would.
+max_size = "16MiB"
+
+[ops]
+follow_symlinks   = false
+preserve_attrs    = true
+trash_on_delete   = true      # F8 to trash, Shift+F8 always permanent
+confirm_overwrite = true
+background_queue  = true
+# The progress dialog. The per-file bar is omitted below
+# file_bar_min_size, where it would only ever flash. The displayed rate is a
+# moving average over rate_window so a stall shows as one; the ETA uses the
+# cumulative average instead, which must not jump. Below rate_min_samples the
+# rate shows a dash and the ETA is omitted rather than guessed.
+file_bar_min_size = "1MiB"
+rate_window       = "3s"
+rate_min_samples  = 4
+# Shift+F2, comparing the two lists. Two mtimes within
+# compare_mtime_slack count as the same, because FAT stores mtime at
+# two-second resolution and a copy to a USB stick would otherwise report every
+# file as changed. compare_contents reads the bytes as well: a byte-for-byte
+# comparison of two trees is a different operation with a different cost, so it
+# is off by default, and when it is on the comparison becomes a job with a
+# progress dialog like any other long read.
+compare_mtime_slack = "2s"
+compare_contents    = false
+
+[archive]
+# These two answer for read-only disk images as well as for archives, and
+# deliberately: read-only disk images define no configuration of their own
+# and none was invented for them. enter_on_click is the same question either
+# way (does Enter on a container browse it), and temp_dir is where an image
+# that is not a local file is materialised before it is read, under the same
+# 0700 directory an archive uses and swept by the same sweep.
+enter_on_click    = true
+temp_dir          = ""          # empty = $TMPDIR
+# Adding a file to a compressed tar rewrites the whole archive. Warn above the
+# first, refuse above the second. Always refused when the filesystem holding
+# temp_dir cannot fit archive_size * 2 + 10%.
+rewrite_warn_size = "256MiB"
+rewrite_max_size  = "500MiB"
+
+[search]
+# Search runs in-process on ripgrep's own libraries: ignore for the walk,
+# grep-searcher for the search, grep-regex for matching.
+#
+# "external" would spawn fd and rg and parse rg --json, which this program
+# rules out entirely. Setting it does not shell out: the search says
+#   search.engine = "external" would run rg as a subprocess, which this
+#   program rules out; the internal engine is the supported path
+# and then runs the internal engine. The key stays here because removing one a
+# user may already have written is worse than a clear message.
+#
+# Two keys that used to be here are gone: name_tool = "fd" and
+# content_tool = "rg", which named the binaries "external" would have spawned.
+# Nothing read them, in any engine, so a file that still has one now gets an
+# unknown-key warning instead of a setting that never did anything.
+engine       = "internal"     # internal (ripgrep libraries) | external
+# A file manager should find what is on disk, not what git would show: with
+# this false a gitignored file, a file under .git and a dotfile are all found.
+# Set it true and the search takes git's view of the tree,
+# which means .git itself is skipped as well as the rules in .gitignore -
+# honouring the rules alone would leave forty thousand loose objects in a
+# search of any repository.
+respect_gitignore = false
+
+[devices]
+# Alt+F1 and Alt+F2's list of mounted volumes. This turns off
+# *hcmd's own* filter - overlay, fuse.portal, binfmt_misc, tracefs, debugfs,
+# configfs, securityfs, bpf, efivarfs, ramfs - and it does NOT mean "show
+# everything the kernel has mounted". The enumeration is sysinfo's, and sysinfo
+# drops proc, sysfs, devtmpfs, cgroup, squashfs (the snap loopbacks), devpts
+# and the rest unconditionally, with no API that lifts it. tmpfs, NFS and CIFS
+# mounts are absent for the same reason, and deliberately: enumerating them
+# calls statvfs from the panel's render path, and a hard-mounted NFS server
+# that has gone away would freeze the whole UI. Ctrl+G and the hotlist (Ctrl+D)
+# both reach a mount that is not on this list.
+show_all = false
+
+[remote]
+default_protocol = "sftp"
+connect_timeout  = "10s"
+keepalive        = "30s"
+view_max_size    = "32MiB"
+pool_size        = 4
+strict_host_keys = true       # a changed host key is always fatal
+listing_ttl      = "2s"       # how long a cached directory listing is served
+pipeline         = 4          # chunks of a transfer in flight at once
+
+[terminal]
+# Force the keyboard protocol on or off; "auto" detects.
+keyboard_protocol = "auto"    # auto | enhanced | legacy
+
+# Force the colour depth; "auto" reads COLORTERM and TERM. Worth setting over
+# ssh and inside multiplexers, where those are frequently wrong.
+colors = "auto"               # auto | truecolor | 256 | 16
+
+# Bind a raw escape sequence to a logical key for terminals that need it.
+# [terminal.sequences]
+# "shift+f5" = "[15;2~"
+
+# ----------------------------------------------------------------- filetypes -
+# File-type colouring. Rules are matched in order, first match
+# wins, and a rule names a *theme slot* rather than a colour, so the rules
+# survive a theme change.
+#
+# `match` takes `ext` (a list, without the dot), `mode` ("exec", "dir" or
+# "symlink"), or both -- both stated means both must hold. An `ext` rule never
+# matches a directory, so a directory named `backup.zip` is still a directory.
+#
+# Writing any [[filetypes]] block REPLACES this list rather than adding to it,
+# so copy the rule below if you want to keep it.
+
+[[filetypes]]
+match = { ext = ["zip", "tar", "gz", "tgz", "bz2", "tbz", "xz", "txz", "zst", "7z", "rar", "lz4", "lzma", "cab", "iso", "jar", "war", "deb", "rpm"] }
+slot  = "panel.archive_fg"
+
+# Colour by mode bits rather than by name --a `.sh` without
+# `+x` is data, and a file with no extension and `+x` is a program.
+# [[filetypes]]
+# match = { mode = "exec" }
+# slot  = "panel.exec_fg"

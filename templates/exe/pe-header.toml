@@ -1,0 +1,250 @@
+# The PE signature, the COFF header and a PE32+ optional header. Apply it at
+# the offset the DOS header's e_lfanew names; there is no magic here because
+# that offset varies. optional_magic reads 523 for PE32+ and 267 for plain
+# PE32, whose optional header from 24 on is laid out differently.
+
+name   = "PE header (PE32+)"
+endian = "little"
+
+[[field]]
+name   = "pe_signature"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "machine"
+type   = "u16"
+offset = 4
+
+[[field]]
+name   = "number_of_sections"
+type   = "u16"
+offset = 6
+
+[[field]]
+name   = "time_date_stamp"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "pointer_to_symbol_table"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "number_of_symbols"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "size_of_optional_header"
+type   = "u16"
+offset = 20
+
+[[field]]
+name   = "characteristics"
+type   = "u16"
+offset = 22
+
+[[field]]
+name   = "optional_magic"
+type   = "u16"
+offset = 24
+
+[[field]]
+name   = "major_linker_version"
+type   = "u8"
+offset = 26
+
+[[field]]
+name   = "minor_linker_version"
+type   = "u8"
+offset = 27
+
+[[field]]
+name   = "size_of_code"
+type   = "u32"
+offset = 28
+
+[[field]]
+name   = "size_of_initialized_data"
+type   = "u32"
+offset = 32
+
+[[field]]
+name   = "size_of_uninitialized_data"
+type   = "u32"
+offset = 36
+
+[[field]]
+name   = "address_of_entry_point"
+type   = "u32"
+offset = 40
+
+[[field]]
+name   = "base_of_code"
+type   = "u32"
+offset = 44
+
+[[field]]
+name   = "image_base"
+type   = "u64"
+offset = 48
+
+[[field]]
+name   = "section_alignment"
+type   = "u32"
+offset = 56
+
+[[field]]
+name   = "file_alignment"
+type   = "u32"
+offset = 60
+
+[[field]]
+name   = "major_os_version"
+type   = "u16"
+offset = 64
+
+[[field]]
+name   = "minor_os_version"
+type   = "u16"
+offset = 66
+
+[[field]]
+name   = "major_image_version"
+type   = "u16"
+offset = 68
+
+[[field]]
+name   = "minor_image_version"
+type   = "u16"
+offset = 70
+
+[[field]]
+name   = "major_subsystem_version"
+type   = "u16"
+offset = 72
+
+[[field]]
+name   = "minor_subsystem_version"
+type   = "u16"
+offset = 74
+
+[[field]]
+name   = "win32_version_value"
+type   = "u32"
+offset = 76
+
+[[field]]
+name   = "size_of_image"
+type   = "u32"
+offset = 80
+
+[[field]]
+name   = "size_of_headers"
+type   = "u32"
+offset = 84
+
+[[field]]
+name   = "checksum"
+type   = "u32"
+offset = 88
+
+[[field]]
+name   = "subsystem"
+type   = "u16"
+offset = 92
+
+[[field]]
+name   = "dll_characteristics"
+type   = "u16"
+offset = 94
+
+[[field]]
+name   = "size_of_stack_reserve"
+type   = "u64"
+offset = 96
+
+[[field]]
+name   = "size_of_stack_commit"
+type   = "u64"
+offset = 104
+
+[[field]]
+name   = "size_of_heap_reserve"
+type   = "u64"
+offset = 112
+
+[[field]]
+name   = "size_of_heap_commit"
+type   = "u64"
+offset = 120
+
+[[field]]
+name   = "loader_flags"
+type   = "u32"
+offset = 128
+
+[[field]]
+name   = "number_of_rva_and_sizes"
+type   = "u32"
+offset = 132
+
+[summary]
+title = "Windows PE binary"
+
+[[summary.line]]
+label  = "Machine"
+field  = "machine"
+render = "enum"
+enum   = { 332 = "x86", 448 = "ARM", 452 = "ARM Thumb-2", 512 = "IA-64", 20530 = "RISC-V 32", 20580 = "RISC-V 64", 34404 = "x86-64", 43620 = "ARM64" }
+
+[[summary.line]]
+label  = "Format"
+field  = "optional_magic"
+render = "enum"
+enum   = { 263 = "ROM image", 267 = "PE32", 523 = "PE32+" }
+
+[[summary.line]]
+label  = "Subsystem"
+field  = "subsystem"
+render = "enum"
+enum   = { 1 = "native", 2 = "Windows GUI", 3 = "Windows console", 5 = "OS/2 console", 7 = "POSIX console", 9 = "Windows CE GUI", 10 = "EFI application", 11 = "EFI boot service driver", 12 = "EFI runtime driver", 13 = "EFI ROM", 14 = "Xbox", 16 = "Windows boot application" }
+
+[[summary.line]]
+label  = "Attributes"
+field  = "characteristics"
+render = "flags"
+flags  = { 1 = "relocations stripped", 2 = "executable", 32 = "large address aware", 512 = "debug stripped", 4096 = "system file", 8192 = "DLL", 16384 = "uniprocessor only" }
+
+[[summary.line]]
+label  = "Mitigations"
+field  = "dll_characteristics"
+render = "flags"
+flags  = { 64 = "ASLR", 128 = "force integrity", 256 = "DEP", 512 = "no isolation", 1024 = "no SEH", 2048 = "no bind", 4096 = "AppContainer", 16384 = "control flow guard", 32768 = "terminal server aware" }
+
+[[summary.line]]
+label  = "Sections"
+field  = "number_of_sections"
+
+[[summary.line]]
+label  = "Entry point"
+field  = "address_of_entry_point"
+render = "hex"
+
+[[summary.line]]
+label  = "Image base"
+field  = "image_base"
+render = "hex"
+
+[[summary.line]]
+label  = "Image size"
+field  = "size_of_image"
+render = "size"
+
+[[summary.line]]
+label  = "Built"
+field  = "time_date_stamp"
+render = "time"

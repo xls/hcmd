@@ -1,0 +1,30 @@
+# A binary package, built from the release artefact rather than from source.
+#
+# The source PKGBUILD beside this one compiles the program. This one installs
+# what the release matrix already compiled, which is what a published package
+# should do: the bytes people run are the bytes that were tested.
+#
+# `@VERSION@` is substituted by the release workflow, and `source=()` means
+# makepkg fetches and extracts nothing, so `package()` reads from `$startdir`.
+pkgname=hcmd-bin
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="A Total Commander alternative for the terminal, for fingers that learned F5 in 1998"
+arch=('x86_64')
+url="https://github.com/xls/hcmd"
+license=('MIT')
+depends=('gcc-libs')
+provides=('hcmd')
+conflicts=('hcmd')
+# The binary is already stripped by the release profile.
+options=('!strip')
+source=()
+
+package() {
+  install -Dm0755 "$startdir/hcmd" "$pkgdir/usr/bin/hcmd"
+  install -Dm0644 "$startdir/README.md" "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm0644 "$startdir/FEATURES.md" "$pkgdir/usr/share/doc/$pkgname/FEATURES.md"
+  install -Dm0644 "$startdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  cd "$startdir"
+  find examples themes -type f -exec install -Dm0644 "{}" "$pkgdir/usr/share/hcmd/{}" \;
+}

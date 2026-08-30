@@ -1,0 +1,89 @@
+# Holos Commander - default theme, Total Commander / Norton Commander blue.
+# Location: ~/.config/holoscommander/themes/blue.toml
+# Colors are RGB; the renderer quantizes to 256 or 16 colors as needed.
+
+name = "blue"
+
+[panel]
+bg              = "#0000A8"
+fg              = "#C0C0C0"
+dir_fg          = "#FFFFFF"
+exec_fg         = "#54FF54"
+link_fg         = "#54FFFF"
+archive_fg      = "#FF54FF"
+marked_fg       = "#FFFF54"
+cursor_bg       = "#00A8A8"
+cursor_fg       = "#000000"
+# Drawn when the command line has focus: still clearly visible, one step back.
+cursor_bg_unfocused = "#007878"
+cursor_fg_unfocused = "#000000"
+# The cursor bar on the panel that is not active at all.
+inactive_cursor_bg  = "#2020B0"
+inactive_cursor_fg  = "#C0C0C0"
+border          = "#54FFFF"
+inactive_border = "#8080C0"
+header_bg       = "#0000A8"
+header_fg       = "#FFFF54"
+status_bg       = "#0000A8"
+status_fg       = "#54FFFF"
+
+[cmdline]
+bg        = "#000000"
+fg        = "#C0C0C0"
+prompt_fg = "#54FF54"
+caret     = "#FFFFFF"
+# The caret is always drawn, focused or not.
+caret_unfocused = "#A0A0A0"
+
+[keybar]
+number_fg = "#C0C0C0"
+label_bg  = "#00A8A8"
+label_fg  = "#000000"
+
+[dialog]
+bg           = "#C0C0C0"
+fg           = "#000000"
+title        = "#000080"
+border       = "#000000"
+button       = "#000080"
+button_focus = "#A80000"
+input_bg     = "#000080"
+input_fg     = "#FFFFFF"
+
+[viewer]
+bg            = "#000000"
+fg            = "#C0C0C0"
+line_numbers  = "#606060"
+match         = "#FFFF54"
+current_match = "#FF5454"
+hex_offset    = "#54FFFF"
+hex_ascii     = "#54FF54"
+selection_bg  = "#FF54FF"
+selection_fg  = "#000000"
+
+[syn]
+keyword     = "#FF54FF"
+string      = "#54FF54"
+comment     = "#808080"
+type        = "#54FFFF"
+function    = "#FFFF54"
+number      = "#FF8754"
+constant    = "#FF8754"
+operator    = "#C0C0C0"
+punctuation = "#A0A0A0"
+variable    = "#C0C0C0"
+
+# Mapping used when the terminal has only 16 colors.
+[fallback_16]
+"#0000A8" = "blue"
+"#C0C0C0" = "white"
+"#FFFFFF" = "bright_white"
+"#00A8A8" = "cyan"
+"#54FFFF" = "bright_cyan"
+"#FFFF54" = "bright_yellow"
+"#54FF54" = "bright_green"
+"#FF54FF" = "bright_magenta"
+"#FF5454" = "bright_red"
+"#FF8754" = "bright_red"
+"#000000" = "black"
+"#808080" = "bright_black"

@@ -1,0 +1,119 @@
+# The file header and a BITMAPINFOHEADER, which is what dib_header_size = 40
+# means. A different header size means a different DIB variant and the
+# fields from 14 on do not apply.
+
+name   = "BMP"
+endian = "little"
+magic  = { offset = 0, bytes = "424D" }
+
+[[field]]
+name   = "signature"
+type   = "char"
+size   = 2
+offset = 0
+
+[[field]]
+name   = "file_size"
+type   = "u32"
+offset = 2
+
+[[field]]
+name   = "reserved1"
+type   = "u16"
+offset = 6
+
+[[field]]
+name   = "reserved2"
+type   = "u16"
+offset = 8
+
+[[field]]
+name   = "pixel_data_offset"
+type   = "u32"
+offset = 10
+
+[[field]]
+name   = "dib_header_size"
+type   = "u32"
+offset = 14
+
+[[field]]
+name   = "width"
+type   = "i32"
+offset = 18
+
+[[field]]
+name   = "height"
+type   = "i32"
+offset = 22
+
+[[field]]
+name   = "planes"
+type   = "u16"
+offset = 26
+
+[[field]]
+name   = "bit_count"
+type   = "u16"
+offset = 28
+
+[[field]]
+name   = "compression"
+type   = "u32"
+offset = 30
+
+[[field]]
+name   = "image_size"
+type   = "u32"
+offset = 34
+
+[[field]]
+name   = "x_pixels_per_metre"
+type   = "i32"
+offset = 38
+
+[[field]]
+name   = "y_pixels_per_metre"
+type   = "i32"
+offset = 42
+
+[[field]]
+name   = "colours_used"
+type   = "u32"
+offset = 46
+
+[[field]]
+name   = "colours_important"
+type   = "u32"
+offset = 50
+
+[summary]
+title = "BMP image"
+
+[[summary.line]]
+label  = "Dimensions"
+field  = "width"
+with   = "height"
+join   = " x "
+unit   = "px"
+
+[[summary.line]]
+label  = "Colour depth"
+field  = "bit_count"
+unit   = "bit"
+
+[[summary.line]]
+label  = "Compression"
+field  = "compression"
+render = "enum"
+enum   = { 0 = "none", 1 = "8-bit RLE", 2 = "4-bit RLE", 3 = "bitfields", 4 = "JPEG", 5 = "PNG" }
+
+[[summary.line]]
+label  = "File size"
+field  = "file_size"
+render = "size"
+
+[[summary.line]]
+label  = "Pixel data at"
+field  = "pixel_data_offset"
+render = "hex"

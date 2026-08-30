@@ -1,0 +1,93 @@
+# The header before each member's data. The file name follows this header,
+# file_name_length bytes of it, then extra_field_length bytes of extra
+# fields.
+
+name   = "ZIP local file header"
+endian = "little"
+magic  = { offset = 0, bytes = "504B0304" }
+
+[[field]]
+name   = "signature"
+type   = "bytes"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "version_needed"
+type   = "u16"
+offset = 4
+
+[[field]]
+name   = "flags"
+type   = "u16"
+offset = 6
+
+[[field]]
+name   = "compression_method"
+type   = "u16"
+offset = 8
+
+[[field]]
+name   = "last_mod_time"
+type   = "u16"
+offset = 10
+
+[[field]]
+name   = "last_mod_date"
+type   = "u16"
+offset = 12
+
+[[field]]
+name   = "crc32"
+type   = "u32"
+offset = 14
+
+[[field]]
+name   = "compressed_size"
+type   = "u32"
+offset = 18
+
+[[field]]
+name   = "uncompressed_size"
+type   = "u32"
+offset = 22
+
+[[field]]
+name   = "file_name_length"
+type   = "u16"
+offset = 26
+
+[[field]]
+name   = "extra_field_length"
+type   = "u16"
+offset = 28
+
+[summary]
+title = "ZIP archive"
+
+[[summary.line]]
+label  = "Compression"
+field  = "compression_method"
+render = "enum"
+enum   = { 0 = "stored", 1 = "shrunk", 6 = "imploded", 8 = "deflate", 9 = "deflate64", 12 = "bzip2", 14 = "LZMA", 93 = "Zstandard", 95 = "XZ", 96 = "JPEG", 98 = "PPMd" }
+
+[[summary.line]]
+label  = "Compressed"
+field  = "compressed_size"
+render = "size"
+
+[[summary.line]]
+label  = "Uncompressed"
+field  = "uncompressed_size"
+render = "size"
+
+[[summary.line]]
+label  = "Flags"
+field  = "flags"
+render = "flags"
+flags  = { 1 = "encrypted", 8 = "sizes follow the data", 64 = "strong encryption", 2048 = "UTF-8 name" }
+
+[[summary.line]]
+label  = "Name length"
+field  = "file_name_length"
+unit   = "bytes"

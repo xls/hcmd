@@ -1,0 +1,297 @@
+# Retrying a failed release does NOT need a new tag. `gh run rerun <id>
+# --failed` re-runs only the jobs that failed and reuses every artefact the
+# successful ones uploaded, which turns a twenty-minute rebuild of six targets
+# into a one-minute retry of the one thing that broke. Re-tagging throws all of
+# that away, which is worth knowing before doing it.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build (for a dry run, any string)"
+        required: true
+        default: dry-run
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # glibc. Built on the oldest runner image available so the binary
+          # runs on distributions older than the builder.
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04
+            cross: true
+          # musl, for a binary that does not care which libc the host has.
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-22.04
+            cross: true
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-22.04
+            cross: true
+          # Both darwin targets on Apple silicon. Xcode there ships the
+           # x86_64 SDK too, so the Intel build is a cross-compile that needs
+           # no Intel runner - and Intel macOS runners are scarce enough that
+           # this job sat queued for forty minutes waiting for one while every
+           # other target had finished.
+          - target: aarch64-apple-darwin
+            os: macos-14
+          - target: x86_64-apple-darwin
+            os: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          rustup show
+          rustup target add ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # Several archive and compression crates build C sources, so a
+      # cross-compiled target needs a cross C toolchain as well as a Rust one.
+      # `cross` carries both in a container, which is why it is used rather
+      # than a hand-assembled linker configuration.
+      # Compiling `cross` from source on every run cost minutes per target for
+      # a binary that never changes, so it is cached on its version.
+      - name: Cache cross
+        if: matrix.cross
+        id: cross-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cross
+          key: cross-0.2.5-${{ runner.os }}
+
+      - name: Install cross
+        if: matrix.cross && steps.cross-cache.outputs.cache-hit != 'true'
+        run: cargo install cross --locked --version 0.2.5
+
+      - name: Build
+        # unrar's vendored cmddata.cpp uses `ptrdiff_t` without including
+        # <cstddef>, which the aarch64-gnu cross image's g++ does not supply
+        # transitively. Forcing the include there fixes the one target it
+        # breaks and changes nothing for the others; `Cross.toml` is what
+        # carries it into the container.
+        env:
+          CXXFLAGS_aarch64_unknown_linux_gnu: -include cstddef
+        run: |
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
+
+      - name: Check it runs
+        # A cross-built binary cannot run on the builder, so it is only smoke
+        # tested where the architecture matches.
+        if: '!matrix.cross'
+        run: ./target/${{ matrix.target }}/release/hcmd --version
+
+      - name: Package
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+          name="hcmd-${version}-${{ matrix.target }}"
+          mkdir -p "dist/${name}"
+          cp "target/${{ matrix.target }}/release/hcmd" "dist/${name}/"
+          cp README.md FEATURES.md LICENSE* "dist/${name}/" 2>/dev/null || true
+          cp -r examples "dist/${name}/examples"
+          cp -r themes "dist/${name}/themes"
+          tar -C dist -czf "dist/${name}.tar.gz" "${name}"
+          (cd dist && shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256")
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+
+  packages:
+    name: deb and rpm
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: hcmd-*-x86_64-unknown-linux-gnu
+          path: dist
+          merge-multiple: true
+
+      - name: Unpack the x86_64 build
+        run: |
+          set -euo pipefail
+          version=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+          tar -C dist -xzf "dist/hcmd-${version}-x86_64-unknown-linux-gnu.tar.gz"
+          mkdir -p target/release
+          cp "dist/hcmd-${version}-x86_64-unknown-linux-gnu/hcmd" target/release/hcmd
+          chmod +x target/release/hcmd
+
+      - name: Build the .deb
+        run: packaging/build-deb.sh
+
+      - name: Build the .rpm
+        run: |
+          sudo apt-get update && sudo apt-get install -y rpm
+          packaging/build-rpm.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            dist/*.deb
+            dist/*.rpm
+
+  arch:
+    name: arch package
+    needs: build
+    runs-on: ubuntu-22.04
+    # makepkg needs an Arch userland and GitHub has no Arch runner, so the
+    # package is built in the distribution's own container, from the binary the
+    # matrix already produced.
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: hcmd-*-x86_64-unknown-linux-gnu
+          path: dist
+          merge-multiple: true
+
+      - name: Tools, and an unprivileged user to build as
+        run: |
+          pacman -Sy --noconfirm --needed base-devel sudo
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+      - name: Build the package
+        run: |
+          set -eu
+          version=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+          tar -C dist -xzf "dist/hcmd-${version}-x86_64-unknown-linux-gnu.tar.gz"
+          work=$(mktemp -d)
+          cp -r "dist/hcmd-${version}-x86_64-unknown-linux-gnu/." "$work/"
+          sed "s/@VERSION@/${version}/" packaging/arch/PKGBUILD.bin > "$work/PKGBUILD"
+          chown -R builder "$work"
+          cd "$work" && sudo -u builder makepkg --noconfirm --nodeps
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          cp "$work"/*.pkg.tar.zst "$GITHUB_WORKSPACE/dist/"
+          ls -la "$GITHUB_WORKSPACE/dist"/*.pkg.tar.zst
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch-package
+          path: dist/*.pkg.tar.zst
+
+  release:
+    name: publish
+    # Not `npm`. That job builds an installer, not a binary, and a release
+    # that waits on it is a release where a typo in a packaging script keeps
+    # six working binaries off the page.
+    needs: [build, packages, arch]
+    # `always()`, deliberately, and this is the interesting decision in the
+    # file: publish what built rather than nothing.
+    #
+    # One target failing used to mean no release at all. That is the wrong
+    # trade in both directions - it withholds five working binaries from
+    # everyone because a sixth is broken, and it makes a broken target an
+    # emergency rather than a known gap. So the assets that exist are
+    # published, the release says plainly which platforms are missing, and the
+    # job still ends red so nobody mistakes a partial release for a whole one.
+    #
+    # `!cancelled()` because a cancelled run should publish nothing: somebody
+    # stopped it, and finishing the job anyway would be doing the thing they
+    # asked to stop.
+    if: always() && !cancelled() && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Work out what is here and what is not
+        id: stock
+        run: |
+          set -eu
+          version=$(echo "${{ github.ref_name }}" | sed 's/^v//')
+          cd dist
+          missing=""
+          for t in \
+            x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu \
+            x86_64-unknown-linux-musl aarch64-unknown-linux-musl \
+            x86_64-apple-darwin aarch64-apple-darwin
+          do
+            [ -f "hcmd-${version}-${t}.tar.gz" ] || missing="$missing $t"
+          done
+          ls *.deb          >/dev/null 2>&1 || missing="$missing debian-package"
+          ls *.rpm          >/dev/null 2>&1 || missing="$missing rpm-package"
+          ls *.pkg.tar.zst  >/dev/null 2>&1 || missing="$missing arch-package"
+          echo "missing=${missing# }" >> "$GITHUB_OUTPUT"
+          # A release with no binaries at all is not a partial release, it is a
+          # failure, and publishing an empty one would be worse than nothing.
+          count=$(ls *.tar.gz 2>/dev/null | wc -l)
+          [ "$count" -gt 0 ] || { echo "nothing built at all"; exit 1; }
+          echo "built $count platform tarballs; missing: ${missing:-nothing}"
+
+      - name: One checksum file for everything that is here
+        run: |
+          cd dist
+          rm -f SHA256SUMS
+          # Globs that match nothing must not take the whole command with them.
+          shopt -s nullglob
+          shasum -a 256 *.tar.gz *.deb *.rpm *.pkg.tar.zst > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Say so on the release itself when something is missing
+        if: steps.stock.outputs.missing != ''
+        run: |
+          {
+            echo "> **This release is incomplete.** These did not build and are"
+            echo "> not attached: \`${{ steps.stock.outputs.missing }}\`."
+            echo ">"
+            echo "> Everything else below was built and checksummed as usual."
+            echo
+          } > dist/NOTICE.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.deb
+            dist/*.rpm
+            dist/*.pkg.tar.zst
+            dist/SHA256SUMS
+          body_path: ${{ steps.stock.outputs.missing != '' && 'dist/NOTICE.md' || '' }}
+          generate_release_notes: true
+
+      # After the upload, so the assets are on the page either way. A red run
+      # against a published release is the honest state for "these platforms
+      # are missing": the binaries that work are available and the gap is not
+      # something anyone has to notice for themselves.
+      - name: Fail the run if the release is incomplete
+        if: steps.stock.outputs.missing != ''
+        run: |
+          echo "published, but without: ${{ steps.stock.outputs.missing }}"
+          exit 1

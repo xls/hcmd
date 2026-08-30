@@ -1,0 +1,39 @@
+name   = "Minidump"
+endian = "little"
+magic  = { offset = 0, bytes = "4D444D50" }
+
+[[field]]
+name   = "signature"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "version"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "number_of_streams"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "stream_directory_rva"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "checksum"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "time_date_stamp"
+type   = "u32"
+offset = 20
+
+[[field]]
+name   = "flags"
+type   = "u64"
+offset = 24

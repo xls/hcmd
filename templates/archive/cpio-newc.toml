@@ -1,0 +1,90 @@
+# The new ASCII format. Every field is eight ASCII hex digits. The CRC
+# variant is identical but for a magic of 070702.
+
+name   = "cpio (newc)"
+endian = "big"
+magic  = { offset = 0, bytes = "303730373031" }
+
+[[field]]
+name   = "magic"
+type   = "char"
+size   = 6
+offset = 0
+
+[[field]]
+name   = "ino"
+type   = "char"
+size   = 8
+offset = 6
+
+[[field]]
+name   = "mode"
+type   = "char"
+size   = 8
+offset = 14
+
+[[field]]
+name   = "uid"
+type   = "char"
+size   = 8
+offset = 22
+
+[[field]]
+name   = "gid"
+type   = "char"
+size   = 8
+offset = 30
+
+[[field]]
+name   = "nlink"
+type   = "char"
+size   = 8
+offset = 38
+
+[[field]]
+name   = "mtime"
+type   = "char"
+size   = 8
+offset = 46
+
+[[field]]
+name   = "filesize"
+type   = "char"
+size   = 8
+offset = 54
+
+[[field]]
+name   = "devmajor"
+type   = "char"
+size   = 8
+offset = 62
+
+[[field]]
+name   = "devminor"
+type   = "char"
+size   = 8
+offset = 70
+
+[[field]]
+name   = "rdevmajor"
+type   = "char"
+size   = 8
+offset = 78
+
+[[field]]
+name   = "rdevminor"
+type   = "char"
+size   = 8
+offset = 86
+
+[[field]]
+name   = "namesize"
+type   = "char"
+size   = 8
+offset = 94
+
+[[field]]
+name   = "check"
+type   = "char"
+size   = 8
+offset = 102

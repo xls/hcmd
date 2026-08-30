@@ -1,0 +1,47 @@
+# major_version 45 is Java 1.1 and each release adds one, so 52 is Java 8
+# and 65 is Java 21.
+
+name   = "Java class"
+endian = "big"
+magic  = { offset = 0, bytes = "CAFEBABE" }
+
+[[field]]
+name   = "magic"
+type   = "bytes"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "minor_version"
+type   = "u16"
+offset = 4
+
+[[field]]
+name   = "major_version"
+type   = "u16"
+offset = 6
+
+[[field]]
+name   = "constant_pool_count"
+type   = "u16"
+offset = 8
+
+[summary]
+title = "Java class file"
+
+[[summary.line]]
+label  = "Compiled for"
+field  = "major_version"
+render = "enum"
+enum   = { 45 = "Java 1.1", 46 = "Java 1.2", 47 = "Java 1.3", 48 = "Java 1.4", 49 = "Java 5", 50 = "Java 6", 51 = "Java 7", 52 = "Java 8", 53 = "Java 9", 54 = "Java 10", 55 = "Java 11", 56 = "Java 12", 57 = "Java 13", 58 = "Java 14", 59 = "Java 15", 60 = "Java 16", 61 = "Java 17", 62 = "Java 18", 63 = "Java 19", 64 = "Java 20", 65 = "Java 21", 66 = "Java 22", 67 = "Java 23", 68 = "Java 24" }
+
+[[summary.line]]
+label  = "Class file version"
+field  = "major_version"
+with   = "minor_version"
+join   = "."
+
+[[summary.line]]
+label  = "Constant pool"
+field  = "constant_pool_count"
+unit   = "entries"

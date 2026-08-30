@@ -1,0 +1,26 @@
+# The header every JFFS2 node begins with. A big-endian image writes the
+# magic the other way round and is not matched.
+
+name   = "JFFS2 node"
+endian = "little"
+magic  = { offset = 0, bytes = "8519" }
+
+[[field]]
+name   = "magic"
+type   = "u16"
+offset = 0
+
+[[field]]
+name   = "nodetype"
+type   = "u16"
+offset = 2
+
+[[field]]
+name   = "totlen"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "hdr_crc"
+type   = "u32"
+offset = 8

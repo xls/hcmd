@@ -1,0 +1,56 @@
+# The stream marker and the STREAMINFO block that must follow it. The sample
+# rate and channel count after 18 are packed across byte boundaries and are
+# not fields this format can express.
+
+name   = "FLAC"
+endian = "big"
+magic  = { offset = 0, bytes = "664C6143" }
+
+[[field]]
+name   = "signature"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "block_type"
+type   = "u8"
+offset = 4
+
+[[field]]
+name   = "block_length"
+type   = "bytes"
+size   = 3
+offset = 5
+
+[[field]]
+name   = "min_block_size"
+type   = "u16"
+offset = 8
+
+[[field]]
+name   = "max_block_size"
+type   = "u16"
+offset = 10
+
+[[field]]
+name   = "min_frame_size"
+type   = "bytes"
+size   = 3
+offset = 12
+
+[[field]]
+name   = "max_frame_size"
+type   = "bytes"
+size   = 3
+offset = 15
+
+[summary]
+title = "FLAC audio"
+
+[[summary.line]]
+label  = "Block size"
+field  = "min_block_size"
+with   = "max_block_size"
+join   = " to "
+unit   = "samples"

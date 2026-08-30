@@ -1,0 +1,244 @@
+# The superblock is at byte 1024 of the volume, not at its start, so the
+# magic is at 1080. s_magic reads 61267 there. Which of ext2, ext3 and ext4
+# this is comes from the feature bits at 92, not from anything named in the
+# magic.
+
+name   = "ext2/3/4 superblock"
+endian = "little"
+offset = 1024
+magic  = { offset = 1080, bytes = "53EF" }
+
+[[field]]
+name   = "s_inodes_count"
+type   = "u32"
+offset = 0
+
+[[field]]
+name   = "s_blocks_count_lo"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "s_r_blocks_count_lo"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "s_free_blocks_count_lo"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "s_free_inodes_count"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "s_first_data_block"
+type   = "u32"
+offset = 20
+
+[[field]]
+name   = "s_log_block_size"
+type   = "u32"
+offset = 24
+
+[[field]]
+name   = "s_log_cluster_size"
+type   = "u32"
+offset = 28
+
+[[field]]
+name   = "s_blocks_per_group"
+type   = "u32"
+offset = 32
+
+[[field]]
+name   = "s_clusters_per_group"
+type   = "u32"
+offset = 36
+
+[[field]]
+name   = "s_inodes_per_group"
+type   = "u32"
+offset = 40
+
+[[field]]
+name   = "s_mtime"
+type   = "u32"
+offset = 44
+
+[[field]]
+name   = "s_wtime"
+type   = "u32"
+offset = 48
+
+[[field]]
+name   = "s_mnt_count"
+type   = "u16"
+offset = 52
+
+[[field]]
+name   = "s_max_mnt_count"
+type   = "u16"
+offset = 54
+
+[[field]]
+name   = "s_magic"
+type   = "u16"
+offset = 56
+
+[[field]]
+name   = "s_state"
+type   = "u16"
+offset = 58
+
+[[field]]
+name   = "s_errors"
+type   = "u16"
+offset = 60
+
+[[field]]
+name   = "s_minor_rev_level"
+type   = "u16"
+offset = 62
+
+[[field]]
+name   = "s_lastcheck"
+type   = "u32"
+offset = 64
+
+[[field]]
+name   = "s_checkinterval"
+type   = "u32"
+offset = 68
+
+[[field]]
+name   = "s_creator_os"
+type   = "u32"
+offset = 72
+
+[[field]]
+name   = "s_rev_level"
+type   = "u32"
+offset = 76
+
+[[field]]
+name   = "s_def_resuid"
+type   = "u16"
+offset = 80
+
+[[field]]
+name   = "s_def_resgid"
+type   = "u16"
+offset = 82
+
+[[field]]
+name   = "s_first_ino"
+type   = "u32"
+offset = 84
+
+[[field]]
+name   = "s_inode_size"
+type   = "u16"
+offset = 88
+
+[[field]]
+name   = "s_block_group_nr"
+type   = "u16"
+offset = 90
+
+[[field]]
+name   = "s_feature_compat"
+type   = "u32"
+offset = 92
+
+[[field]]
+name   = "s_feature_incompat"
+type   = "u32"
+offset = 96
+
+[[field]]
+name   = "s_feature_ro_compat"
+type   = "u32"
+offset = 100
+
+[[field]]
+name   = "s_uuid"
+type   = "bytes"
+size   = 16
+offset = 104
+
+[[field]]
+name   = "s_volume_name"
+type   = "char"
+size   = 16
+offset = 120
+
+[[field]]
+name   = "s_last_mounted"
+type   = "char"
+size   = 64
+offset = 136
+
+[summary]
+title = "ext2, ext3 or ext4 volume"
+
+[[summary.line]]
+label  = "Volume name"
+field  = "s_volume_name"
+render = "text"
+
+[[summary.line]]
+label  = "Last mounted on"
+field  = "s_last_mounted"
+render = "text"
+
+[[summary.line]]
+label  = "Block size"
+field  = "s_log_block_size"
+render = "enum"
+enum   = { 0 = "1 KB", 1 = "2 KB", 2 = "4 KB", 3 = "8 KB", 4 = "16 KB", 5 = "32 KB", 6 = "64 KB" }
+
+[[summary.line]]
+label  = "Blocks"
+field  = "s_blocks_count_lo"
+
+[[summary.line]]
+label  = "Free blocks"
+field  = "s_free_blocks_count_lo"
+
+[[summary.line]]
+label  = "Inodes"
+field  = "s_inodes_count"
+
+[[summary.line]]
+label  = "Inode size"
+field  = "s_inode_size"
+unit   = "bytes"
+
+[[summary.line]]
+label  = "State"
+field  = "s_state"
+render = "enum"
+enum   = { 1 = "cleanly unmounted", 2 = "errors detected", 4 = "orphans being recovered" }
+
+[[summary.line]]
+label  = "On error"
+field  = "s_errors"
+render = "enum"
+enum   = { 1 = "continue", 2 = "remount read-only", 3 = "panic" }
+
+[[summary.line]]
+label  = "Last written"
+field  = "s_wtime"
+render = "time"
+
+[[summary.line]]
+label  = "Last checked"
+field  = "s_lastcheck"
+render = "time"
+
+[[summary.line]]
+label  = "Mounts since check"
+field  = "s_mnt_count"

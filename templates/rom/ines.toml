@@ -1,0 +1,74 @@
+# The 16-byte header a NES ROM dump carries. The two size fields count 16
+# KiB and 8 KiB units.
+
+name   = "iNES"
+endian = "little"
+magic  = { offset = 0, bytes = "4E45531A" }
+
+[[field]]
+name   = "magic"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "prg_rom_size"
+type   = "u8"
+offset = 4
+
+[[field]]
+name   = "chr_rom_size"
+type   = "u8"
+offset = 5
+
+[[field]]
+name   = "flags6"
+type   = "u8"
+offset = 6
+
+[[field]]
+name   = "flags7"
+type   = "u8"
+offset = 7
+
+[[field]]
+name   = "flags8"
+type   = "u8"
+offset = 8
+
+[[field]]
+name   = "flags9"
+type   = "u8"
+offset = 9
+
+[[field]]
+name   = "flags10"
+type   = "u8"
+offset = 10
+
+[[field]]
+name   = "padding"
+type   = "bytes"
+size   = 5
+offset = 11
+
+[summary]
+title = "NES cartridge dump"
+
+[[summary.line]]
+label  = "Program ROM"
+field  = "prg_rom_size"
+render = "size"
+scale  = 16384
+
+[[summary.line]]
+label  = "Character ROM"
+field  = "chr_rom_size"
+render = "size"
+scale  = 8192
+
+[[summary.line]]
+label  = "Layout"
+field  = "flags6"
+render = "flags"
+flags  = { 1 = "vertical mirroring", 2 = "battery-backed RAM", 4 = "512-byte trainer", 8 = "four-screen VRAM" }

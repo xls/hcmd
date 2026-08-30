@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+# One CI run per branch at a time. Six commits pushed in a row used to queue
+# six full runs, each with a macOS matrix, and they competed with the release
+# for the same scarce runners while five of them were already answering a
+# question nobody would read. The newest push is the only one whose answer
+# matters, so it cancels the ones it supersedes. The release workflow has no
+# such rule on purpose: a release is never redundant.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  check:
+    name: fmt, clippy, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The toolchain is pinned in rust-toolchain.toml, so rustup picks the
+      # right one and the components come with it.
+      - name: Install toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+
+      # A few of the archive and compression crates build C sources.
+      #
+      # zsh is here for the prompt-hook tests, which drive a real shell and
+      # skip themselves where it is missing. Without it, the zsh snippet was
+      # exercised on the macOS runner and nowhere else, so a zsh-only defect
+      # cost a full macOS build to discover instead of this job's two minutes.
+      - name: Build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config zsh
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test
+
+  # The program must start on a machine with no desktop session: no D-Bus, no
+  # XDG directories, no HOME, and a terminal that claims nothing. This is the
+  # check that a dependency has not quietly made a desktop a requirement.
+  vanilla:
+    name: starts with no desktop
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release
+
+      - name: Run with nothing set
+        run: |
+          env -i TERM=dumb ./target/release/hcmd --version
+          env -i TERM=dumb ./target/release/hcmd --check-config
+
+      - name: Report dynamic dependencies
+        run: ldd target/release/hcmd
+
+  # macOS was only ever built by the release workflow, which runs on a tag.
+  # That meant a change could break the macOS build and nothing said so until
+  # release day. It builds and tests on every push now, on both architectures.
+  macos:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-14
+          # Cross-compiled on Apple silicon: Intel macOS runners are scarce and
+          # a queue there should not hold up a whole CI run.
+          - target: x86_64-apple-darwin
+            os: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        run: |
+          rustup show
+          rustup target add ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      # macOS ships bash 3.2.57 as /bin/bash and the runner image carries
+      # nothing newer. PS0 arrived in 4.4, and PS0 is where the command-start
+      # mark comes from, so without this the console criteria that rest on it
+      # skip themselves and macOS never exercises them at all.
+      - name: A bash that can mark where a command starts
+        if: matrix.target == 'aarch64-apple-darwin'
+        run: brew install bash
+
+      - name: Build
+        run: cargo build --all-targets --target ${{ matrix.target }}
+      # Only where the architecture matches the runner: a cross-compiled
+      # binary cannot run here, and a test suite that cannot run is not a
+      # test suite that passed.
+      - name: Test
+        if: matrix.target == 'aarch64-apple-darwin'
+        run: cargo test --target ${{ matrix.target }}
+      - name: Check it runs
+        if: matrix.target == 'aarch64-apple-darwin'
+        run: ./target/${{ matrix.target }}/debug/hcmd --version
+
+  msrv:
+    name: builds on the stated minimum Rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read rust-version from Cargo.toml
+        id: msrv
+        run: echo "version=$(grep '^rust-version' Cargo.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
+      - name: Install it
+        run: |
+          rm -f rust-toolchain.toml
+          rustup toolchain install ${{ steps.msrv.outputs.version }} --profile minimal
+          rustup default ${{ steps.msrv.outputs.version }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build

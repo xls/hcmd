@@ -1,0 +1,32 @@
+# The table directory of a TrueType font, whose version is the fixed number
+# 1.0. The table records follow, sixteen bytes each.
+
+name   = "TrueType (sfnt)"
+endian = "big"
+magic  = { offset = 0, bytes = "00010000" }
+
+[[field]]
+name   = "sfnt_version"
+type   = "bytes"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "num_tables"
+type   = "u16"
+offset = 4
+
+[[field]]
+name   = "search_range"
+type   = "u16"
+offset = 6
+
+[[field]]
+name   = "entry_selector"
+type   = "u16"
+offset = 8
+
+[[field]]
+name   = "range_shift"
+type   = "u16"
+offset = 10

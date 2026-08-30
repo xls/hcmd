@@ -1,0 +1,60 @@
+name   = "Sun AU"
+endian = "big"
+magic  = { offset = 0, bytes = "2E736E64" }
+
+[[field]]
+name   = "magic"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "data_offset"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "data_size"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "encoding"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "sample_rate"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "channels"
+type   = "u32"
+offset = 20
+
+[summary]
+title = "Sun AU audio"
+
+[[summary.line]]
+label  = "Encoding"
+field  = "encoding"
+render = "enum"
+enum   = { 1 = "8-bit mu-law", 2 = "8-bit linear", 3 = "16-bit linear", 4 = "24-bit linear", 5 = "32-bit linear", 6 = "32-bit float", 7 = "64-bit float", 27 = "8-bit A-law" }
+
+[[summary.line]]
+label  = "Sample rate"
+field  = "sample_rate"
+render = "si"
+unit   = "Hz"
+
+[[summary.line]]
+label  = "Channels"
+field  = "channels"
+render = "enum"
+enum   = { 1 = "mono", 2 = "stereo" }
+
+[[summary.line]]
+label  = "Audio data"
+field  = "data_size"
+render = "size"

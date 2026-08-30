@@ -1,0 +1,47 @@
+# The 4.x signature. RAR 5 has an eighth byte, 0x01, after this one, so a
+# RAR 5 file also matches this magic while its fields from 7 on are shifted
+# by one.
+
+name   = "RAR (4.x)"
+endian = "little"
+magic  = { offset = 0, bytes = "526172211A0700" }
+
+[[field]]
+name   = "signature"
+type   = "bytes"
+size   = 7
+offset = 0
+
+[[field]]
+name   = "header_crc"
+type   = "u16"
+offset = 7
+
+[[field]]
+name   = "header_type"
+type   = "u8"
+offset = 9
+
+[[field]]
+name   = "header_flags"
+type   = "u16"
+offset = 10
+
+[[field]]
+name   = "header_size"
+type   = "u16"
+offset = 12
+
+[summary]
+title = "RAR archive"
+
+[[summary.line]]
+label  = "First block"
+field  = "header_type"
+render = "enum"
+enum   = { 114 = "marker", 115 = "archive header", 116 = "file header" }
+
+[[summary.line]]
+label  = "Block size"
+field  = "header_size"
+render = "size"

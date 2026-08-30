@@ -1,0 +1,94 @@
+# The base block of a registry hive. The two sequence numbers differ when
+# the hive was not cleanly unmounted. file_name is UTF-16, so its reading
+# shows a dot after each character.
+
+name   = "Registry hive (regf)"
+endian = "little"
+magic  = { offset = 0, bytes = "72656766" }
+
+[[field]]
+name   = "signature"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "primary_sequence"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "secondary_sequence"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "last_written"
+type   = "u64"
+offset = 12
+
+[[field]]
+name   = "major_version"
+type   = "u32"
+offset = 20
+
+[[field]]
+name   = "minor_version"
+type   = "u32"
+offset = 24
+
+[[field]]
+name   = "file_type"
+type   = "u32"
+offset = 28
+
+[[field]]
+name   = "file_format"
+type   = "u32"
+offset = 32
+
+[[field]]
+name   = "root_cell_offset"
+type   = "u32"
+offset = 36
+
+[[field]]
+name   = "hive_bins_data_size"
+type   = "u32"
+offset = 40
+
+[[field]]
+name   = "clustering_factor"
+type   = "u32"
+offset = 44
+
+[[field]]
+name   = "file_name"
+type   = "char"
+size   = 64
+offset = 48
+
+[summary]
+title = "Windows registry hive"
+
+[[summary.line]]
+label  = "Hive file"
+field  = "file_name"
+render = "text"
+
+[[summary.line]]
+label  = "Format version"
+field  = "major_version"
+with   = "minor_version"
+join   = "."
+
+[[summary.line]]
+label  = "Data size"
+field  = "hive_bins_data_size"
+render = "size"
+
+[[summary.line]]
+label  = "Clean"
+field  = "primary_sequence"
+with   = "secondary_sequence"
+join   = " and "

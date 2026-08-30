@@ -1,0 +1,78 @@
+# AIFF is the big-endian cousin of WAV. The sample rate is an 80-bit
+# extended float, which is why it is left as bytes.
+
+name   = "AIFF"
+endian = "big"
+magic  = { offset = 8, bytes = "41494646" }
+
+[[field]]
+name   = "form"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "file_size"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "form_type"
+type   = "char"
+size   = 4
+offset = 8
+
+[[field]]
+name   = "comm_chunk_id"
+type   = "char"
+size   = 4
+offset = 12
+
+[[field]]
+name   = "comm_chunk_size"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "num_channels"
+type   = "u16"
+offset = 20
+
+[[field]]
+name   = "num_frames"
+type   = "u32"
+offset = 22
+
+[[field]]
+name   = "sample_size"
+type   = "u16"
+offset = 26
+
+[[field]]
+name   = "sample_rate"
+type   = "bytes"
+size   = 10
+offset = 28
+
+[summary]
+title = "AIFF audio"
+
+[[summary.line]]
+label  = "Channels"
+field  = "num_channels"
+render = "enum"
+enum   = { 1 = "mono", 2 = "stereo" }
+
+[[summary.line]]
+label  = "Frames"
+field  = "num_frames"
+
+[[summary.line]]
+label  = "Bit depth"
+field  = "sample_size"
+unit   = "bit"
+
+[[summary.line]]
+label  = "File size"
+field  = "file_size"
+render = "size"

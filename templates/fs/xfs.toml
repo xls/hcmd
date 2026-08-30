@@ -1,0 +1,139 @@
+# XFS is big-endian on disk whatever the machine is.
+
+name   = "XFS superblock"
+endian = "big"
+magic  = { offset = 0, bytes = "58465342" }
+
+[[field]]
+name   = "sb_magicnum"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "sb_blocksize"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "sb_dblocks"
+type   = "u64"
+offset = 8
+
+[[field]]
+name   = "sb_rblocks"
+type   = "u64"
+offset = 16
+
+[[field]]
+name   = "sb_rextents"
+type   = "u64"
+offset = 24
+
+[[field]]
+name   = "sb_uuid"
+type   = "bytes"
+size   = 16
+offset = 32
+
+[[field]]
+name   = "sb_logstart"
+type   = "u64"
+offset = 48
+
+[[field]]
+name   = "sb_rootino"
+type   = "u64"
+offset = 56
+
+[[field]]
+name   = "sb_rbmino"
+type   = "u64"
+offset = 64
+
+[[field]]
+name   = "sb_rsumino"
+type   = "u64"
+offset = 72
+
+[[field]]
+name   = "sb_rextsize"
+type   = "u32"
+offset = 80
+
+[[field]]
+name   = "sb_agblocks"
+type   = "u32"
+offset = 84
+
+[[field]]
+name   = "sb_agcount"
+type   = "u32"
+offset = 88
+
+[[field]]
+name   = "sb_rbmblocks"
+type   = "u32"
+offset = 92
+
+[[field]]
+name   = "sb_logblocks"
+type   = "u32"
+offset = 96
+
+[[field]]
+name   = "sb_versionnum"
+type   = "u16"
+offset = 100
+
+[[field]]
+name   = "sb_sectsize"
+type   = "u16"
+offset = 102
+
+[[field]]
+name   = "sb_inodesize"
+type   = "u16"
+offset = 104
+
+[[field]]
+name   = "sb_inopblock"
+type   = "u16"
+offset = 106
+
+[[field]]
+name   = "sb_fname"
+type   = "char"
+size   = 12
+offset = 108
+
+[summary]
+title = "XFS volume"
+
+[[summary.line]]
+label  = "Volume name"
+field  = "sb_fname"
+render = "text"
+
+[[summary.line]]
+label  = "Block size"
+field  = "sb_blocksize"
+render = "size"
+
+[[summary.line]]
+label  = "Blocks"
+field  = "sb_dblocks"
+
+[[summary.line]]
+label  = "Allocation groups"
+field  = "sb_agcount"
+
+[[summary.line]]
+label  = "Inode size"
+field  = "sb_inodesize"
+unit   = "bytes"
+
+[[summary.line]]
+label  = "Sector size"
+field  = "sb_sectsize"
+unit   = "bytes"

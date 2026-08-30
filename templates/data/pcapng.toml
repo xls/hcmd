@@ -1,0 +1,37 @@
+# byte_order_magic reads 439041101 on a little-endian capture; a big-endian
+# one has the same bytes reversed and every field after the block type read
+# the other way round. A section_length of -1 means it is not known.
+
+name   = "pcapng section header"
+endian = "little"
+magic  = { offset = 0, bytes = "0A0D0D0A" }
+
+[[field]]
+name   = "block_type"
+type   = "u32"
+offset = 0
+
+[[field]]
+name   = "block_total_length"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "byte_order_magic"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "major_version"
+type   = "u16"
+offset = 12
+
+[[field]]
+name   = "minor_version"
+type   = "u16"
+offset = 14
+
+[[field]]
+name   = "section_length"
+type   = "i64"
+offset = 16

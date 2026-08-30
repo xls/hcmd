@@ -1,0 +1,78 @@
+# The container superblock begins with a 32-byte object header, so the NXSB
+# magic is at 32 rather than at 0.
+
+name   = "APFS container superblock"
+endian = "little"
+magic  = { offset = 32, bytes = "4E585342" }
+
+[[field]]
+name   = "o_cksum"
+type   = "u64"
+offset = 0
+
+[[field]]
+name   = "o_oid"
+type   = "u64"
+offset = 8
+
+[[field]]
+name   = "o_xid"
+type   = "u64"
+offset = 16
+
+[[field]]
+name   = "o_type"
+type   = "u32"
+offset = 24
+
+[[field]]
+name   = "o_subtype"
+type   = "u32"
+offset = 28
+
+[[field]]
+name   = "nx_magic"
+type   = "char"
+size   = 4
+offset = 32
+
+[[field]]
+name   = "nx_block_size"
+type   = "u32"
+offset = 36
+
+[[field]]
+name   = "nx_block_count"
+type   = "u64"
+offset = 40
+
+[[field]]
+name   = "nx_features"
+type   = "u64"
+offset = 48
+
+[[field]]
+name   = "nx_readonly_compatible_features"
+type   = "u64"
+offset = 56
+
+[[field]]
+name   = "nx_incompatible_features"
+type   = "u64"
+offset = 64
+
+[[field]]
+name   = "nx_uuid"
+type   = "bytes"
+size   = 16
+offset = 72
+
+[[field]]
+name   = "nx_next_oid"
+type   = "u64"
+offset = 88
+
+[[field]]
+name   = "nx_next_xid"
+type   = "u64"
+offset = 96

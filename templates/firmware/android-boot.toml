@@ -1,0 +1,74 @@
+# Header versions 0 to 2 share this layout; version 3 and later drop the
+# addresses and are laid out differently from 8 on.
+
+name   = "Android boot image"
+endian = "little"
+magic  = { offset = 0, bytes = "414E44524F494421" }
+
+[[field]]
+name   = "magic"
+type   = "char"
+size   = 8
+offset = 0
+
+[[field]]
+name   = "kernel_size"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "kernel_address"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "ramdisk_size"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "ramdisk_address"
+type   = "u32"
+offset = 20
+
+[[field]]
+name   = "second_size"
+type   = "u32"
+offset = 24
+
+[[field]]
+name   = "second_address"
+type   = "u32"
+offset = 28
+
+[[field]]
+name   = "tags_address"
+type   = "u32"
+offset = 32
+
+[[field]]
+name   = "page_size"
+type   = "u32"
+offset = 36
+
+[[field]]
+name   = "header_version"
+type   = "u32"
+offset = 40
+
+[[field]]
+name   = "os_version"
+type   = "u32"
+offset = 44
+
+[[field]]
+name   = "product_name"
+type   = "char"
+size   = 16
+offset = 48
+
+[[field]]
+name   = "kernel_cmdline"
+type   = "char"
+size   = 512
+offset = 64

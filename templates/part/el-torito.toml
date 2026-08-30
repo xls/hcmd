@@ -1,0 +1,41 @@
+# The boot record volume descriptor, at sector 17 of the volume, which is
+# byte 34816. Its boot_system_identifier is the string EL TORITO
+# SPECIFICATION, padded with zeros.
+
+name   = "ISO El Torito boot record"
+endian = "little"
+offset = 34816
+magic  = { offset = 34823, bytes = "454C20544F5249544F" }
+
+[[field]]
+name   = "type"
+type   = "u8"
+offset = 0
+
+[[field]]
+name   = "standard_identifier"
+type   = "char"
+size   = 5
+offset = 1
+
+[[field]]
+name   = "version"
+type   = "u8"
+offset = 6
+
+[[field]]
+name   = "boot_system_identifier"
+type   = "char"
+size   = 32
+offset = 7
+
+[[field]]
+name   = "unused"
+type   = "char"
+size   = 32
+offset = 39
+
+[[field]]
+name   = "boot_catalog_lba"
+type   = "u32"
+offset = 71

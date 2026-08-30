@@ -1,0 +1,21 @@
+# The embedded signature of a Mach-O binary, whose magic reads 4205907392.
+# No magic field: the blob is at the offset an LC_CODE_SIGNATURE load
+# command names, not at a fixed place in the file.
+
+name   = "Code signature SuperBlob"
+endian = "big"
+
+[[field]]
+name   = "magic"
+type   = "u32"
+offset = 0
+
+[[field]]
+name   = "length"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "count"
+type   = "u32"
+offset = 8

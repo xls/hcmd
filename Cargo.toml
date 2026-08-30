@@ -1,0 +1,300 @@
+[package]
+name         = "holoscommander"
+version      = "0.1.0"
+edition      = "2024"
+rust-version = "1.95"
+description  = "A Total Commander alternative for the terminal, for fingers that learned F5 in 1998"
+license      = "MIT"
+# examples/ holds TOML reference configs, not Rust example targets.
+autoexamples = false
+
+[[bin]]
+name = "hcmd"
+path = "src/main.rs"
+
+[dependencies]
+ratatui              = "0.30.2"
+crossterm            = "0.29.0"
+tokio                = { version = "1.53.1", features = ["rt-multi-thread", "macros", "fs", "sync", "time", "signal"] }
+serde                = { version = "1.0.229", features = ["derive"] }
+toml                 = "1.1.4"
+sysinfo              = { version = "0.39.6", default-features = false, features = ["disk"] }
+unicode-width        = "0.2.2"
+unicode-segmentation = "1.13.3"
+chrono               = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+thiserror            = "2.0.20"
+trash                = "5.2.6"
+# `anyhow` was declared here and used nowhere: `crate::error::Error` is this
+# program's error type, every fallible function returns `crate::Result`, and a
+# second error type in the dependency list is an invitation to start a second
+# convention. Removed rather than adopted.
+
+# The design: a persistent shell on a pty, rendered through a real terminal
+# emulator. Both were dev-dependencies for the acceptance harness in v0.1/v0.2;
+# v0.3 makes them the console itself, at the same pinned versions.
+portable-pty         = "0.9.0"
+vt100                = "0.16.2"
+# The design: the viewer's syntax highlighting. `default-features =
+# false` + `default-fancy` is the pure-Rust `fancy-regex` engine -- no Oniguruma
+# and therefore no C dependency. two-face ships bat's curated syntax and theme
+# set on top; its own default feature is `syntect-onig`, which would drag
+# `onig`/`onig_sys` back in through the side door, so it is built with
+# `syntect-fancy` instead. `cargo tree` must never show `onig`.
+syntect              = { version = "=5.3.0", default-features = false, features = ["default-fancy"] }
+two-face             = { version = "=0.5.2", default-features = false, features = ["syntect-fancy"] }
+# The design: encoding_rs decodes, chardetng sniffs the first chunk.
+encoding_rs          = "=0.8.35"
+chardetng            = "=1.0.0"
+
+# The design: archives, every format an in-process Rust crate. Nothing
+# shells out, and `compress-tools`/libarchive is rejected with it. The
+# design's own table names `xz2` for `.tar.xz`; the rejected-crates table
+# rejects `xz2` (last release 2022-06-06) and names `liblzma`, which is maintained and
+# API-compatible. The rejected-crates table is the authority, so this is
+# `liblzma`.
+zip                  = "8.6.0"
+tar                  = "0.4.46"
+flate2               = "1.1.9"
+# `static` forwards to `liblzma-sys/static`, which builds and links the xz
+# library into the binary instead of resolving `liblzma.so.5` at load time.
+# The design picked `liblzma` over `xz2` for portability; a binary that will
+# not start on a host without xz installed is the same problem one layer down,
+# so it is bundled. `ldd` must not name liblzma.
+liblzma              = { version = "0.4.8", features = ["static"] }
+zstd                 = "0.13.3"
+bzip2                = "0.6.1"
+sevenz-rust2         = "0.22.2"
+unrar                = "0.5.8"
+
+# The design: search runs in-process on ripgrep's own libraries. This is
+# not reimplementing ripgrep; it is calling it as a library instead of parsing
+# its stdout, which gives the same engine and the same speed with structured
+# results, no subprocess, and no external tool to be missing. The design's
+# "with rg/fd" names the engines, not two binaries: the rejected-crates table
+# rejects `fd-find` because it is the fd *binary* crate, and names `ignore` as
+# the library underneath both fd and ripgrep.
+ignore               = "0.4.33"
+grep-searcher        = "0.1.17"
+grep-regex           = "0.1.14"
+# `grep-regex` is, in its own words, "an implementation of `grep-matcher`'s
+# `Matcher` trait": every method of `RegexMatcher` that matches anything is a
+# trait method, and a trait cannot be used from a crate that is not a direct
+# dependency. This adds no code to the build - `grep-matcher` is already in
+# `Cargo.lock` as `grep-regex`'s own dependency, at the version it pins - and
+# it is not a fourth engine. The design's table names the three crates that
+# do the work; this is the one that spells their interface.
+grep-matcher         = "0.1.9"
+
+# The design: remote connections. `suppaftp` is below, with the
+# FTP backend that asked for it.
+#
+# `russh`'s own default backend is `aws-lc-rs`, which builds a C library and
+# needs cmake. The design asks for pure Rust wherever it is credible;
+# neither of russh's two backends is, so the smaller and simpler build wins:
+# `ring` is what `rustls` already uses everywhere else in this ecosystem, and
+# `cargo tree` shows no `aws-lc-sys` with it. `rsa` keeps `ssh-key` able to
+# parse an `ssh-rsa` line in `known_hosts`, which a real file has in it, and
+# `flate2` is russh's own default and is already in this tree.
+russh                = { version = "=0.63.1", default-features = false, features = ["ring", "rsa", "flate2"] }
+# The design: the SFTP subsystem itself, protocol version 3. It talks only to
+# a byte stream - `russh`'s channel, here - so it pulls in no cryptography of
+# its own and is independent of the feature set chosen above.
+russh-sftp           = "=2.4.0"
+# The design: stored passwords go in the system keyring and never in a file.
+# The `v1` default feature is the Secret Service / kwallet store.
+keyring              = "=4.1.6"
+# The design: FTP and FTPS, "explicit and implicit TLS, passive by default".
+#
+# Three feature flags, and each one is a decision:
+#
+# * `rustls-ring` and not `rustls`: there is no `rustls` feature in suppaftp
+#   10.0.2. It offers `rustls-aws-lc-rs` and `rustls-ring`, and `ring` is the
+#   one `russh` above is already built with, so the binary has one TLS
+#   provider rather than two and `cargo tree` shows no `aws-lc-sys` and no
+#   `openssl-sys` (the design's pure-Rust rule, contract I19).
+# * `deprecated`: `connect_secure_implicit` is behind it, and implicit TLS is
+#   half of what the design asks for. suppaftp calls implicit FTPS
+#   deprecated, which it is; the protocol is still what a `ftps-implicit` host
+#   speaks, and there is no other way to reach it in this crate.
+# * `no-log`: suppaftp traces every control-channel line it sends, `PASS`
+#   included. Nothing in this tree installs a `log` sink today, so nothing is
+#   written today - but the design's rule is that a password never reaches a
+#   log line, and a rule that depends on nobody ever adding a logger is not a
+#   rule. This compiles the trace out.
+suppaftp             = { version = "=10.0.2", default-features = false, features = ["rustls-ring", "deprecated", "no-log"] }
+
+# The design: file associations, in process. Nothing shells out to
+# `xdg-open` or `xdg-mime` to ask what a file is; `open` is what
+# *launches* the desktop's own default once the answer is known, which is the
+# feature rather than an implementation of it.
+#
+# `mime_guess` answers from the extension and `infer` corrects it from the
+# content, which is the design's own rule - "a `.txt` that is actually a
+# JPEG opens as an image".
+open                      = "5.4.2"
+mime_guess                = "2.0.5"
+infer                     = "0.22.0"
+freedesktop-desktop-entry = { version = "0.8.2", default-features = false }
+
+# The design: ISO 9660, with Joliet and Rock Ridge, inside a read-only
+# disk image. Pure Rust, in process, nothing shells out and nothing wraps a C
+# library. `write` is off deliberately: it is a default feature, it pulls in
+# `hadris-part`'s writer and its CRC support, and this backend must have no
+# write path to compile at all.
+hadris-iso                = { version = "=2.2.0", default-features = false, features = ["std", "read", "sync", "joliet"] }
+
+# The design: FAT12/16/32 inside a read-only disk image. Pure Rust, in
+# process, nothing shells out and nothing wraps a C library. The default
+# features are kept, `chrono` included: without it a FAT directory entry has no
+# `modified()` and the panel's date column would be empty for every file in an
+# image.
+fatfs                     = "=0.3.6"
+
+# One small HTTPS client, for the two things that ask GitHub a question: is
+# there a newer release, and are there themes here that this machine does not
+# have. rustls is already linked for SFTP and FTPS, so this adds a client and
+# a root store rather than a second TLS stack.
+ureq                      = { version = "3.1.2", default-features = false, features = ["rustls"] }
+
+# Image decoding and encoding, for the resizer. Default features off and the
+# codecs named one by one: the default set pulls in every format the crate
+# knows, and this binary has 370 KB of headroom against its own size gate.
+# WebP decodes but does not encode, so it is a source format only.
+image                     = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "tiff", "ico", "tga", "webp"] }
+
+# The design: GPT and MBR partition tables inside a read-only disk
+# image. Pure Rust, in process, nothing shells out and nothing wraps a C
+# library. A partition table is read, never written: `probe` and `sniff` are
+# the whole of what this backend calls, and the crate's writer is never
+# reached.
+am-partitions             = "=0.3.3"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Release profile. There was none at all before this, so the shipped binary
+# carried its full debug symbol table: 8.1 MB of the 29.8 MB it measured, and
+# of no use to anyone who is not debugging that exact build with this source
+# tree beside it. Stripping is the whole of the size win.
+#
+# `lto = "thin"` is not here for size, and it is worth saying so rather than
+# implying otherwise: it is worth about 6 kB. It is here for the cross-crate
+# inlining, and it is thin rather than fat because thin gets close to fat's
+# result for a fraction of the link time, which keeps a release build
+# something that can be run rather than scheduled.
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+# macOS has neither `/proc/sys/kernel/hostname` nor `/etc/hostname`, so the
+# only portable way to learn this machine's name without a subprocess or an
+# `unsafe` call is to ask sysinfo, which is already here for the disk list.
+# Scoped to macOS so no other target pays for the extra feature.
+[target.'cfg(target_os = "macos")'.dependencies]
+sysinfo              = { version = "0.39.6", default-features = false, features = ["disk", "system"] }
+
+[profile.release]
+strip = "symbols"
+lto   = "thin"
+# Arithmetic that wraps is a bug here, not a mode. There are ~129 raw `+`, `-`
+# and `*` sites left on sizes, offsets, counts and column widths; each one is
+# guarded today by the code around it, and a debug build panics the moment one
+# stops being. Without this the *shipped* build would silently wrap instead -
+# a scroll offset that becomes u64::MAX, a size that reads as enormous - and
+# the release binary would be the one configuration where the regression is
+# invisible. The cost is a compare and a branch on those sites, which is not
+# measurable against reading a directory.
+overflow-checks = true
+
+# ═══════════════════════════════════════════════════════════════════════════
+# House lints. The thresholds and the disallowed-type list live in clippy.toml;
+# severities live here.
+#
+# This is the rust-pro reference set with its `restriction`-group lints turned
+# down, and the reason is worth writing down rather than discovering again.
+# That set is calibrated for a project on day one. Applied to 88,000 lines of
+# existing code it produced 5,000+ findings, of which 190 were fatal from
+# `unused_results` alone - a lint that fires on every `map.insert(k, v);`. A
+# gate that cannot go green is not a gate; it gets bypassed and then it
+# enforces nothing at all.
+#
+# What is kept is everything that catches the pitfalls the ban list exists
+# for: panicking accessors, indexing, unreachable states, unsafe, interior
+# mutability, and silent suppression. Those are deny and they pass today, so
+# drift is caught from here on.
+#
+# What is deferred, and is a real debt rather than a decision: min_ident_chars,
+# unused_results, default_numeric_fallback, unnecessary_qualification,
+# excessive nesting, and the literal-formatting lints. They are cosmetic or
+# mechanical, they number in the thousands, and they belong with the file-size
+# refactor rather than in front of it.
+# ═══════════════════════════════════════════════════════════════════════════
+
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+rust_2018_idioms = { level = "allow", priority = -1 }
+
+[lints.clippy]
+# The panic paths. These are the bans the house style is actually about, and
+# clippy.toml exempts #[cfg(test)] code from all four.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unreachable = "deny"
+todo = "deny"
+unimplemented = "deny"
+
+# Interior mutability and the rest of the disallowed list live in clippy.toml;
+# this is the lint that enforces them.
+# On, and staying on: the five Cell fields it was deferred for are gone. Three
+# were a scroll offset that is a pure function of the caret and the field width
+# (ui::text::caret_window), one was the queue view's scroll and now belongs to
+# Dialog::layout, and one was a "made it yet" flag that is a OnceLock. The next
+# Cell has to argue for itself in a diff rather than arriving quietly.
+disallowed_types = "deny"
+# Still deferred: one tokio::select in the event loop, which is the event loop
+# itself and wants an #[expect] with a reason rather than a rewrite, and 5
+# indexing sites.
+disallowed_macros = { level = "allow", priority = 1 }
+indexing_slicing = { level = "allow", priority = 1 }
+
+# On: every #[allow] in the tree now carries the reason its comment already
+# gave, so the reason travels with the attribute rather than beside it.
+allow_attributes_without_reason = "deny"
+
+# ---------------------------------------------------------------------------
+# Deferred, and deliberately not silent: these are `allow` with a reason rather
+# than absent, so `cargo clippy -W clippy::all` still shows them and removing a
+# line here is how the debt gets paid.
+#
+# Measured again after the decomposition, which was expected to pay these off
+# and did not: 363 excessive_nesting, 150 wildcard_enum_match_arm, 48
+# too_many_arguments and 33 cognitive_complexity. Two of the six did come off
+# with it and are now at deny above; these four are not a consequence of file
+# size, so a refactor that cut file size was never going to move them. Each is
+# a body-shape change in code that works, which is a different piece of work
+# from moving code, and doing it under a gate that is already red is how a
+# gate gets bypassed - after which it enforces nothing at all, including the
+# four bans above that matter most.
+# ---------------------------------------------------------------------------
+wildcard_enum_match_arm = { level = "allow", priority = 1 }
+excessive_nesting = { level = "allow", priority = 1 }
+cognitive_complexity = { level = "allow", priority = 1 }
+too_many_arguments = { level = "allow", priority = 1 }
+# The fifth of the same kind, and it was absent rather than deferred, which is
+# the one state that is worse than either: 182 functions are over
+# clippy.toml's 50-line ceiling (112 of them outside test code) and none of it
+# was counted, so the decomposition had no number to move. Here it is
+# `-W clippy::all` away, like the four above, and deleting this line is how it
+# gets paid.
+too_many_lines = { level = "allow", priority = 1 }
+type_complexity = "deny"
+
+# ---------------------------------------------------------------------------
+# A recorded deviation rather than a silence: the house style nominally denies
+# `clippy::mod_module_files`, and this crate is `mod.rs` throughout - `src/vfs/
+# mod.rs` beside `src/vfs/local.rs`, and so on for every directory. It is not
+# listed above at any level because it is not debt anyone intends to pay: the
+# layout is uniform, changing it would rename most files in the tree for no
+# behaviour, and a rule the code deliberately does not follow belongs written
+# down where the other severities are, not left for the next reader to
+# rediscover as an omission.
+# ---------------------------------------------------------------------------

@@ -1,0 +1,60 @@
+# The fat header and its first architecture entry. A Java class file has the
+# same first four bytes, and is told apart by what follows: nfat_arch here
+# is a small count, where a class file has its version numbers.
+
+name   = "Mach-O universal header"
+endian = "big"
+magic  = { offset = 0, bytes = "CAFEBABE" }
+
+[[field]]
+name   = "magic"
+type   = "u32"
+offset = 0
+
+[[field]]
+name   = "nfat_arch"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "cputype"
+type   = "i32"
+offset = 8
+
+[[field]]
+name   = "cpusubtype"
+type   = "i32"
+offset = 12
+
+[[field]]
+name   = "offset"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "size"
+type   = "u32"
+offset = 20
+
+[[field]]
+name   = "align"
+type   = "u32"
+offset = 24
+
+[summary]
+title = "Mach-O universal binary"
+
+[[summary.line]]
+label  = "Architectures"
+field  = "nfat_arch"
+
+[[summary.line]]
+label  = "First architecture"
+field  = "cputype"
+render = "enum"
+enum   = { 7 = "x86", 12 = "ARM", 18 = "PowerPC", 16777223 = "x86-64", 16777228 = "ARM64", 16777234 = "PowerPC 64" }
+
+[[summary.line]]
+label  = "Its size"
+field  = "size"
+render = "size"

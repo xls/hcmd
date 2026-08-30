@@ -1,0 +1,62 @@
+# The sparse extent header. The magic reads KDMV on disk. A flat extent has
+# no header at all, only the text descriptor file beside it.
+
+name   = "VMDK sparse"
+endian = "little"
+magic  = { offset = 0, bytes = "4B444D56" }
+
+[[field]]
+name   = "magic"
+type   = "bytes"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "version"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "flags"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "capacity"
+type   = "u64"
+offset = 12
+
+[[field]]
+name   = "grain_size"
+type   = "u64"
+offset = 20
+
+[[field]]
+name   = "descriptor_offset"
+type   = "u64"
+offset = 28
+
+[[field]]
+name   = "descriptor_size"
+type   = "u64"
+offset = 36
+
+[[field]]
+name   = "num_gtes_per_gt"
+type   = "u32"
+offset = 44
+
+[[field]]
+name   = "rgd_offset"
+type   = "u64"
+offset = 48
+
+[[field]]
+name   = "gd_offset"
+type   = "u64"
+offset = 56
+
+[[field]]
+name   = "overhead"
+type   = "u64"
+offset = 64

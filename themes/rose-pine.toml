@@ -1,0 +1,93 @@
+# Holos Commander - the rose-pine theme.
+# Location: ~/.config/holoscommander/themes/rose-pine.toml
+#
+# Generated from a semantic palette so every slot is covered and no two themes
+# disagree about what a slot means. Colours are RGB; the renderer quantizes to
+# 256 or 16 as the terminal allows.
+
+name = "rose-pine"
+
+[panel]
+bg              = "#191724"
+fg              = "#e0def4"
+dir_fg          = "#ffffff"
+exec_fg         = "#31748f"
+link_fg         = "#9ccfd8"
+archive_fg      = "#c4a7e7"
+marked_fg       = "#f6c177"
+cursor_bg       = "#c4a7e7"
+cursor_fg       = "#191724"
+# Drawn when the command line has focus: still clearly visible, one step back.
+cursor_bg_unfocused = "#403d52"
+cursor_fg_unfocused = "#e0def4"
+# The cursor bar on the panel that is not active at all.
+inactive_cursor_bg  = "#2c2a3b"
+inactive_cursor_fg  = "#6e6a86"
+border          = "#c4a7e7"
+inactive_border = "#6e6a86"
+header_bg       = "#191724"
+header_fg       = "#f6c177"
+status_bg       = "#191724"
+status_fg       = "#9ccfd8"
+
+[cmdline]
+bg        = "#100f17"
+fg        = "#e0def4"
+prompt_fg = "#31748f"
+caret     = "#ffffff"
+# The caret is always drawn, focused or not.
+caret_unfocused = "#6e6a86"
+
+[keybar]
+number_fg = "#e0def4"
+label_bg  = "#c4a7e7"
+label_fg  = "#191724"
+
+[dialog]
+bg           = "#403d52"
+fg           = "#e0def4"
+title        = "#c4a7e7"
+border       = "#6e6a86"
+button       = "#c4a7e7"
+button_focus = "#eb6f92"
+input_bg     = "#100f17"
+input_fg     = "#ffffff"
+
+[viewer]
+bg            = "#191724"
+fg            = "#e0def4"
+line_numbers  = "#6e6a86"
+match         = "#f6c177"
+current_match = "#eb6f92"
+hex_offset    = "#9ccfd8"
+hex_ascii     = "#31748f"
+selection_bg  = "#c4a7e7"
+selection_fg  = "#191724"
+
+[syn]
+keyword     = "#c4a7e7"
+string      = "#31748f"
+comment     = "#6e6a86"
+type        = "#9ccfd8"
+function    = "#9ccfd8"
+number      = "#f09884"
+constant    = "#f09884"
+operator    = "#e0def4"
+punctuation = "#6e6a86"
+variable    = "#e0def4"
+
+# Mapping used when the terminal has only 16 colors.
+[fallback_16]
+"#191724" = "black"
+"#100f17" = "black"
+"#e0def4" = "white"
+"#ffffff" = "bright_white"
+"#c4a7e7" = "bright_cyan"
+"#403d52" = "bright_black"
+"#2c2a3b" = "bright_black"
+"#6e6a86" = "bright_black"
+"#eb6f92" = "bright_red"
+"#31748f" = "bright_green"
+"#f6c177" = "bright_yellow"
+"#9ccfd8" = "bright_blue"
+"#f09884" = "bright_red"

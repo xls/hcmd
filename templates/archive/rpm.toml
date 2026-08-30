@@ -1,0 +1,75 @@
+# The 96-byte lead. It is obsolete as a source of truth - the header that
+# follows it carries the real metadata - but it is still written at the
+# front of every package.
+
+name   = "RPM lead"
+endian = "big"
+magic  = { offset = 0, bytes = "EDABEEDB" }
+
+[[field]]
+name   = "magic"
+type   = "bytes"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "major"
+type   = "u8"
+offset = 4
+
+[[field]]
+name   = "minor"
+type   = "u8"
+offset = 5
+
+[[field]]
+name   = "package_type"
+type   = "u16"
+offset = 6
+
+[[field]]
+name   = "archnum"
+type   = "u16"
+offset = 8
+
+[[field]]
+name   = "name"
+type   = "char"
+size   = 66
+offset = 10
+
+[[field]]
+name   = "osnum"
+type   = "u16"
+offset = 76
+
+[[field]]
+name   = "signature_type"
+type   = "u16"
+offset = 78
+
+[[field]]
+name   = "reserved"
+type   = "bytes"
+size   = 16
+offset = 80
+
+[summary]
+title = "RPM package"
+
+[[summary.line]]
+label  = "Name"
+field  = "name"
+render = "text"
+
+[[summary.line]]
+label  = "Lead version"
+field  = "major"
+with   = "minor"
+join   = "."
+
+[[summary.line]]
+label  = "Kind"
+field  = "package_type"
+render = "enum"
+enum   = { 0 = "binary", 1 = "source" }

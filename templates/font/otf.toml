@@ -1,0 +1,32 @@
+# The same table directory as TrueType, with OTTO in place of the version to
+# say the outlines are CFF rather than glyf.
+
+name   = "OpenType CFF (OTTO)"
+endian = "big"
+magic  = { offset = 0, bytes = "4F54544F" }
+
+[[field]]
+name   = "sfnt_version"
+type   = "bytes"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "num_tables"
+type   = "u16"
+offset = 4
+
+[[field]]
+name   = "search_range"
+type   = "u16"
+offset = 6
+
+[[field]]
+name   = "entry_selector"
+type   = "u16"
+offset = 8
+
+[[field]]
+name   = "range_shift"
+type   = "u16"
+offset = 10

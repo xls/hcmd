@@ -1,0 +1,26 @@
+# Everything after the descriptor is variable length: which of the window,
+# dictionary and content-size fields follow is decided by the bits in it.
+
+name   = "Zstandard"
+endian = "little"
+magic  = { offset = 0, bytes = "28B52FFD" }
+
+[[field]]
+name   = "magic"
+type   = "bytes"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "frame_header_descriptor"
+type   = "u8"
+offset = 4
+
+[summary]
+title = "Zstandard archive"
+
+[[summary.line]]
+label  = "Frame header"
+field  = "frame_header_descriptor"
+render = "flags"
+flags  = { 32 = "content checksum", 128 = "single segment" }

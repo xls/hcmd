@@ -1,0 +1,71 @@
+# The portable ASCII format. Every field is ASCII octal.
+
+name   = "cpio (odc)"
+endian = "big"
+magic  = { offset = 0, bytes = "303730373037" }
+
+[[field]]
+name   = "magic"
+type   = "char"
+size   = 6
+offset = 0
+
+[[field]]
+name   = "dev"
+type   = "char"
+size   = 6
+offset = 6
+
+[[field]]
+name   = "ino"
+type   = "char"
+size   = 6
+offset = 12
+
+[[field]]
+name   = "mode"
+type   = "char"
+size   = 6
+offset = 18
+
+[[field]]
+name   = "uid"
+type   = "char"
+size   = 6
+offset = 24
+
+[[field]]
+name   = "gid"
+type   = "char"
+size   = 6
+offset = 30
+
+[[field]]
+name   = "nlink"
+type   = "char"
+size   = 6
+offset = 36
+
+[[field]]
+name   = "rdev"
+type   = "char"
+size   = 6
+offset = 42
+
+[[field]]
+name   = "mtime"
+type   = "char"
+size   = 11
+offset = 48
+
+[[field]]
+name   = "namesize"
+type   = "char"
+size   = 6
+offset = 59
+
+[[field]]
+name   = "filesize"
+type   = "char"
+size   = 11
+offset = 65

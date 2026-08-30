@@ -1,0 +1,71 @@
+# A little-endian 64-bit Mach-O, which is what macOS on x86-64 and arm64
+# produces.
+
+name   = "Mach-O 64 header"
+endian = "little"
+magic  = { offset = 0, bytes = "CFFAEDFE" }
+
+[[field]]
+name   = "magic"
+type   = "u32"
+offset = 0
+
+[[field]]
+name   = "cputype"
+type   = "i32"
+offset = 4
+
+[[field]]
+name   = "cpusubtype"
+type   = "i32"
+offset = 8
+
+[[field]]
+name   = "filetype"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "ncmds"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "sizeofcmds"
+type   = "u32"
+offset = 20
+
+[[field]]
+name   = "flags"
+type   = "u32"
+offset = 24
+
+[[field]]
+name   = "reserved"
+type   = "u32"
+offset = 28
+
+[summary]
+title = "Mach-O 64-bit binary"
+
+[[summary.line]]
+label  = "CPU"
+field  = "cputype"
+render = "enum"
+enum   = { 7 = "x86", 12 = "ARM", 18 = "PowerPC", 16777223 = "x86-64", 16777228 = "ARM64", 16777234 = "PowerPC 64" }
+
+[[summary.line]]
+label  = "Type"
+field  = "filetype"
+render = "enum"
+enum   = { 1 = "relocatable object", 2 = "executable", 4 = "core dump", 6 = "dynamic library", 7 = "dynamic linker", 8 = "bundle", 9 = "dylib stub", 10 = "debug symbols", 11 = "kernel extension" }
+
+[[summary.line]]
+label  = "Load commands"
+field  = "ncmds"
+
+[[summary.line]]
+label  = "Attributes"
+field  = "flags"
+render = "flags"
+flags  = { 1 = "no undefined symbols", 4 = "linked by dyld", 32 = "two-level namespace", 128 = "prebound", 2097152 = "position independent" }

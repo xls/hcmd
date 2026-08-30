@@ -1,0 +1,118 @@
+# The container behind legacy Word, Excel and PowerPoint documents and
+# behind MSI. sector_shift is 9 for the 512-byte sectors of version 3 and 12
+# for version 4.
+
+name   = "OLE compound file"
+endian = "little"
+magic  = { offset = 0, bytes = "D0CF11E0A1B11AE1" }
+
+[[field]]
+name   = "signature"
+type   = "bytes"
+size   = 8
+offset = 0
+
+[[field]]
+name   = "clsid"
+type   = "bytes"
+size   = 16
+offset = 8
+
+[[field]]
+name   = "minor_version"
+type   = "u16"
+offset = 24
+
+[[field]]
+name   = "major_version"
+type   = "u16"
+offset = 26
+
+[[field]]
+name   = "byte_order"
+type   = "u16"
+offset = 28
+
+[[field]]
+name   = "sector_shift"
+type   = "u16"
+offset = 30
+
+[[field]]
+name   = "mini_sector_shift"
+type   = "u16"
+offset = 32
+
+[[field]]
+name   = "reserved"
+type   = "bytes"
+size   = 6
+offset = 34
+
+[[field]]
+name   = "number_of_directory_sectors"
+type   = "u32"
+offset = 40
+
+[[field]]
+name   = "number_of_fat_sectors"
+type   = "u32"
+offset = 44
+
+[[field]]
+name   = "first_directory_sector"
+type   = "u32"
+offset = 48
+
+[[field]]
+name   = "transaction_signature"
+type   = "u32"
+offset = 52
+
+[[field]]
+name   = "mini_stream_cutoff_size"
+type   = "u32"
+offset = 56
+
+[[field]]
+name   = "first_mini_fat_sector"
+type   = "u32"
+offset = 60
+
+[[field]]
+name   = "number_of_mini_fat_sectors"
+type   = "u32"
+offset = 64
+
+[[field]]
+name   = "first_difat_sector"
+type   = "u32"
+offset = 68
+
+[[field]]
+name   = "number_of_difat_sectors"
+type   = "u32"
+offset = 72
+
+[summary]
+title = "OLE compound file"
+
+[[summary.line]]
+label  = "Format version"
+field  = "major_version"
+with   = "minor_version"
+join   = "."
+
+[[summary.line]]
+label  = "Sector size"
+field  = "sector_shift"
+render = "enum"
+enum   = { 9 = "512 bytes", 12 = "4096 bytes" }
+
+[[summary.line]]
+label  = "Directory sectors"
+field  = "number_of_directory_sectors"
+
+[[summary.line]]
+label  = "FAT sectors"
+field  = "number_of_fat_sectors"

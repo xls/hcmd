@@ -1,0 +1,108 @@
+# The volume header is at byte 1024. A signature of H+ is HFS+ and HX is
+# HFSX, which is the case-sensitive variant.
+
+name   = "HFS+ volume header"
+endian = "big"
+offset = 1024
+magic  = { offset = 1024, bytes = "482B" }
+
+[[field]]
+name   = "signature"
+type   = "char"
+size   = 2
+offset = 0
+
+[[field]]
+name   = "version"
+type   = "u16"
+offset = 2
+
+[[field]]
+name   = "attributes"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "last_mounted_version"
+type   = "char"
+size   = 4
+offset = 8
+
+[[field]]
+name   = "journal_info_block"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "create_date"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "modify_date"
+type   = "u32"
+offset = 20
+
+[[field]]
+name   = "backup_date"
+type   = "u32"
+offset = 24
+
+[[field]]
+name   = "checked_date"
+type   = "u32"
+offset = 28
+
+[[field]]
+name   = "file_count"
+type   = "u32"
+offset = 32
+
+[[field]]
+name   = "folder_count"
+type   = "u32"
+offset = 36
+
+[[field]]
+name   = "block_size"
+type   = "u32"
+offset = 40
+
+[[field]]
+name   = "total_blocks"
+type   = "u32"
+offset = 44
+
+[[field]]
+name   = "free_blocks"
+type   = "u32"
+offset = 48
+
+[summary]
+title = "HFS+ volume"
+
+[[summary.line]]
+label  = "Signature"
+field  = "signature"
+render = "text"
+
+[[summary.line]]
+label  = "Files"
+field  = "file_count"
+
+[[summary.line]]
+label  = "Folders"
+field  = "folder_count"
+
+[[summary.line]]
+label  = "Block size"
+field  = "block_size"
+render = "size"
+
+[[summary.line]]
+label  = "Blocks"
+field  = "total_blocks"
+
+[[summary.line]]
+label  = "Free blocks"
+field  = "free_blocks"

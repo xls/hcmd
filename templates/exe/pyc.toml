@@ -1,0 +1,59 @@
+# The magic number changes with every Python release, so the only fixed
+# bytes are the carriage return and newline at 2. When bit 0 of bit_field is
+# set the last eight bytes are a source hash rather than a timestamp and a
+# size.
+
+name   = "Python pyc (3.7+)"
+endian = "little"
+magic  = { offset = 2, bytes = "0D0A" }
+
+[[field]]
+name   = "magic_number"
+type   = "u16"
+offset = 0
+
+[[field]]
+name   = "crlf"
+type   = "bytes"
+size   = 2
+offset = 2
+
+[[field]]
+name   = "bit_field"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "timestamp"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "source_size"
+type   = "u32"
+offset = 12
+
+[summary]
+title = "Python bytecode"
+
+[[summary.line]]
+label  = "Compiled by"
+field  = "magic_number"
+render = "enum"
+enum   = { 3394 = "Python 3.7", 3413 = "Python 3.8", 3425 = "Python 3.9", 3439 = "Python 3.10", 3495 = "Python 3.11", 3531 = "Python 3.12" }
+
+[[summary.line]]
+label  = "Invalidation"
+field  = "bit_field"
+render = "flags"
+flags  = { 1 = "source hash", 2 = "hash checked" }
+
+[[summary.line]]
+label  = "Source last changed"
+field  = "timestamp"
+render = "time"
+
+[[summary.line]]
+label  = "Source size"
+field  = "source_size"
+render = "size"

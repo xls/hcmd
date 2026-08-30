@@ -1,0 +1,75 @@
+# A big-endian dump, which is what the magic recognises. Byte-swapped dumps
+# write the same header as 37 80 40 12 or 40 12 37 80 and are not matched.
+
+name   = "Nintendo 64 ROM"
+endian = "big"
+magic  = { offset = 0, bytes = "80371240" }
+
+[[field]]
+name   = "pi_bsd_dom1"
+type   = "bytes"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "clock_rate"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "boot_address"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "release"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "crc1"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "crc2"
+type   = "u32"
+offset = 20
+
+[[field]]
+name   = "reserved"
+type   = "bytes"
+size   = 8
+offset = 24
+
+[[field]]
+name   = "image_name"
+type   = "char"
+size   = 20
+offset = 32
+
+[[field]]
+name   = "reserved2"
+type   = "bytes"
+size   = 7
+offset = 52
+
+[[field]]
+name   = "manufacturer"
+type   = "u8"
+offset = 59
+
+[[field]]
+name   = "cartridge_id"
+type   = "u16"
+offset = 60
+
+[[field]]
+name   = "country_code"
+type   = "u8"
+offset = 62
+
+[[field]]
+name   = "version"
+type   = "u8"
+offset = 63

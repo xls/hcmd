@@ -1,0 +1,43 @@
+# The multi-stream file header. The magic is the readable part of the
+# 32-byte signature, which continues with a carriage return, a newline,
+# 0x1A, the letters DS and three zero bytes.
+
+name   = "PDB (MSF 7.0)"
+endian = "little"
+magic  = { offset = 0, bytes = "4D6963726F736F667420432F432B2B204D534620372E3030" }
+
+[[field]]
+name   = "file_magic"
+type   = "char"
+size   = 32
+offset = 0
+
+[[field]]
+name   = "block_size"
+type   = "u32"
+offset = 32
+
+[[field]]
+name   = "free_block_map_block"
+type   = "u32"
+offset = 36
+
+[[field]]
+name   = "num_blocks"
+type   = "u32"
+offset = 40
+
+[[field]]
+name   = "num_directory_bytes"
+type   = "u32"
+offset = 44
+
+[[field]]
+name   = "unknown"
+type   = "u32"
+offset = 48
+
+[[field]]
+name   = "block_map_address"
+type   = "u32"
+offset = 52

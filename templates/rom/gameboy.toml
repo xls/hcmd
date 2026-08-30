@@ -1,0 +1,124 @@
+# The header at 0x100. The magic is the first eight bytes of the Nintendo
+# logo at 0x104, which the boot ROM compares against its own copy before it
+# will run the cartridge.
+
+name   = "Game Boy cartridge"
+endian = "big"
+offset = 256
+magic  = { offset = 260, bytes = "CEED6666CC0D000B" }
+
+[[field]]
+name   = "entry_point"
+type   = "bytes"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "nintendo_logo"
+type   = "bytes"
+size   = 48
+offset = 4
+
+[[field]]
+name   = "title"
+type   = "char"
+size   = 11
+offset = 52
+
+[[field]]
+name   = "manufacturer_code"
+type   = "char"
+size   = 4
+offset = 63
+
+[[field]]
+name   = "cgb_flag"
+type   = "u8"
+offset = 67
+
+[[field]]
+name   = "new_licensee_code"
+type   = "char"
+size   = 2
+offset = 68
+
+[[field]]
+name   = "sgb_flag"
+type   = "u8"
+offset = 70
+
+[[field]]
+name   = "cartridge_type"
+type   = "u8"
+offset = 71
+
+[[field]]
+name   = "rom_size"
+type   = "u8"
+offset = 72
+
+[[field]]
+name   = "ram_size"
+type   = "u8"
+offset = 73
+
+[[field]]
+name   = "destination_code"
+type   = "u8"
+offset = 74
+
+[[field]]
+name   = "old_licensee_code"
+type   = "u8"
+offset = 75
+
+[[field]]
+name   = "mask_rom_version"
+type   = "u8"
+offset = 76
+
+[[field]]
+name   = "header_checksum"
+type   = "u8"
+offset = 77
+
+[[field]]
+name   = "global_checksum"
+type   = "u16"
+offset = 78
+
+[summary]
+title = "Game Boy cartridge"
+
+[[summary.line]]
+label  = "Title"
+field  = "title"
+render = "text"
+
+[[summary.line]]
+label  = "Cartridge"
+field  = "cartridge_type"
+render = "enum"
+enum   = { 0 = "ROM only", 1 = "MBC1", 3 = "MBC1 with RAM and battery", 5 = "MBC2", 16 = "MBC3 with timer, RAM and battery", 19 = "MBC3 with RAM and battery", 27 = "MBC5 with RAM and battery" }
+
+[[summary.line]]
+label  = "ROM size"
+field  = "rom_size"
+render = "enum"
+enum   = { 0 = "32 KB", 1 = "64 KB", 2 = "128 KB", 3 = "256 KB", 4 = "512 KB", 5 = "1 MB", 6 = "2 MB", 7 = "4 MB", 8 = "8 MB" }
+
+[[summary.line]]
+label  = "Region"
+field  = "destination_code"
+render = "enum"
+enum   = { 0 = "Japan", 1 = "everywhere else" }
+
+[[summary.line]]
+label  = "Colour support"
+field  = "cgb_flag"
+render = "enum"
+enum   = { 128 = "Game Boy Color enhanced", 192 = "Game Boy Color only" }
+
+[[summary.line]]
+label  = "Version"
+field  = "mask_rom_version"

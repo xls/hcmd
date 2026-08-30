@@ -1,0 +1,107 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# BORING RUST: Clippy Configuration for Agent-Friendly Development
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Philosophy: Correctness over cleverness. One way to do things. Local reasoning.
+#
+# Pairs with cargo_lints.toml (the [lints] section for Cargo.toml). This file
+# holds thresholds and disallowed-item lists; severities live in [lints].
+#
+# Every key here is validated against stable clippy: an unknown key is a hard
+# error that disables clippy entirely, so do not add keys without verifying.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# COMPLEXITY CEILINGS (Do not increase - these are maximums, not targets)
+# ─────────────────────────────────────────────────────────────────────────────────
+
+# Cognitive complexity: measures how difficult code is to understand
+# 15 is strict but achievable; anything higher indicates need for decomposition
+cognitive-complexity-threshold = 15
+
+# Function length: Rust is more verbose than Go, allow slightly more
+too-many-lines-threshold = 50
+
+# Arguments: more than 5 parameters = use a config struct
+too-many-arguments-threshold = 5
+
+# Nesting depth: deeper than 4 levels = extract a function
+excessive-nesting-threshold = 4
+
+# Type complexity: deeply nested generics are unreadable
+type-complexity-threshold = 250
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# TEST RELAXATIONS (no #![allow] preamble needed in test code)
+# ─────────────────────────────────────────────────────────────────────────────────
+# Panic-style assertions are the point of tests. These keys relax the panic
+# lints inside #[cfg(test)] code only; production code stays fully strict.
+
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true
+allow-print-in-tests = true
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# DISALLOWED ITEMS (mechanically enforced bans; severity set in cargo_lints.toml)
+# ─────────────────────────────────────────────────────────────────────────────────
+
+disallowed-types = [
+    { path = "std::cell::RefCell", reason = "runtime borrow panics; restructure so &mut works" },
+    { path = "std::cell::Cell", reason = "interior mutability hides data flow; restructure" },
+]
+
+disallowed-macros = [
+    { path = "tokio::select", reason = "cancellation bugs; use structured concurrency (try_join_all, JoinSet)" },
+    { path = "futures::select", reason = "cancellation bugs; use structured concurrency" },
+]
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# NAMING
+# ─────────────────────────────────────────────────────────────────────────────────
+
+# Idents of this length or SHORTER are flagged (min_ident_chars lint):
+# 2 means names must be >= 3 chars unless allowlisted below
+min-ident-chars-threshold = 2
+
+# Single-char names only for these well-known patterns
+single-char-binding-names-threshold = 4
+allowed-idents-below-min-chars = [
+    "i", "j", "k", "n",     # loop indices, counts
+    "x", "y", "z",          # coordinates
+    "w", "h",               # width, height
+    "r", "g", "b", "a",     # color channels
+    "t",                    # time, or test in test contexts
+    "s",                    # string slice in simple contexts
+    "f",                    # file, or function in higher-order contexts
+    "e",                    # error in catch contexts
+    "id",                   # identifiers
+    "dx", "dy", "dz", "dt", # deltas
+    "tx", "rx",             # channel sender/receiver
+    "_",                    # explicitly ignored
+]
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# SIZE THRESHOLDS
+# ─────────────────────────────────────────────────────────────────────────────────
+
+# Enum variants larger than this should Box their payload (large_enum_variant)
+enum-variant-size-threshold = 200
+
+# Types this size or smaller: pass by value, impl Copy (trivially_copy_pass_by_ref)
+trivial-copy-size-limit = 16
+
+# Types larger than this: pass by reference (large_types_passed_by_value)
+pass-by-value-size-limit = 256
+
+# Futures larger than this should be boxed (large_futures)
+future-size-threshold = 16384
+
+# ─────────────────────────────────────────────────────────────────────────────────
+# MSRV (Minimum Supported Rust Version)
+# ─────────────────────────────────────────────────────────────────────────────────
+
+# Floor for suggested idioms. 1.85 = edition 2024 baseline; raise to match
+# your project's actual MSRV.
+msrv = "1.95"

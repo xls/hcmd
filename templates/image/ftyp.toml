@@ -1,0 +1,52 @@
+# The ftyp box every MP4, HEIC and AVIF file begins with. major_brand says
+# which one it is.
+
+name   = "ISO base media ftyp"
+endian = "big"
+magic  = { offset = 4, bytes = "66747970" }
+
+[[field]]
+name   = "box_size"
+type   = "u32"
+offset = 0
+
+[[field]]
+name   = "box_type"
+type   = "char"
+size   = 4
+offset = 4
+
+[[field]]
+name   = "major_brand"
+type   = "char"
+size   = 4
+offset = 8
+
+[[field]]
+name   = "minor_version"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "compatible_brand"
+type   = "char"
+size   = 4
+offset = 16
+
+[summary]
+title = "ISO base media file"
+
+[[summary.line]]
+label  = "Brand"
+field  = "major_brand"
+render = "fourcc"
+
+[[summary.line]]
+label  = "Also compatible with"
+field  = "compatible_brand"
+render = "fourcc"
+
+[[summary.line]]
+label  = "Box size"
+field  = "box_size"
+render = "size"

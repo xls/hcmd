@@ -1,0 +1,124 @@
+# The two shift fields are powers of two: 9 means 512 bytes per sector.
+
+name   = "exFAT VBR"
+endian = "little"
+magic  = { offset = 3, bytes = "4558464154202020" }
+
+[[field]]
+name   = "jump"
+type   = "bytes"
+size   = 3
+offset = 0
+
+[[field]]
+name   = "fs_name"
+type   = "char"
+size   = 8
+offset = 3
+
+[[field]]
+name   = "must_be_zero"
+type   = "bytes"
+size   = 53
+offset = 11
+
+[[field]]
+name   = "partition_offset"
+type   = "u64"
+offset = 64
+
+[[field]]
+name   = "volume_length"
+type   = "u64"
+offset = 72
+
+[[field]]
+name   = "fat_offset"
+type   = "u32"
+offset = 80
+
+[[field]]
+name   = "fat_length"
+type   = "u32"
+offset = 84
+
+[[field]]
+name   = "cluster_heap_offset"
+type   = "u32"
+offset = 88
+
+[[field]]
+name   = "cluster_count"
+type   = "u32"
+offset = 92
+
+[[field]]
+name   = "first_cluster_of_root"
+type   = "u32"
+offset = 96
+
+[[field]]
+name   = "volume_serial_number"
+type   = "u32"
+offset = 100
+
+[[field]]
+name   = "fs_revision"
+type   = "u16"
+offset = 104
+
+[[field]]
+name   = "volume_flags"
+type   = "u16"
+offset = 106
+
+[[field]]
+name   = "bytes_per_sector_shift"
+type   = "u8"
+offset = 108
+
+[[field]]
+name   = "sectors_per_cluster_shift"
+type   = "u8"
+offset = 109
+
+[[field]]
+name   = "number_of_fats"
+type   = "u8"
+offset = 110
+
+[[field]]
+name   = "drive_select"
+type   = "u8"
+offset = 111
+
+[[field]]
+name   = "percent_in_use"
+type   = "u8"
+offset = 112
+
+[summary]
+title = "exFAT volume"
+
+[[summary.line]]
+label  = "Volume length"
+field  = "volume_length"
+unit   = "sectors"
+
+[[summary.line]]
+label  = "Clusters"
+field  = "cluster_count"
+
+[[summary.line]]
+label  = "Root directory cluster"
+field  = "first_cluster_of_root"
+
+[[summary.line]]
+label  = "Serial number"
+field  = "volume_serial_number"
+render = "hex"
+
+[[summary.line]]
+label  = "In use"
+field  = "percent_in_use"
+unit   = "percent"

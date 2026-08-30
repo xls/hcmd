@@ -1,0 +1,65 @@
+# No magic: TGA has no signature at the front of the file. Version 2 puts
+# TRUEVISION-XFILE in the last 18 bytes instead.
+
+name   = "TGA"
+endian = "little"
+
+[[field]]
+name   = "id_length"
+type   = "u8"
+offset = 0
+
+[[field]]
+name   = "colour_map_type"
+type   = "u8"
+offset = 1
+
+[[field]]
+name   = "image_type"
+type   = "u8"
+offset = 2
+
+[[field]]
+name   = "cmap_first_entry"
+type   = "u16"
+offset = 3
+
+[[field]]
+name   = "cmap_length"
+type   = "u16"
+offset = 5
+
+[[field]]
+name   = "cmap_entry_size"
+type   = "u8"
+offset = 7
+
+[[field]]
+name   = "x_origin"
+type   = "u16"
+offset = 8
+
+[[field]]
+name   = "y_origin"
+type   = "u16"
+offset = 10
+
+[[field]]
+name   = "width"
+type   = "u16"
+offset = 12
+
+[[field]]
+name   = "height"
+type   = "u16"
+offset = 14
+
+[[field]]
+name   = "pixel_depth"
+type   = "u8"
+offset = 16
+
+[[field]]
+name   = "image_descriptor"
+type   = "u8"
+offset = 17

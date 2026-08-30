@@ -1,0 +1,106 @@
+# The magic reads hsqs on a little-endian image, which is what mksquashfs
+# writes. A big-endian image spells it sqsh and is not matched.
+
+name   = "SquashFS superblock"
+endian = "little"
+magic  = { offset = 0, bytes = "68737173" }
+
+[[field]]
+name   = "magic"
+type   = "char"
+size   = 4
+offset = 0
+
+[[field]]
+name   = "inode_count"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "modification_time"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "block_size"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "fragment_count"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "compression"
+type   = "u16"
+offset = 20
+
+[[field]]
+name   = "block_log"
+type   = "u16"
+offset = 22
+
+[[field]]
+name   = "flags"
+type   = "u16"
+offset = 24
+
+[[field]]
+name   = "id_count"
+type   = "u16"
+offset = 26
+
+[[field]]
+name   = "version_major"
+type   = "u16"
+offset = 28
+
+[[field]]
+name   = "version_minor"
+type   = "u16"
+offset = 30
+
+[[field]]
+name   = "root_inode_ref"
+type   = "u64"
+offset = 32
+
+[[field]]
+name   = "bytes_used"
+type   = "u64"
+offset = 40
+
+[summary]
+title = "SquashFS image"
+
+[[summary.line]]
+label  = "Version"
+field  = "version_major"
+with   = "version_minor"
+join   = "."
+
+[[summary.line]]
+label  = "Compression"
+field  = "compression"
+render = "enum"
+enum   = { 1 = "gzip", 2 = "LZMA", 3 = "LZO", 4 = "XZ", 5 = "LZ4", 6 = "Zstandard" }
+
+[[summary.line]]
+label  = "Block size"
+field  = "block_size"
+render = "size"
+
+[[summary.line]]
+label  = "Inodes"
+field  = "inode_count"
+
+[[summary.line]]
+label  = "Size"
+field  = "bytes_used"
+render = "size"
+
+[[summary.line]]
+label  = "Built"
+field  = "modification_time"
+render = "time"

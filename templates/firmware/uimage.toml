@@ -1,0 +1,64 @@
+name   = "U-Boot uImage"
+endian = "big"
+magic  = { offset = 0, bytes = "27051956" }
+
+[[field]]
+name   = "ih_magic"
+type   = "u32"
+offset = 0
+
+[[field]]
+name   = "ih_hcrc"
+type   = "u32"
+offset = 4
+
+[[field]]
+name   = "ih_time"
+type   = "u32"
+offset = 8
+
+[[field]]
+name   = "ih_size"
+type   = "u32"
+offset = 12
+
+[[field]]
+name   = "ih_load"
+type   = "u32"
+offset = 16
+
+[[field]]
+name   = "ih_ep"
+type   = "u32"
+offset = 20
+
+[[field]]
+name   = "ih_dcrc"
+type   = "u32"
+offset = 24
+
+[[field]]
+name   = "ih_os"
+type   = "u8"
+offset = 28
+
+[[field]]
+name   = "ih_arch"
+type   = "u8"
+offset = 29
+
+[[field]]
+name   = "ih_type"
+type   = "u8"
+offset = 30
+
+[[field]]
+name   = "ih_comp"
+type   = "u8"
+offset = 31
+
+[[field]]
+name   = "ih_name"
+type   = "char"
+size   = 32
+offset = 32

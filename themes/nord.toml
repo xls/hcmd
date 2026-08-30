@@ -1,0 +1,95 @@
+# Holos Commander - the nord theme.
+# Location: ~/.config/holoscommander/themes/nord.toml
+#
+# Generated from a semantic palette so every slot is covered and no two themes
+# disagree about what a slot means. Colours are RGB; the renderer quantizes to
+# 256 or 16 as the terminal allows.
+
+name = "nord"
+
+[panel]
+bg              = "#2e3440"
+fg              = "#d8dee9"
+dir_fg          = "#eceff4"
+exec_fg         = "#a3be8c"
+link_fg         = "#8fbcbb"
+archive_fg      = "#b48ead"
+marked_fg       = "#ebcb8b"
+cursor_bg       = "#88c0d0"
+cursor_fg       = "#2e3440"
+# Drawn when the command line has focus: still clearly visible, one step back.
+cursor_bg_unfocused = "#434c5e"
+cursor_fg_unfocused = "#d8dee9"
+# The cursor bar on the panel that is not active at all.
+inactive_cursor_bg  = "#38404f"
+inactive_cursor_fg  = "#4c566a"
+border          = "#88c0d0"
+inactive_border = "#4c566a"
+header_bg       = "#2e3440"
+header_fg       = "#ebcb8b"
+status_bg       = "#2e3440"
+status_fg       = "#8fbcbb"
+
+[cmdline]
+bg        = "#1e222a"
+fg        = "#d8dee9"
+prompt_fg = "#a3be8c"
+caret     = "#eceff4"
+# The caret is always drawn, focused or not.
+caret_unfocused = "#4c566a"
+
+[keybar]
+number_fg = "#d8dee9"
+label_bg  = "#88c0d0"
+label_fg  = "#2e3440"
+
+[dialog]
+bg           = "#434c5e"
+fg           = "#d8dee9"
+title        = "#88c0d0"
+border       = "#4c566a"
+button       = "#88c0d0"
+button_focus = "#bf616a"
+input_bg     = "#1e222a"
+input_fg     = "#eceff4"
+
+[viewer]
+bg            = "#2e3440"
+fg            = "#d8dee9"
+line_numbers  = "#4c566a"
+match         = "#ebcb8b"
+current_match = "#bf616a"
+hex_offset    = "#8fbcbb"
+hex_ascii     = "#a3be8c"
+selection_bg  = "#b48ead"
+selection_fg  = "#2e3440"
+
+[syn]
+keyword     = "#b48ead"
+string      = "#a3be8c"
+comment     = "#4c566a"
+type        = "#8fbcbb"
+function    = "#81a1c1"
+number      = "#d5967a"
+constant    = "#d5967a"
+operator    = "#d8dee9"
+punctuation = "#4c566a"
+variable    = "#d8dee9"
+
+# Mapping used when the terminal has only 16 colors.
+[fallback_16]
+"#2e3440" = "black"
+"#1e222a" = "black"
+"#d8dee9" = "white"
+"#eceff4" = "bright_white"
+"#88c0d0" = "bright_cyan"
+"#434c5e" = "bright_black"
+"#38404f" = "bright_black"
+"#4c566a" = "bright_black"
+"#bf616a" = "bright_red"
+"#a3be8c" = "bright_green"
+"#ebcb8b" = "bright_yellow"
+"#81a1c1" = "bright_blue"
+"#b48ead" = "bright_magenta"
+"#8fbcbb" = "bright_cyan"
+"#d5967a" = "bright_red"

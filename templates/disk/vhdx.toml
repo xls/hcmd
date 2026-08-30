@@ -1,0 +1,17 @@
+# The file identifier, the first 64 KiB of a VHDX. creator is UTF-16 text.
+
+name   = "VHDX"
+endian = "little"
+magic  = { offset = 0, bytes = "7668647866696C65" }
+
+[[field]]
+name   = "signature"
+type   = "char"
+size   = 8
+offset = 0
+
+[[field]]
+name   = "creator"
+type   = "char"
+size   = 512
+offset = 8

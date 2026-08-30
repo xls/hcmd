@@ -1,0 +1,18 @@
+# The eight-byte header. Everything a binary plist needs to be read is in a
+# 32-byte trailer at the end of the file instead.
+
+name   = "Binary plist"
+endian = "big"
+magic  = { offset = 0, bytes = "62706C697374" }
+
+[[field]]
+name   = "magic"
+type   = "char"
+size   = 6
+offset = 0
+
+[[field]]
+name   = "version"
+type   = "char"
+size   = 2
+offset = 6
