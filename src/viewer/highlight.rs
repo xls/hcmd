@@ -82,6 +82,19 @@ pub enum SynSlot {
     Punctuation,
     /// `syn.variable`.
     Variable,
+    /// `diff.added`: a line the right-hand side has and the left does not.
+    ///
+    /// The last four are not syntax, and they live here because this is the
+    /// slot type a [`Span`] carries and a rendered diff paints its lines with
+    /// spans like every other rendered document. Keeping them out would mean a
+    /// second colour path through the renderer for one kind of document.
+    DiffAdded,
+    /// `diff.removed`: a line the left-hand side has and the right does not.
+    DiffRemoved,
+    /// `diff.header`: the `@@` line, and the two file names above it.
+    DiffHeader,
+    /// `diff.marker`: a collapsed run of unchanged lines.
+    DiffMarker,
 }
 
 /// **The mapping**: Sublime scope selectors onto the slots.
@@ -191,7 +204,10 @@ fn selectors() -> &'static [(Scope, Option<SynSlot>)] {
 }
 
 impl SynSlot {
-    /// The slot's name inside the `[syn]` table, as spelled in a theme file.
+    /// The slot's name inside its theme table, as spelled in a theme file.
+    ///
+    /// The syntax slots are `[syn]` and the four diff slots are `[diff]`;
+    /// [`SynSlot::group`] says which.
     pub const fn id(self) -> &'static str {
         match self {
             Self::Keyword => "keyword",
@@ -204,6 +220,10 @@ impl SynSlot {
             Self::Operator => "operator",
             Self::Punctuation => "punctuation",
             Self::Variable => "variable",
+            Self::DiffAdded => "added",
+            Self::DiffRemoved => "removed",
+            Self::DiffHeader => "header",
+            Self::DiffMarker => "marker",
         }
     }
 
@@ -221,6 +241,10 @@ impl SynSlot {
             Self::Operator => syn.operator,
             Self::Punctuation => syn.punctuation,
             Self::Variable => syn.variable,
+            Self::DiffAdded => theme.diff.added,
+            Self::DiffRemoved => theme.diff.removed,
+            Self::DiffHeader => theme.diff.header,
+            Self::DiffMarker => theme.diff.marker,
         }
     }
 

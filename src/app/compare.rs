@@ -93,6 +93,34 @@ impl App {
         self.request_job(JobSpec::compare_files(left, right));
     }
 
+    /// Show the file under each panel's cursor as a unified diff.
+    ///
+    /// The other half of `Ctrl+F2`'s question. That one answers "the same, or
+    /// different at byte 4,231"; this one answers "different how", which is
+    /// the question a reader asks next often enough that answering only the
+    /// first was leaving the job half done.
+    ///
+    /// The left panel is the `---` side and the right is `+++`, whichever
+    /// panel is active: a diff whose direction depended on which side the
+    /// cursor happened to be in would be a diff nobody could read twice.
+    ///
+    /// Reads nothing here. Both files are read by the event loop, because
+    /// `dispatch` performs no I/O.
+    pub fn diff_files(&mut self) {
+        let Some((left, _)) = self.cursor_file(crate::app::Side::Left) else {
+            self.message = Some("diff: the left panel has no file under the cursor".into());
+            return;
+        };
+        let Some((right, _)) = self.cursor_file(crate::app::Side::Right) else {
+            self.message = Some("diff: the right panel has no file under the cursor".into());
+            return;
+        };
+        self.request_view(crate::app::ViewRequest::Diff {
+            old: left,
+            new: right,
+        });
+    }
+
     /// The path and name of the file under one panel's cursor.
     ///
     /// `None` for an empty listing, for `..`, and for a directory - each of

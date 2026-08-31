@@ -204,6 +204,12 @@ tab_width     = 4        # clamped to 1..16: a stop is a column count, and
 # about to change.
 default_mode     = "text"   # text | hex -- the floor
 open_as_document = true     # let a recognised format open as mode 3
+# The same idea one step further: for a file you have edited since committing
+# it, the document the file is right now is the change you made. F3 on a
+# tracked file that differs from HEAD opens on its diff; 1 still gives the
+# text and 2 the bytes. An untracked or unmodified file is unaffected, having
+# no diff to show. Reads the object store directly, never runs git.
+diff_against_git = true     # F3 on a modified tracked file shows its diff
 hex_width     = 16       # bytes per row, clamped to 1..64. A width that is not
                          # a whole number of [viewer.hex] words is rounded down
                          # to one and the status line says so,

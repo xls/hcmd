@@ -167,8 +167,21 @@ binary-size)
   # owner agreed to: a file manager that decodes eight image formats and
   # renders JSON, HTML and markdown is a bigger program than one that does
   # not, and the alternative was leaving the features out.
+  #
+  # 29 MB buys the diff viewer, and the split is worth recording because it is
+  # lopsided. Measured on this machine, one part at a time:
+  #
+  #   27,050,192   before it
+  #   27,215,312   with the diff renderer      (+161 KB, `similar`)
+  #   28,376,880   with git as well            (+1.11 MB, `gix`)
+  #
+  # So reading git's object store costs seven times what diffing does. It buys
+  # the half of the feature that gets used daily - F3 on a file you have edited
+  # since committing it - and the alternative was writing a packfile reader,
+  # which is a week of work to save a megabyte and a way to be subtly wrong
+  # about which bytes the diff is against.
   b=$(stat -c %s target/release/hcmd)
-  [ "$b" -lt 28000000 ] || { echo "binary is $b bytes, expected under 28000000"; exit 1; }
+  [ "$b" -lt 29000000 ] || { echo "binary is $b bytes, expected under 29000000"; exit 1; }
   echo "BINARY-SIZE-OK bytes=$b"
   ;;
 

@@ -1879,3 +1879,153 @@ fn ctrl_f_opens_an_empty_bar_even_after_a_search() {
         "Ctrl+F reopened the bar still holding the last pattern:\n{text}"
     );
 }
+
+/// Two files that differ in the middle of a long identical run.
+struct DiffPair {
+    root: PathBuf,
+}
+
+impl DiffPair {
+    fn new(tag: &str) -> Self {
+        let root = std::env::temp_dir().join(format!("hcmd-diff-{}-{tag}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("fixture dir");
+        let mut old = String::new();
+        let mut new = String::new();
+        for i in 0..30 {
+            let line = format!("shared line {i}\n");
+            old.push_str(&line);
+            new.push_str(&line);
+        }
+        old.push_str("the old text\n");
+        new.push_str("the new text\n");
+        for i in 30..60 {
+            let line = format!("shared line {i}\n");
+            old.push_str(&line);
+            new.push_str(&line);
+        }
+        // `a.txt` sorts first, so it is the left panel's cursor row.
+        std::fs::write(root.join("a.txt"), old).expect("old");
+        std::fs::write(root.join("b.txt"), new).expect("new");
+        Self { root }
+    }
+}
+
+impl Drop for DiffPair {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+
+/// `Alt+Shift+F2`, in the encoding a legacy terminal sends.
+const ALT_SHIFT_F2: &[u8] = b"\x1b[1;4Q";
+
+#[test]
+fn alt_shift_f2_shows_the_two_files_as_a_diff() {
+    let fixture = DiffPair::new("view");
+    let mut run = Run::new(100, 30);
+    run.cwd = Some(fixture.root.clone());
+    // Left cursor onto a.txt, across and down onto b.txt, then diff.
+    let input = keys(&[DOWN, TAB, DOWN, DOWN, ALT_SHIFT_F2]);
+    run.input = &input;
+    run.settle = Duration::from_secs(6);
+    let (parser, _) = run_in_pty(run);
+    let text = plain(&parser);
+
+    assert!(
+        text.contains("--- a.txt") && text.contains("+++ b.txt"),
+        "the diff does not name its two sides:\n{text}"
+    );
+    assert!(
+        text.contains("-the old text") && text.contains("+the new text"),
+        "the changed lines are not marked in column zero:\n{text}"
+    );
+    // The unchanged runs are folded **and collapsed**, which is what a diff
+    // means by showing a diff: 30 identical lines either side of the change,
+    // less three of context, behind one line saying so.
+    assert!(
+        text.contains("... 27 unchanged lines"),
+        "the identical run was not collapsed:\n{text}"
+    );
+    assert!(
+        text.contains(" shared line 29") && !text.contains(" shared line 5"),
+        "context is kept and the rest is hidden:\n{text}"
+    );
+}
+
+/// A git repository holding one committed file that has since been edited.
+struct GitTree {
+    root: PathBuf,
+}
+
+impl GitTree {
+    fn new(tag: &str) -> Option<Self> {
+        let root = std::env::temp_dir().join(format!("hcmd-gt-{}-{tag}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).ok()?;
+        let run = |args: &[&str]| -> bool {
+            std::process::Command::new("git")
+                .args(args)
+                .current_dir(&root)
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+        };
+        if !run(&["init", "-q"]) {
+            return None;
+        }
+        run(&["config", "user.email", "t@example.invalid"]);
+        run(&["config", "user.name", "Test"]);
+        std::fs::write(
+            root.join("notes.txt"),
+            "first line\ncommitted body\nlast line\n",
+        )
+        .ok()?;
+        if !run(&["add", "-A"]) || !run(&["commit", "-q", "-m", "one"]) {
+            return None;
+        }
+        // Edited since. This is the file F3 should show as a diff.
+        std::fs::write(
+            root.join("notes.txt"),
+            "first line\nworking body\nlast line\n",
+        )
+        .ok()?;
+        Some(Self { root })
+    }
+}
+
+impl Drop for GitTree {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+
+#[test]
+fn f3_on_a_modified_tracked_file_shows_its_diff() {
+    let Some(fixture) = GitTree::new("f3diff") else {
+        eprintln!("SKIPPING f3_on_a_modified_tracked_file: git is not installed");
+        return;
+    };
+    let mut run = Run::new(100, 30);
+    run.cwd = Some(fixture.root.clone());
+    // Past [..] and [.git], onto notes.txt.
+    let input = keys(&[DOWN, DOWN, b"\x1b[13~"]);
+    run.input = &input;
+    run.settle = Duration::from_secs(6);
+    let (parser, _) = run_in_pty(run);
+    let text = plain(&parser);
+
+    assert!(
+        text.contains("notes.txt (HEAD)"),
+        "F3 did not open the diff against HEAD:\n{text}"
+    );
+    assert!(
+        text.contains("-committed body") && text.contains("+working body"),
+        "the change is not shown:\n{text}"
+    );
+    // `1` still gives the file's own text, so F3 has not taken that away.
+    assert!(
+        !text.contains("first line\nfirst line"),
+        "the file is shown once, as a diff:\n{text}"
+    );
+}

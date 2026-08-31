@@ -47,6 +47,10 @@ a 40 GB file as fast as a 4 KB one. Everything runs in process: no `rg`, no
   PNG says `1920 x 1080 px`, `RGBA`, `deflate`; an ELF says `x86-64`, `shared
   object`. In hex mode the same templates paint the regions they know, and
   stepping the cursor into one reads it out in the status bar.
+- **Diffs where you already are.** `F3` on a file you have edited since
+  committing it opens on the diff against `HEAD`, unchanged runs folded away.
+  `Alt+Shift+F2` diffs the two files under the panel cursors. It reads git's
+  object store itself rather than running `git`.
 - **Compare, and convert.** `Shift+F2` marks what differs between the two
   listings; `Ctrl+F2` compares two files byte for byte and says where they part.
   `Shift+R` resizes and converts images, keeping the source's own channel count

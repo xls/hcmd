@@ -1190,6 +1190,7 @@ pub(crate) fn run_action(app: &mut App, action: Action, press: KeyPress) -> Resu
         // -------------------------------------------- the design compare -
         A::CompareDirs => app.compare_lists(),
         A::CompareFiles => app.compare_files(),
+        A::DiffFiles => app.diff_files(),
 
         // ------------------------------------------ the design quick view
         A::QuickView => app.quick_view_toggle(),

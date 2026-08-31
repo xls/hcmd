@@ -682,6 +682,7 @@ static CONFIG_SCHEMA: std::sync::LazyLock<Schema> = std::sync::LazyLock::new(|| 
             "tab_width",
             "default_mode",
             "open_as_document",
+            "diff_against_git",
             "render",
             "hex_width",
             "hex",

@@ -33,6 +33,7 @@
 //! deserializes into Rust types and nothing round-trips, so a scanner that
 //! walks the text once and emits lines is the whole job.
 
+pub mod diff;
 pub mod entities;
 pub mod facts;
 pub mod html;
@@ -58,6 +59,10 @@ pub enum RenderKind {
     Html,
     /// Headings, lists and code blocks made rather than spelled.
     Markdown,
+    /// Two files, or one file and what git has for it, as a unified diff.
+    /// Produced by [`diff::render`] and never by [`render`], which has one
+    /// text and a diff needs two.
+    Diff,
     /// Not a renderer at all: a binary whose format a template recognised,
     /// shown as what that template says it is. See [`summary_document`].
     Summary,
@@ -68,6 +73,7 @@ impl RenderKind {
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
+            Self::Diff => "diff",
             Self::Json => "json",
             Self::Html => "html",
             Self::Markdown => "markdown",
@@ -294,7 +300,9 @@ pub fn render(kind: RenderKind, text: &str) -> Option<Rendered> {
         // Not a renderer over text: it is built from a template and the
         // file's head, by `summary_document`, which is the only thing that
         // can produce this kind.
-        RenderKind::Summary => return None,
+        // Neither is produced from one text: a summary comes from a template
+        // and the file's head, and a diff needs a second side.
+        RenderKind::Summary | RenderKind::Diff => return None,
     };
     Some(Rendered {
         kind,

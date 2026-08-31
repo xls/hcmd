@@ -941,6 +941,14 @@ pub struct ViewerConfig {
     /// editing JSON wants, because the thing they are about to change is the
     /// source and not the shape it describes.
     pub open_as_document: bool,
+    /// Whether a tracked file that differs from `HEAD` opens as its diff.
+    ///
+    /// On by default, and it is the same idea as `open_as_document` one step
+    /// further: for a file you have edited since committing it, the document
+    /// the file *is* right now is the change you made. `1` still gives the
+    /// text and `2` the bytes, and an unmodified or untracked file is
+    /// unaffected because there is no diff to show.
+    pub diff_against_git: bool,
     /// Bytes per row in hex mode.
     pub hex_width: u16,
     /// How the bytes are grouped and read in hex mode.
@@ -977,6 +985,7 @@ impl Default for ViewerConfig {
             tab_width: 4,
             default_mode: ViewerMode::Text,
             open_as_document: true,
+            diff_against_git: true,
             hex_width: 16,
             hex: HexConfig::default(),
             index_chunk: ByteSize::mib(1),

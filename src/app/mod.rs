@@ -414,6 +414,18 @@ pub enum ViewRequest {
         /// Where to open it, when a search hit asked rather than `F3`.
         at: Option<Box<ViewerStart>>,
     },
+    /// Two files, shown as a unified diff.
+    ///
+    /// Both are read by the event loop, because reading them is I/O and
+    /// `dispatch` performs none. `old` is the left-hand side of the diff and
+    /// `new` is the file the viewer is opened over, so `1` and `2` show the
+    /// new one's own text and bytes.
+    Diff {
+        /// The side the diff calls `---`.
+        old: VfsPath,
+        /// The side the diff calls `+++`, and the file the viewer holds.
+        new: VfsPath,
+    },
     /// the whole-program reference, on the section the key was
     /// pressed in.
     ///

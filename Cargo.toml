@@ -155,6 +155,7 @@ fatfs                     = "=0.3.6"
 # have. rustls is already linked for SFTP and FTPS, so this adds a client and
 # a root store rather than a second TLS stack.
 ureq                      = { version = "3.1.2", default-features = false, features = ["rustls"] }
+similar                   = { version = "3", default-features = false, features = ["text"] }
 
 # Image decoding and encoding, for the resizer. Default features off and the
 # codecs named one by one: the default set pulls in every format the crate
@@ -171,6 +172,7 @@ am-partitions             = "=0.3.3"
 smb2 = "0.20.1"
 ext4-view = "0.9.3"
 squashfs_reader = "0.1.1"
+gix                       = { version = "0.87", default-features = false, features = ["basic", "sha1"] }
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Release profile. There was none at all before this, so the shipped binary

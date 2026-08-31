@@ -44,6 +44,10 @@ delete_permanent  = ["shift+f8", "shift+delete"]
 context_menu      = ["shift+f10", "alt+k"]
 compare_dirs      = ["shift+f2"]
 compare_files     = ["ctrl+f2"]
+# The pair of ctrl+f2: that one answers whether two files differ, this one
+# answers how. alt+shift+f2 rather than a ctrl+F<n>, because ctrl+f3 to ctrl+f6
+# are the sort keys Total Commander puts there.
+diff_files        = ["alt+shift+f2"]
 
 # The second binding on each of these is the legacy-terminal fallback:
 # alt+F<n> is physically undeliverable on a plain terminal.

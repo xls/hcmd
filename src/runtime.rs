@@ -1129,6 +1129,65 @@ pub async fn run_connect(
         let _ = authority;
     }
 }
+/// What git has for this file, when it has something different.
+///
+/// `None` for everything ordinary: the setting is off, the file is not local,
+/// git has no repository or no commits, the file is untracked, or it is
+/// tracked and unchanged. Only a file that is **both tracked and modified**
+/// has a diff worth opening on, and only that case answers `Some`.
+///
+/// The comparison is bytes rather than a status query: git's own status is a
+/// larger machine that answers a broader question, and the one asked here is
+/// "are these the same bytes", which is cheap and unambiguous. Both sides are
+/// bounded by [`DIFF_SIDE_MAX`].
+fn git_side(
+    path: &crate::vfs::VfsPath,
+    cfg: &crate::config::ViewerConfig,
+) -> Option<viewer::DiffSide> {
+    if !cfg.diff_against_git {
+        return None;
+    }
+    let local = path.local_path()?;
+    let head = crate::git::head_blob(local).ok().flatten()?;
+    if head.bytes.len() as u64 > DIFF_SIDE_MAX {
+        return None;
+    }
+    let working = std::fs::read(local).ok()?;
+    if working == head.bytes {
+        return None;
+    }
+    Some(viewer::DiffSide {
+        label: head.label,
+        text: String::from_utf8_lossy(&head.bytes).into_owned(),
+    })
+}
+
+/// The most either side of a diff may be.
+///
+/// A diff holds both sides in memory as lines, which is the one place in this
+/// program where a file's length becomes an allocation. The viewer's own side
+/// is already bounded by `viewer.render_max`; this is the same promise for the
+/// side it is being compared against.
+const DIFF_SIDE_MAX: u64 = 32 * 1024 * 1024;
+
+/// One side of a diff, read whole and decoded, or a refusal that says why.
+fn read_side(vfs: &dyn crate::vfs::Vfs, path: &crate::vfs::VfsPath) -> crate::Result<String> {
+    use std::io::Read as _;
+    let reader = vfs.open_read(path)?;
+    let mut bytes = Vec::new();
+    reader
+        .take(DIFF_SIDE_MAX)
+        .read_to_end(&mut bytes)
+        .map_err(crate::error::Error::Bare)?;
+    if bytes.len() as u64 >= DIFF_SIDE_MAX {
+        return Err(crate::error::Error::msg(format!(
+            "{}: too large to diff (over {} MB)",
+            path.display_title(),
+            DIFF_SIDE_MAX / (1024 * 1024)
+        )));
+    }
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
 
 /// the SFTP: russh plus russh-sftp, async end to end.
 async fn connect_sftp(
@@ -1265,7 +1324,13 @@ pub fn open_pending_viewer(
             let tx = view_tx.clone();
             *opening = true;
             let built = tokio::task::spawn_blocking(move || {
+                let against = git_side(&path, &cfg);
                 Viewer::open_path(id, vfs, path, &cfg).and_then(|mut v| {
+                    // Before the mode is chosen, because it is what decides
+                    // there is a document to open in at all.
+                    if let Some(side) = against {
+                        v.set_diff_side(side);
+                    }
                     v.choose_initial_mode(cfg.default_mode, cfg.open_as_document)?;
                     // a content match opens at the hit with the
                     // pattern that found it installed. After `set_mode`,
@@ -1312,6 +1377,35 @@ pub fn open_pending_viewer(
         // column order and the terminal's keyboard capability - thirty pages
         // of text that a keystroke has no business rendering.
         //
+        // Two files. Both reads happen here, on the blocking pool, for the
+        // reason every other read in this file does: `dispatch` performs no
+        // I/O. The viewer is opened over the `new` side, so `1` and `2` show
+        // that file's own text and bytes and only mode 3 is the diff.
+        ViewRequest::Diff { old, new } => {
+            let vfs = Arc::clone(&app.vfs);
+            let tx = view_tx.clone();
+            *opening = true;
+            let built = tokio::task::spawn_blocking(move || {
+                let label = old.display_title();
+                let text = read_side(vfs.as_ref(), &old)?;
+                let mut viewer = Viewer::open_path(id, vfs, new, &cfg)?;
+                viewer.set_diff_side(viewer::DiffSide { label, text });
+                // Straight to mode 3: the diff is the whole reason this viewer
+                // was opened, and landing in the text of one of its two sides
+                // would answer a question nobody asked.
+                viewer.set_mode(crate::config::ViewerMode::Render)?;
+                Ok(viewer)
+            });
+            tokio::spawn(async move {
+                let opened = match built.await {
+                    Ok(opened) => opened,
+                    Err(join) => Err(crate::error::Error::msg(format!(
+                        "the diff could not be opened: {join}"
+                    ))),
+                };
+                let _ = tx.send(opened).await;
+            });
+        }
         ViewRequest::Help { topic } => {
             let (body, at) = crate::ui::help::page(app, topic);
             let opened =

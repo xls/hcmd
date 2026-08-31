@@ -26,6 +26,7 @@ pub mod console;
 pub mod devices;
 pub mod dialog;
 pub mod error;
+pub mod git;
 pub mod input;
 pub mod net;
 pub mod ops;

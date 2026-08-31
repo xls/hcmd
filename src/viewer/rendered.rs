@@ -100,6 +100,36 @@ impl Viewer {
         self.render_top = 0;
         self.render_cursor = 0;
 
+        // A diff first, and instead of everything below: this viewer is
+        // showing two files, and what its own file is made of is not the
+        // question. The other side was read once by the event loop; nothing
+        // here reads anything but the file the viewer already holds.
+        if let Some(other) = self.diff_old.clone() {
+            let fits = self.source.len().is_none_or(|len| len <= limit);
+            if !fits {
+                return Err(RenderRefusal::TooBig {
+                    len: self.source.len().unwrap_or(0),
+                    limit,
+                });
+            }
+            let bytes = self
+                .read_all(limit)
+                .map_err(|_| RenderRefusal::NoRenderer)?;
+            let (text, _) = self.encoding.decode(&bytes);
+            // Both sides named the same way. The viewer's title is the whole
+            // path, and `--- a.txt` against `+++ /tmp/long/path/b.txt` reads
+            // as two different kinds of thing rather than as two files.
+            let mine = self
+                .path
+                .as_ref()
+                .and_then(crate::vfs::VfsPath::file_name)
+                .unwrap_or_else(|| self.title.clone());
+            let document = super::render::diff::render(&other.text, &text, &other.label, &mine)
+                .ok_or(RenderRefusal::NoRenderer)?;
+            self.install_render(document);
+            return Ok(());
+        }
+
         let kind = RenderKind::of_name(&self.title);
         let fits = self.source.len().is_none_or(|len| len <= limit);
         // One read for both attempts below. Where a renderer applies and the
@@ -146,8 +176,16 @@ impl Viewer {
 
     /// Take a built document and make it the one on screen.
     fn install_render(&mut self, document: Rendered) {
+        // A diff opens with its unchanged runs already collapsed, which is
+        // what `diff -u` does by dropping them and what a reader means by
+        // "show me the diff". Every other document opens expanded: a JSON
+        // tree collapsed to `{...}` would be one row.
+        let collapse = document.kind == RenderKind::Diff;
         self.render_regions = document.foldable();
         self.rendered = Some(document);
+        if collapse {
+            self.fold_all(true);
+        }
     }
 
     /// How many rendered rows the window shows.

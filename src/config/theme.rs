@@ -397,6 +397,15 @@ theme_group!(
 );
 
 theme_group!(
+    DiffTheme,
+    RawDiffTheme,
+    added = "added",
+    removed = "removed",
+    header = "header",
+    marker = "marker",
+);
+
+theme_group!(
     SynTheme,
     RawSynTheme,
     keyword = "keyword",
@@ -428,6 +437,10 @@ pub struct Theme {
     pub viewer: ViewerTheme,
     /// `syn.*`.
     pub syn: SynTheme,
+    /// `diff.*`: the colours of a rendered diff. Their own group rather than
+    /// four more `syn` slots, because a diff is not syntax: the same file
+    /// highlighted as Rust and shown as a diff wants both palettes at once.
+    pub diff: DiffTheme,
     /// `[fallback_16]`: the mapping used when the terminal has only 16 colours.
     pub fallback_16: HashMap<Rgb, Named16>,
 }
@@ -443,6 +456,7 @@ struct RawTheme {
     dialog: RawDialogTheme,
     viewer: RawViewerTheme,
     syn: RawSynTheme,
+    diff: RawDiffTheme,
     fallback_16: HashMap<Rgb, Named16>,
 }
 
@@ -525,6 +539,17 @@ impl Theme {
                 punctuation: hex("#A0A0A0", k),
                 variable: hex("#C0C0C0", k),
             },
+            diff: DiffTheme {
+                // Green added, red removed, and a dimmer pair for the parts
+                // that are about the diff rather than in it. Chosen to read on
+                // the built-in blue; every theme may override them and none
+                // has to, because a theme file that says nothing about `diff`
+                // inherits these.
+                added: hex("#54FF54", k),
+                removed: hex("#FF5454", k),
+                header: hex("#54FFFF", k),
+                marker: hex("#808080", k),
+            },
             fallback_16: HashMap::from([
                 (hex("#0000A8", k), Named16::Blue),
                 // The two cursor-bar backgrounds that nearest-match gets wrong.
@@ -581,6 +606,7 @@ impl Theme {
             dialog: base.dialog.merge(raw.dialog),
             viewer: base.viewer.merge(raw.viewer),
             syn: base.syn.merge(raw.syn),
+            diff: base.diff.merge(raw.diff),
             fallback_16: base.fallback_16,
         };
         // The file's entries are laid *over* the built-in table rather than

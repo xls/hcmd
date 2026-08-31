@@ -302,6 +302,15 @@ pub enum Row {
 /// expanded text for [`Row::Text`], byte indices for [`Row::Hex`] - because
 /// the renderer has the row and nothing else. `current` is what separates
 /// the `viewer.current_match` from `viewer.match`: exactly one match
+/// One side of a diff, already read and decoded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiffSide {
+    /// What the `---` line calls it.
+    pub label: String,
+    /// Its whole text.
+    pub text: String,
+}
+
 /// on screen can be the one `n` / `Shift+N` is standing on.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatchRun {
@@ -679,6 +688,13 @@ pub struct Viewer {
     render_hits: Vec<find_render::RenderHit>,
     /// Which of `render_hits` the cursor is on.
     render_hit: Option<usize>,
+    /// The other side of a diff, when this viewer is showing one.
+    ///
+    /// The `---` side: the file the viewer holds is the `+++` one, so `1` and
+    /// `2` still show its own text and bytes. Held as decoded text rather than
+    /// as a path, because it was read once by the event loop and re-reading it
+    /// on every mode switch would be I/O on a keystroke.
+    diff_old: Option<DiffSide>,
     /// Whether `render_hits` has been built for the pattern now in the bar.
     ///
     /// A seeded pattern - the session's last search, installed when the viewer
@@ -888,6 +904,7 @@ impl Viewer {
             render_hits: Vec::new(),
             render_hit: None,
             render_hits_built: false,
+            diff_old: None,
             find_origin: found.bom_len,
             find_job: None,
             find_cancel: None,
@@ -2095,6 +2112,20 @@ impl Viewer {
     /// What is in the find bar, for the session pattern.
     pub const fn find_query(&self) -> &FindQuery {
         self.find.query()
+    }
+
+    /// Show this viewer as a diff against `other`, the `---` side.
+    ///
+    /// Set before the initial mode is chosen, because it decides what mode 3
+    /// renders and therefore whether mode 3 can be entered at all.
+    pub fn set_diff_side(&mut self, other: DiffSide) {
+        self.diff_old = Some(other);
+    }
+
+    /// The other side of the diff, when this viewer is showing one.
+    #[must_use]
+    pub const fn diff_side(&self) -> Option<&DiffSide> {
+        self.diff_old.as_ref()
     }
 
     /// Install the session's last pattern without running it.

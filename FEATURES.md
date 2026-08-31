@@ -135,6 +135,13 @@ Read-only is the feature, not a stage of one: there is no write path to disable.
   too, as its fields; one they do not still shows what can be read of it.
 - In hex mode a template paints the regions it knows, and stepping the cursor
   into one reads it out in the status bar: what the field is, and its value.
+- **Diffs.** `F3` on a tracked file you have edited since committing it opens
+  on its diff against `HEAD`; `Alt+Shift+F2` diffs the file under each panel's
+  cursor. Unified format, `+` and `-` coloured, unchanged runs collapsed behind
+  `... 27 unchanged lines` and expandable. It is the document mode rather than
+  a mode of its own, so `1` and `2` still give the file's own text and bytes
+  and find still searches what is on screen. Git's object store is read
+  directly, loose objects and packfiles alike; no `git` process is started.
 - Streaming: a 40 GB file opens as fast as a 4 KB one, and memory is bounded by
   the window rather than the file.
 - Syntax highlighting (`syntect`) with the active theme.
