@@ -104,7 +104,7 @@ impl Viewer {
         // showing two files, and what its own file is made of is not the
         // question. The other side was read once by the event loop; nothing
         // here reads anything but the file the viewer already holds.
-        if let Some(other) = self.diff_old.clone() {
+        if let Some(other) = self.diff_old.clone().filter(|_| self.diff_shown) {
             let fits = self.source.len().is_none_or(|len| len <= limit);
             if !fits {
                 return Err(RenderRefusal::TooBig {

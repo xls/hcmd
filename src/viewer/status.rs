@@ -56,6 +56,7 @@ impl Viewer {
             binary: self.binary,
             highlighted: self.highlighting,
             render: self.rendered.as_ref().map(|r| r.label.clone()),
+            git: self.git_state.map(crate::git::State::label),
             field: self.field_reading.clone(),
             // An empty selection is not one: it covers no byte, paints nothing
             // and `Ctrl+C` refuses it, so the status line does not announce it

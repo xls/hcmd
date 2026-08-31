@@ -367,6 +367,11 @@ file_info         = ["f9"]
 # nothing else in any context wants a bare t. The picker's first row removes
 # the template again; Esc leaves whatever is applied alone.
 viewer_template   = ["t"]
+# Mode 3 shows the file's own document - markdown as markdown, JSON as a tree -
+# and this swaps it for the diff against git, or back. A file no renderer
+# claims, which is most source code, starts on the diff because there is no
+# document for it to displace.
+toggle_diff       = ["ctrl+d"]
 mode_text         = ["1"]
 mode_hex          = ["2"]
 # 3 is the rendered view: a JSON tree, a page's text, a Markdown file with its

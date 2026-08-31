@@ -16,6 +16,26 @@
 
 use std::path::{Path, PathBuf};
 
+/// What git says about a file, for the status line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum State {
+    /// Tracked, and the working copy differs from `HEAD`.
+    Modified,
+    /// Tracked, and the same as `HEAD`.
+    Unmodified,
+}
+
+impl State {
+    /// How the status line spells it.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Modified => "git modified",
+            Self::Unmodified => "git unmodified",
+        }
+    }
+}
+
 /// What git knows about one file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HeadBlob {

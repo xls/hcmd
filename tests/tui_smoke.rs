@@ -1981,6 +1981,7 @@ impl GitTree {
             "first line\ncommitted body\nlast line\n",
         )
         .ok()?;
+        std::fs::write(root.join("readme.md"), "# Title\n\ncommitted body\n").ok()?;
         if !run(&["add", "-A"]) || !run(&["commit", "-q", "-m", "one"]) {
             return None;
         }
@@ -1990,6 +1991,7 @@ impl GitTree {
             "first line\nworking body\nlast line\n",
         )
         .ok()?;
+        std::fs::write(root.join("readme.md"), "# Title\n\nworking body\n").ok()?;
         Some(Self { root })
     }
 }
@@ -2027,5 +2029,63 @@ fn f3_on_a_modified_tracked_file_shows_its_diff() {
     assert!(
         !text.contains("first line\nfirst line"),
         "the file is shown once, as a diff:\n{text}"
+    );
+}
+
+#[test]
+fn a_modified_markdown_file_still_opens_as_markdown() {
+    // The file's own format wins. A diff that displaced the document left a
+    // modified `.md` with no way to be read as markdown at all, which is the
+    // renderer doing the opposite of its job.
+    let Some(fixture) = GitTree::new("mdfirst") else {
+        eprintln!("SKIPPING a_modified_markdown_file: git is not installed");
+        return;
+    };
+    let mut run = Run::new(100, 30);
+    run.cwd = Some(fixture.root.clone());
+    // Past [..] and [.git], onto notes.txt, then down again to readme.md.
+    let input = keys(&[DOWN, DOWN, DOWN, b"\x1b[13~"]);
+    run.input = &input;
+    run.settle = Duration::from_secs(6);
+    let (parser, _) = run_in_pty(run);
+    let text = plain(&parser);
+
+    assert!(
+        text.contains("render [markdown]"),
+        "a modified markdown file did not open as markdown:\n{text}"
+    );
+    assert!(
+        !text.contains("--- readme.md (HEAD)"),
+        "the diff displaced the document:\n{text}"
+    );
+    // And git still says what it knows, so the reader can tell "unmodified"
+    // from "not in a repository" when the toggle appears to do nothing.
+    assert!(
+        text.contains("git modified"),
+        "the status line does not say what git knows:\n{text}"
+    );
+}
+
+#[test]
+fn ctrl_d_swaps_the_document_for_the_diff() {
+    let Some(fixture) = GitTree::new("toggle") else {
+        eprintln!("SKIPPING ctrl_d_swaps: git is not installed");
+        return;
+    };
+    let mut run = Run::new(100, 30);
+    run.cwd = Some(fixture.root.clone());
+    let input = keys(&[DOWN, DOWN, DOWN, b"\x1b[13~", b"\x04"]);
+    run.input = &input;
+    run.settle = Duration::from_secs(6);
+    let (parser, _) = run_in_pty(run);
+    let text = plain(&parser);
+
+    assert!(
+        text.contains("--- readme.md (HEAD)"),
+        "Ctrl+D did not swap the document for the diff:\n{text}"
+    );
+    assert!(
+        text.contains("-committed body") && text.contains("+working body"),
+        "the diff is not showing the change:\n{text}"
     );
 }

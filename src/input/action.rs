@@ -181,6 +181,7 @@ actions! {
     CompareDirs       = "compare_dirs",      V07, "Compare the two file lists";
     CompareFiles      = "compare_files",     V09, "Compare the two files byte for byte";
     DiffFiles         = "diff_files",        V09, "Show the two files as a diff";
+    ToggleDiff        = "toggle_diff",       V09, "Swap mode 3 between the document and the diff";
 
     DriveLeft         = "drive_left",        V07, "Choose a device for the left panel";
     DriveRight        = "drive_right",       V07, "Choose a device for the right panel";

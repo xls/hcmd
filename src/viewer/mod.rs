@@ -390,6 +390,9 @@ pub struct Status {
     /// What mode 3 is showing: the renderer's name, or the template's where a
     /// template's summary is what is on screen.
     pub render: Option<String>,
+    /// What git says about the file: `git modified` or `git unmodified`, and
+    /// `None` where git has nothing to say about it at all.
+    pub git: Option<&'static str>,
     /// The field the cursor is standing in, already decoded as
     /// `name: value`. `None` in every mode but hex, and in hex whenever the
     /// cursor is outside every field a template explains.
@@ -695,6 +698,17 @@ pub struct Viewer {
     /// as a path, because it was read once by the event loop and re-reading it
     /// on every mode switch would be I/O on a keystroke.
     diff_old: Option<DiffSide>,
+    /// Whether mode 3 is currently showing the diff rather than the document.
+    ///
+    /// The file's own format wins by default: a modified `.md` opens as
+    /// markdown, because that is what the file *is* and the diff is a question
+    /// about it. A file no renderer claims - which is most source code - opens
+    /// on its diff instead, there being no document for the diff to displace.
+    /// Either way `toggle_diff` moves between them.
+    diff_shown: bool,
+    /// What git says about this file, for the status line. `None` when git
+    /// has nothing to say: no repository, no commits, or an untracked file.
+    git_state: Option<crate::git::State>,
     /// Whether `render_hits` has been built for the pattern now in the bar.
     ///
     /// A seeded pattern - the session's last search, installed when the viewer
@@ -905,6 +919,8 @@ impl Viewer {
             render_hit: None,
             render_hits_built: false,
             diff_old: None,
+            diff_shown: false,
+            git_state: None,
             find_origin: found.bom_len,
             find_job: None,
             find_cancel: None,
@@ -2114,12 +2130,50 @@ impl Viewer {
         self.find.query()
     }
 
-    /// Show this viewer as a diff against `other`, the `---` side.
+    /// Offer a diff against `other`, the `---` side.
     ///
     /// Set before the initial mode is chosen, because it decides what mode 3
-    /// renders and therefore whether mode 3 can be entered at all.
+    /// renders. Whether the diff is what mode 3 *starts* on depends on whether
+    /// the file has a document of its own: see [`Viewer::diff_shown`].
     pub fn set_diff_side(&mut self, other: DiffSide) {
+        self.diff_shown = render::RenderKind::of_name(&self.title).is_none();
         self.diff_old = Some(other);
+    }
+
+    /// Record what git says about this file, for the status line.
+    ///
+    /// Separate from [`Viewer::set_diff_side`] because the two answers are
+    /// different: a file can be tracked and unchanged, which is worth saying
+    /// and has no diff to show.
+    pub fn set_git_state(&mut self, state: crate::git::State) {
+        self.git_state = Some(state);
+    }
+
+    /// Whether mode 3 is showing the diff rather than the file's own document.
+    #[must_use]
+    pub const fn diff_shown(&self) -> bool {
+        self.diff_shown
+    }
+
+    /// Swap mode 3 between the file's document and its diff.
+    ///
+    /// Answers `false` when there is no diff to swap to, which the caller
+    /// reports: a key that silently does nothing is the thing being avoided.
+    pub fn toggle_diff(&mut self) -> Result<bool> {
+        if self.diff_old.is_none() {
+            return Ok(false);
+        }
+        self.diff_shown = !self.diff_shown;
+        // Rebuilt rather than kept: the two are different documents, with
+        // different line counts and different folds, and a cursor into one is
+        // not a position in the other.
+        if matches!(self.mode, ViewerMode::Render) {
+            let limit = self.render_max;
+            let _ = self.build_render(limit, crate::viewer::fileinfo::MATCH_HEAD);
+        } else {
+            self.set_mode(ViewerMode::Render)?;
+        }
+        Ok(true)
     }
 
     /// The other side of the diff, when this viewer is showing one.

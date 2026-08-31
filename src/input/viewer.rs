@@ -467,6 +467,20 @@ fn viewer_action(app: &mut App, action: Action, extend: Extend) -> Result<()> {
             report_find(app, found);
             return Ok(());
         }
+        // Mode 3 holds two documents for a file git knows about, and this is
+        // how a reader gets at the other one.
+        A::ToggleDiff => {
+            let swapped = viewer.toggle_diff()?;
+            if !swapped {
+                app.message = Some(
+                    "no diff for this file: it is unmodified, untracked, or not in a repository"
+                        .to_string(),
+                );
+            } else if let Some(said) = viewer.render_note().map(str::to_string) {
+                app.message = Some(said);
+            }
+            return Ok(());
+        }
         A::ModeText => viewer.set_mode(crate::config::ViewerMode::Text),
         A::ModeHex => viewer.set_mode(crate::config::ViewerMode::Hex),
         // Mode 3 is the one mode that can decline to be entered, and it says

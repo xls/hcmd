@@ -1143,23 +1143,35 @@ pub async fn run_connect(
 fn git_side(
     path: &crate::vfs::VfsPath,
     cfg: &crate::config::ViewerConfig,
-) -> Option<viewer::DiffSide> {
+) -> (Option<viewer::DiffSide>, Option<crate::git::State>) {
     if !cfg.diff_against_git {
-        return None;
+        return (None, None);
     }
-    let local = path.local_path()?;
-    let head = crate::git::head_blob(local).ok().flatten()?;
-    if head.bytes.len() as u64 > DIFF_SIDE_MAX {
-        return None;
-    }
-    let working = std::fs::read(local).ok()?;
+    let Some(local) = path.local_path() else {
+        return (None, None);
+    };
+    let Some(head) = crate::git::head_blob(local).ok().flatten() else {
+        return (None, None);
+    };
+    let Ok(working) = std::fs::read(local) else {
+        return (None, None);
+    };
     if working == head.bytes {
-        return None;
+        // Tracked and unchanged. There is no diff to show and that is worth
+        // saying: an empty status line beside a file under version control
+        // reads as "git does not know this file", which is a different fact.
+        return (None, Some(crate::git::State::Unmodified));
     }
-    Some(viewer::DiffSide {
-        label: head.label,
-        text: String::from_utf8_lossy(&head.bytes).into_owned(),
-    })
+    if head.bytes.len() as u64 > DIFF_SIDE_MAX {
+        return (None, Some(crate::git::State::Modified));
+    }
+    (
+        Some(viewer::DiffSide {
+            label: head.label,
+            text: String::from_utf8_lossy(&head.bytes).into_owned(),
+        }),
+        Some(crate::git::State::Modified),
+    )
 }
 
 /// The most either side of a diff may be.
@@ -1324,10 +1336,13 @@ pub fn open_pending_viewer(
             let tx = view_tx.clone();
             *opening = true;
             let built = tokio::task::spawn_blocking(move || {
-                let against = git_side(&path, &cfg);
+                let (against, git) = git_side(&path, &cfg);
                 Viewer::open_path(id, vfs, path, &cfg).and_then(|mut v| {
                     // Before the mode is chosen, because it is what decides
                     // there is a document to open in at all.
+                    if let Some(state) = git {
+                        v.set_git_state(state);
+                    }
                     if let Some(side) = against {
                         v.set_diff_side(side);
                     }

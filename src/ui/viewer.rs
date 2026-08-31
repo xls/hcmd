@@ -1126,12 +1126,24 @@ fn fields(status: &Status) -> Vec<Field> {
             // Which renderer is showing, not merely that mode 3 is on: a JSON
             // file and an HTML one look nothing alike and the field is the one
             // place that says which of the three produced what is on screen.
+            // Which renderer is showing, and for a file git knows about,
+            // which of its two documents: `render [markdown]` and
+            // `render [diff]` are the same key showing different things.
             ViewerMode::Render => match status.render.as_deref() {
                 Some(what) => format!("render [{what}]"),
                 None => "render".to_string(),
             },
         },
     );
+    // What git says about the file. Ranked with the mode rather than above it,
+    // because it is a fact about the file and the mode is a fact about what is
+    // on screen - but it is worth a slot of its own: a reader who has just
+    // pressed `Ctrl+D` and seen nothing happen wants to know whether the file
+    // is unmodified or simply not in a repository, and those are different
+    // answers.
+    if let Some(git) = status.git {
+        push(RANK_NAMED, git.to_string());
+    }
     // What the cursor is standing in, when a template explains it. Ranked
     // with the mode and the encoding rather than above them: it is the answer
     // this whole feature exists to give, but it describes the offset, and an
@@ -1424,6 +1436,7 @@ mod tests {
             binary: false,
             highlighted: true,
             render: None,
+            git: None,
             field: None,
             error: None,
             selection: None,
@@ -1460,6 +1473,7 @@ mod tests {
             binary: false,
             highlighted: true,
             render: None,
+            git: None,
             field: None,
             error: None,
             selection: None,
@@ -1551,6 +1565,7 @@ mod tests {
             binary: false,
             highlighted: true,
             render: None,
+            git: None,
             field: None,
             error: None,
             selection: None,
@@ -1601,6 +1616,7 @@ mod tests {
             binary: false,
             highlighted: false,
             render: None,
+            git: None,
             field: None,
             error: None,
             selection: None,
