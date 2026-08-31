@@ -232,7 +232,11 @@ pub fn draw(f: &mut Frame, app: &App, side: Side, area: Rect) {
     let show_tabs = panel.tab_bar_visible(app.config.panel.show_tab_bar);
     let r = rows(area, show_tabs);
 
-    let allocated = columns::allocate(&app.config.panel, usize::from(r.entries.width));
+    // The git column earns its cell only in a repository: a directory whose
+    // read found a git state on at least one entry. Elsewhere it would be a
+    // blank column stealing a cell from the name.
+    let show_git = tab.entries.iter().any(|e| e.git_state.is_some());
+    let allocated = columns::allocate(&app.config.panel, usize::from(r.entries.width), show_git);
     let crop = columns::name_crop(&app.config.panel, &allocated);
 
     draw_tab_bar(f, app, panel, r.tab_bar, g);

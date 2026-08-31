@@ -25,6 +25,7 @@ split_ratio    = 0.5         # left panel share of the width
 confirm_exit   = true
 
 [panel]
+git_status     = true       # a git-state column in a repository (see below)
 show_hidden        = true
 directories_first  = true
 human_sizes        = true
@@ -48,7 +49,13 @@ show_tab_bar       = "auto"          # auto (hide with one tab) | always | never
 # Left to right. This order also defines the sort keys: ctrl+1 sorts by the
 # 1st column, ctrl+2 by the 2nd, and so on -- and it keeps working for a column
 # that is currently hidden.
-order = ["name", "ext", "size", "date", "attr"]
+order = ["name", "ext", "size", "date", "attr", "git"]
+
+# git_status: show each file's git state in the "git" column when the directory
+# is inside a repository. ~ modified, + staged, A newly added, ? untracked, and
+# blank for a clean or untracked-free file. Off turns the whole computation off,
+# so a directory read never touches git; it costs a fast discovery on an
+# ordinary folder and an index read inside a repository.
 
 # Percentage of the panel's inner width. "name" is not listed: it is the
 # flexible column and absorbs whatever is left.

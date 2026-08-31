@@ -619,6 +619,7 @@ static CONFIG_SCHEMA: std::sync::LazyLock<Schema> = std::sync::LazyLock::new(|| 
         "panel",
         &[
             "show_hidden",
+            "git_status",
             "directories_first",
             "human_sizes",
             "thousands_separator",
@@ -1011,7 +1012,7 @@ mod tests {
         assert_eq!(cfg.panel.max_tabs, 3);
         assert_eq!(cfg.ui.theme, "blue");
         assert!(cfg.ui.show_keybar);
-        assert_eq!(cfg.panel.columns.order.len(), 5);
+        assert_eq!(cfg.panel.columns.order.len(), 6);
     }
 
     #[test]

@@ -133,6 +133,8 @@ fn default_min_chars(cfg: &PanelConfig, id: ColumnId) -> usize {
         ColumnId::Owner | ColumnId::Group => 8,
         // "0644".
         ColumnId::PermsOctal => 4,
+        // One glyph.
+        ColumnId::GitState => 1,
     }
 }
 
@@ -337,7 +339,8 @@ mod tests {
                 ColumnId::Ext,
                 ColumnId::Size,
                 ColumnId::Date,
-                ColumnId::Attr
+                ColumnId::Attr,
+                ColumnId::GitState
             ],
             "everything fits at 200"
         );
@@ -366,7 +369,8 @@ mod tests {
                 ColumnId::Attr,
                 ColumnId::Ext,
                 ColumnId::Size,
-                ColumnId::Date
+                ColumnId::Date,
+                ColumnId::GitState
             ],
             "the default hide_priority order"
         );

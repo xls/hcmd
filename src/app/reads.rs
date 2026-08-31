@@ -78,6 +78,36 @@ pub struct CapsEvent {
     pub caps: Capabilities,
 }
 
+/// A directory whose git flags should be computed off the event loop.
+///
+/// Fired when a local listing finishes, when `panel.git_status` is on. The
+/// generation pins it to the listing that asked, so a fast `Tab` change cannot
+/// paint one directory's flags onto another's rows.
+#[derive(Debug, Clone)]
+pub struct GitStatusRequest {
+    /// Which panel.
+    pub side: Side,
+    /// Which tab.
+    pub tab: usize,
+    /// The listing this is for.
+    pub generation: u64,
+    /// The directory to read git's state of.
+    pub dir: std::path::PathBuf,
+}
+
+/// The answer: each file's git state, by name.
+#[derive(Debug, Clone)]
+pub struct GitStatusEvent {
+    /// Which panel.
+    pub side: Side,
+    /// Which tab.
+    pub tab: usize,
+    /// The listing this is for.
+    pub generation: u64,
+    /// The flags, by file name.
+    pub flags: std::collections::HashMap<String, crate::git::FileState>,
+}
+
 /// Ask [`Vfs::capabilities_for`] on the blocking pool and deliver the answer
 /// to the event loop, the way [`crate::app::stream_read`] delivers a listing.
 ///
@@ -469,6 +499,21 @@ impl App {
                     generation,
                     path: tab.path.clone(),
                 });
+                // A local listing in a repository also gets its git flags,
+                // computed off the loop and merged when they arrive. Only for
+                // a real local directory: a virtual listing or a remote has no
+                // working tree to read git's state from.
+                self.pending_git_status = self
+                    .panel(side)
+                    .tab(tab_index)
+                    .filter(|_| self.config.panel.git_status)
+                    .and_then(|tab| tab.path.local_path().map(std::path::Path::to_path_buf))
+                    .map(|dir| GitStatusRequest {
+                        side,
+                        tab: tab_index,
+                        generation,
+                        dir,
+                    });
                 let tab = self.panel_mut(side).tab_mut(tab_index)?;
                 tab.loading = false;
                 tab.sort_entries(directories_first);
@@ -543,6 +588,27 @@ impl App {
         // comparisons and no reads.
         self.note_quick_view_cursor();
         caps_request
+    }
+    /// Take the queued git-status request, for the event loop.
+    pub fn take_pending_git_status(&mut self) -> Option<GitStatusRequest> {
+        self.pending_git_status.take()
+    }
+
+    /// Merge a directory's git flags into the listing that asked for them.
+    ///
+    /// The generation guards it: flags computed for a listing the panel has
+    /// since replaced are dropped, so one directory's state never paints
+    /// another's rows.
+    pub fn apply_git_status_event(&mut self, event: GitStatusEvent) {
+        let Some(tab) = self.panel_mut(event.side).tab_mut(event.tab) else {
+            return;
+        };
+        if tab.generation != event.generation {
+            return;
+        }
+        for entry in &mut tab.entries {
+            entry.git_state = event.flags.get(&entry.name).copied();
+        }
     }
 
     /// [`App::apply_read_event`] for a caller with nowhere to send the probe.

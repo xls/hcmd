@@ -102,6 +102,9 @@ pub enum ColumnId {
     Group,
     /// Numeric mode, `0644`.
     PermsOctal,
+    /// The file's git state, one character: `~` modified, `+` staged, `A`
+    /// added, `?` untracked, blank for clean or outside a repository.
+    GitState,
 }
 
 impl ColumnId {
@@ -115,6 +118,7 @@ impl ColumnId {
         Self::Owner,
         Self::Group,
         Self::PermsOctal,
+        Self::GitState,
     ];
 
     /// The stable id used in `config.toml`.
@@ -128,6 +132,7 @@ impl ColumnId {
             Self::Owner => "owner",
             Self::Group => "group",
             Self::PermsOctal => "perms_octal",
+            Self::GitState => "git",
         }
     }
 
@@ -148,6 +153,9 @@ impl ColumnId {
             Self::Owner => "Owner",
             Self::Group => "Group",
             Self::PermsOctal => "Perms",
+            // One column, headed with a git-ish glyph. Kept to a single cell
+            // because that is all a flag needs and width in a panel is dear.
+            Self::GitState => "G",
         }
     }
 
@@ -1134,6 +1142,7 @@ pub fn compare_by(column: ColumnId, a: &Entry, b: &Entry) -> std::cmp::Ordering 
             (None, None) => Ordering::Equal,
         },
         ColumnId::Attr | ColumnId::PermsOctal => a.mode.cmp(&b.mode),
+        ColumnId::GitState => git_sort_key(a).cmp(&git_sort_key(b)),
         ColumnId::Owner => a.uid.cmp(&b.uid),
         ColumnId::Group => a.gid.cmp(&b.gid),
     }
@@ -1542,6 +1551,18 @@ fn entry_home(base: &VfsPath, entry: &Entry) -> VfsPath {
 /// shows an empty `/` rather than crashing.
 static FALLBACK_TAB: std::sync::LazyLock<Tab> =
     std::sync::LazyLock::new(|| Tab::new(VfsPath::local_root()));
+
+/// A sort rank for the git column: dirtier first, clean and untracked-free
+/// last, so sorting by `G` groups the files that need attention.
+fn git_sort_key(entry: &Entry) -> u8 {
+    match entry.git_state {
+        Some(crate::git::FileState::Modified) => 0,
+        Some(crate::git::FileState::Staged) => 1,
+        Some(crate::git::FileState::Added) => 2,
+        Some(crate::git::FileState::Untracked) => 3,
+        None => 4,
+    }
+}
 
 #[cfg(test)]
 mod tests {

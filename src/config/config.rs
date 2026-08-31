@@ -241,6 +241,10 @@ pub enum NameTruncate {
 pub struct PanelConfig {
     /// Show dotfiles (`Ctrl+H`).
     pub show_hidden: bool,
+    /// Show each file's git state in the `git` column, when the directory is
+    /// in a repository. Off turns the whole computation off, not just the
+    /// column, so a directory read never touches git.
+    pub git_status: bool,
     /// Directories sort before files, on top of every sort order.
     ///
     pub directories_first: bool,
@@ -294,6 +298,7 @@ impl Default for PanelConfig {
     fn default() -> Self {
         Self {
             show_hidden: true,
+            git_status: true,
             directories_first: true,
             // not examples/config.toml.
             human_sizes: false,
@@ -355,6 +360,7 @@ impl Default for ColumnsConfig {
                 ColumnId::Size,
                 ColumnId::Date,
                 ColumnId::Attr,
+                ColumnId::GitState,
             ],
             width: HashMap::from([
                 (ColumnId::Ext, 6),
@@ -381,6 +387,7 @@ impl Default for ColumnsConfig {
                 ColumnId::Ext,
                 ColumnId::Size,
                 ColumnId::Date,
+                ColumnId::GitState,
             ],
             name_truncate: NameTruncate::Auto,
             name_min_width: 16,

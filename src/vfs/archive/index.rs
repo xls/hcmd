@@ -176,6 +176,7 @@ impl Member {
             is_parent: false,
             location: None,
             hit: None,
+            git_state: None,
         }
     }
 }

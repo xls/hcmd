@@ -817,6 +817,8 @@ pub struct App {
     pending_link: Option<crate::app::links::LinkRequest>,
     /// A permission change the keystroke asked for.
     pending_chmod: Option<crate::app::links::ChmodRequest>,
+    /// A directory whose git flags are being computed off the loop.
+    pending_git_status: Option<crate::app::reads::GitStatusRequest>,
     /// A password to put in the keyring, from the host form.
     pending_keyring: Option<crate::app::links::KeyringWrite>,
     /// A password typed into the host form, between the form being answered
@@ -957,6 +959,7 @@ impl App {
             compare_names: None,
             pending_link: None,
             pending_chmod: None,
+            pending_git_status: None,
             pending_keyring: None,
             pending_host_secret: None,
             editor_size_pending: None,

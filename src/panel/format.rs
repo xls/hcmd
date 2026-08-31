@@ -379,6 +379,9 @@ pub fn cell_text(
         ColumnId::Owner => entry.uid.to_string(),
         ColumnId::Group => entry.gid.to_string(),
         ColumnId::PermsOctal => perms_octal_text(entry),
+        ColumnId::GitState => entry
+            .git_state
+            .map_or_else(String::new, |g| g.flag().to_string()),
     }
 }
 

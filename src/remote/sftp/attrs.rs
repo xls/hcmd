@@ -53,6 +53,7 @@ pub(crate) fn entry_from(name: &str, attrs: &russh_sftp::protocol::FileAttribute
         is_parent: false,
         location: None,
         hit: None,
+        git_state: None,
     }
 }
 

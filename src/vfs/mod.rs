@@ -508,6 +508,10 @@ pub struct Entry {
     /// hit is the rare case and an `Entry` is the common one: a listing of a
     /// million files pays one pointer per row rather than four more fields.
     pub hit: Option<Box<ContentHit>>,
+    /// The file's git state, for the `git` column, when the panel is in a
+    /// repository and `panel.git_status` is on. `None` everywhere else and for
+    /// a clean tracked file, which the column draws as a blank.
+    pub git_state: Option<crate::git::FileState>,
 }
 
 impl Entry {
@@ -527,6 +531,7 @@ impl Entry {
             is_parent: false,
             location: None,
             hit: None,
+            git_state: None,
         }
     }
 
@@ -552,6 +557,7 @@ impl Entry {
             is_parent: true,
             location: None,
             hit: None,
+            git_state: None,
         }
     }
 

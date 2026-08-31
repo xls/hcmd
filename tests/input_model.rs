@@ -786,7 +786,7 @@ fn tab_moves_between_panels_and_alt_digits_move_between_tabs() {
 #[test]
 fn ctrl_digits_sort_by_the_nth_configured_column() {
     // positional over panel.columns.order, which by default is
-    // name, ext, size, date, attr.
+    // name, ext, size, date, attr, git.
     let mut app = app_with(&["alpha"]);
     press(&mut app, KeyCode::Char('3'), CTRL);
     assert_eq!(
@@ -803,22 +803,29 @@ fn ctrl_digits_sort_by_the_nth_configured_column() {
         SortKey::Column(ColumnId::Date)
     );
 
-    // A position past the end of the configured order wraps to the start
-    // rather than refusing. With the default five columns that makes Ctrl+6 to
-    // Ctrl+9 a second set of keys for the first four - which is the fallback a
-    // terminal needs when it will not deliver Ctrl+1 to Ctrl+3, either because
-    // it cannot encode them or because it has taken them for its own tabs.
+    // The sixth column is the git-state flag.
     press(&mut app, KeyCode::Char('6'), CTRL);
     assert_eq!(
         app.left.active_tab().sort.key,
-        SortKey::Column(ColumnId::Name),
-        "ctrl+6 is ctrl+1 again"
+        SortKey::Column(ColumnId::GitState)
     );
-    press(&mut app, KeyCode::Char('8'), CTRL);
+
+    // A position past the end of the configured order wraps to the start
+    // rather than refusing. With the default six columns that makes Ctrl+7 the
+    // first one again - the fallback a terminal needs when it will not deliver
+    // Ctrl+1, either because it cannot encode it or because it has taken it for
+    // its own tabs.
+    press(&mut app, KeyCode::Char('7'), CTRL);
+    assert_eq!(
+        app.left.active_tab().sort.key,
+        SortKey::Column(ColumnId::Name),
+        "ctrl+7 is ctrl+1 again"
+    );
+    press(&mut app, KeyCode::Char('9'), CTRL);
     assert_eq!(
         app.left.active_tab().sort.key,
         SortKey::Column(ColumnId::Size),
-        "ctrl+8 is ctrl+3 again"
+        "ctrl+9 is ctrl+3 again"
     );
 }
 

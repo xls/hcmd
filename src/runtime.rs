@@ -348,6 +348,7 @@ pub async fn event_loop() -> Result<()> {
     );
     let (link_tx, mut link_rx) =
         mpsc::channel::<crate::app::links::LinkOutcome>(crate::app::links::LINK_CHANNEL_DEPTH);
+    let (git_tx, mut git_rx) = mpsc::channel::<crate::app::reads::GitStatusEvent>(4);
     // The resize action queued one, and this is the header read that tells the
     // dialog what it is about to work on. Named by action rather than by key:
     // every binding is the user's to change, so a comment that says `Shift+R`
@@ -391,6 +392,7 @@ pub async fn event_loop() -> Result<()> {
         app.service_update_check(&update_tx);
         app.service_file_info(&info_tx);
         app.service_links(&link_tx);
+        service_git_status(&mut app, &git_tx);
         // Text a keystroke asked for: the `OSC 52` write is the loop's, for
         // the same reason the viewer's copy is.
         if let Some(text) = app.take_clipboard_text() {
@@ -730,6 +732,11 @@ pub async fn event_loop() -> Result<()> {
                 app.push_dialog(Box::new(
                     crate::ui::dialog::resize::ResizeDialog::new(subject),
                 ));
+            }
+            Some(event) = git_rx.recv() => {
+                // A directory's git flags arrived; merge them into the rows
+                // that asked, if that listing is still on screen.
+                app.apply_git_status_event(event);
             }
             Some(outcome) = link_rx.recv() => {
                 // One system call, already made. What is left is a sentence
@@ -1384,6 +1391,33 @@ async fn connect_ftp(
     .map_err(|err| crate::Error::msg(err.to_string()))?;
     let (fs, start) = joined?;
     Ok((fs as Arc<dyn RemoteTransport>, start))
+}
+/// Compute a directory's git flags off the event loop.
+///
+/// One `dir_status` per finished local listing, on the blocking pool, because
+/// it opens the index and stats every file. The answer rides home on a channel
+/// and is merged into the rows if the listing is still on screen. A directory
+/// that is not in a repository answers nothing, so `git_status` on costs a
+/// fast `discover` on an ordinary folder and nothing more.
+pub fn service_git_status(app: &mut App, tx: &mpsc::Sender<crate::app::reads::GitStatusEvent>) {
+    let Some(request) = app.take_pending_git_status() else {
+        return;
+    };
+    let tx = tx.clone();
+    tokio::task::spawn_blocking(move || {
+        let Some(flags) = crate::git::dir_status(&request.dir) else {
+            return;
+        };
+        if flags.is_empty() {
+            return;
+        }
+        let _ = tx.blocking_send(crate::app::reads::GitStatusEvent {
+            side: request.side,
+            tab: request.tab,
+            generation: request.generation,
+            flags,
+        });
+    });
 }
 
 /// Queue the rename `Start!` or `Undo` asked for.
