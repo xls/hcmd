@@ -343,9 +343,9 @@ mod tests {
         /// counts the calls that put it there.
         ///
         /// The contract writes **four**, counting "the argument to russh's or
-        /// suppaftp's authenticate call" as one. It is six once all three
-        /// backends exist, and here is every one of them by name, so a seventh
-        /// is a deliberate edit to this list and not an accident:
+        /// suppaftp's authenticate call" as one. It is eight once every
+        /// backend exists, and here is each of them by name, so a ninth is a
+        /// deliberate edit to this list and not an accident:
         ///
         /// 1. `keyring.rs` `SystemKeyring::set` - into the system keyring, and
         ///    only where the user opted in.
@@ -358,10 +358,14 @@ mod tests {
         /// 5. `ftp.rs` the login attempt itself, handed to suppaftp's `login`.
         /// 6. `smb/connect.rs` the login attempt itself, handed to smb2's
         ///    `ClientConfig`.
+        /// 7. `dav/mod.rs` `connect` - the secret built into the Basic
+        ///    authorization header, once, when the connection opens.
+        /// 8. `s3/mod.rs` `connect` - the secret from which the SigV4 signing
+        ///    key is derived, once, when the connection opens.
         ///
-        /// Every one of them borrows for the length of one call and copies
-        /// nothing into an owned `String`.
-        const EXPOSE_BUDGET: usize = 6;
+        /// The last two copy into an owned `Vec` because a signing key and a
+        /// header outlive the borrow; every other one borrows for one call.
+        const EXPOSE_BUDGET: usize = 8;
 
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let mut total = 0usize;

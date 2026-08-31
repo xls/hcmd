@@ -668,7 +668,7 @@ static CONFIG_SCHEMA: std::sync::LazyLock<Schema> = std::sync::LazyLock::new(|| 
     s.table("open", &["execute", "execute_in", "handlers"]);
     s.table("open.handlers", &["match", "command"]);
     s.open_table("open.handlers.match");
-    s.table("editor", &["command", "args"]);
+    s.table("editor", &["command", "args", "warn_above"]);
     s.table(
         "viewer",
         &[

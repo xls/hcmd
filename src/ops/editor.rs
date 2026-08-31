@@ -445,6 +445,7 @@ mod tests {
 
     fn cfg(command: &str, args: &[&str]) -> EditorConfig {
         EditorConfig {
+            warn_above: crate::config::ByteSize::mib(10),
             command: command.to_string(),
             args: args.iter().map(|a| (*a).to_string()).collect(),
         }

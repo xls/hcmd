@@ -260,6 +260,17 @@ pub fn dialog_answered(app: &mut App, id: DialogId, job: Option<JobId>, result: 
                 Err(err) => app.message = Some(err.to_string()),
             }
         }
+        (DialogId::ConfirmEditLarge, DialogResult::Confirm(true)) => {
+            // The retried `F4` opens the editor rather than asking again: the
+            // cursor has not moved, so the file is the same one.
+            if app.editor_size_pending.take().is_some() {
+                app.editor_size_confirmed = true;
+                crate::input::files::open_editor(app);
+            }
+        }
+        (DialogId::ConfirmEditLarge, DialogResult::Confirm(false)) => {
+            app.editor_size_pending = None;
+        }
         (DialogId::Symlink | DialogId::Hardlink, DialogResult::Text(name)) => {
             let symbolic = id == DialogId::Symlink;
             let base = app.active_panel().active_tab().path.clone();

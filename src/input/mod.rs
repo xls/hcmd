@@ -117,6 +117,8 @@ pub enum DialogId {
     Hardlink,
     /// The permission bits of the selection, as an octal number.
     Permissions,
+    /// The warning before `F4` edits a file over the configured size.
+    ConfirmEditLarge,
     /// Naming the checksum file `checksum_create` is about to write. The
     /// extension chooses the digest, so `.sha256` and `.sfv` are the same
     /// question answered two ways.
@@ -215,6 +217,7 @@ impl DialogId {
             Self::Mkdir => "mkdir",
             Self::MkdirForTarget => "mkdir_for_target",
             Self::Checksum => "checksum",
+            Self::ConfirmEditLarge => "confirm_edit_large",
             Self::Split => "split",
             Self::Symlink => "symlink",
             Self::Hardlink => "hardlink",

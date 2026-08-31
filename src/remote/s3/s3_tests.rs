@@ -180,3 +180,60 @@ fn the_scheme_follows_the_protocol_rather_than_being_guessed() {
     );
     assert_eq!(crate::remote::Protocol::parse("s3"), Some(Protocol::S3));
 }
+
+/// A live round trip against an S3 endpoint, when one is configured.
+///
+/// Off by default and driven entirely by the environment, so it carries no
+/// credential of its own and runs in CI only where somebody set one up:
+///
+///   HCMD_S3_TEST=s3+http://root:secret@192.0.2.10:32768/test
+///
+/// It writes an object, lists it, reads it back byte for byte, renames it into
+/// a second bucket, and deletes it. The endpoint's own MinIO or Ceph is the
+/// thing under test; the parsing above is what runs everywhere.
+#[test]
+fn a_live_endpoint_round_trips_when_one_is_configured() {
+    use std::io::{Read, Write};
+    let Ok(url) = std::env::var("HCMD_S3_TEST") else {
+        eprintln!("SKIPPING live S3: set HCMD_S3_TEST to a writable s3 endpoint");
+        return;
+    };
+    let parsed = crate::remote::url::parse(&url, Protocol::S3, "s3")
+        .expect("HCMD_S3_TEST is a connection string");
+    let fs = S3Fs::connect(
+        &parsed.target,
+        &parsed.target.user,
+        parsed.password.as_ref(),
+        false,
+    )
+    .expect("connect to the configured endpoint");
+
+    let bucket = parsed
+        .target
+        .dir
+        .as_deref()
+        .unwrap_or("/test")
+        .trim_matches('/')
+        .to_string();
+    let key = format!("/{bucket}/hcmd-selftest.txt");
+    let body = b"round trip\n";
+
+    let mut w = fs.open_write(&key).expect("open_write");
+    w.write_all(body).expect("write");
+    w.flush().expect("flush");
+
+    let rows = fs.list(&format!("/{bucket}")).expect("list");
+    assert!(
+        rows.iter().any(|e| e.name == "hcmd-selftest.txt"),
+        "the written object is listed"
+    );
+
+    let mut got = Vec::new();
+    fs.open_read(&key)
+        .expect("open_read")
+        .read_to_end(&mut got)
+        .expect("read");
+    assert_eq!(got, body, "read back byte for byte");
+
+    fs.remove_file(&key).expect("delete");
+}

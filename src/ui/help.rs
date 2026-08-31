@@ -879,6 +879,13 @@ fn dialog_help(id: DialogId) -> (&'static str, &'static str) {
             "Create directory",
             "F7. Intermediate directories are created with it.",
         ),
+        DialogId::ConfirmEditLarge => (
+            "Edit a large file",
+            "F4 on a file larger than editor.warn_above asks first, because a\n\
+             big file is slow to open in a line editor and easy to open by\n\
+             mistake. Edit opens it anyway; the size is only a warning. Set\n\
+             editor.warn_above to 0 to turn it off.",
+        ),
         DialogId::Symlink => (
             "Create symbolic link",
             "The name of the link. Its target is what the cursor is on, so\n\

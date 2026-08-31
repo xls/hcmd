@@ -171,6 +171,7 @@ execute_in = "console"
 # command = ["$EDITOR", "{file}"]
 
 [editor]
+warn_above = "10 MiB"       # F4 asks before opening a file larger than this; 0 off
 command = ""             # empty (the default) = $VISUAL, then $EDITOR, then nano
 args    = ["{file}"]     # e.g. nvim: ["+{line}", "{file}"]
 

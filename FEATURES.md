@@ -127,7 +127,10 @@ Read-only is the feature, not a stage of one: there is no write path to disable.
   an archive that lives on the remote.
 - Saved connections in `hosts.toml`.
 
-- **S3**, and anything that speaks it: MinIO, Ceph, Backblaze, R2. Buckets are
+- **S3**, over `s3://` for TLS or `s3+http://` for a plain-HTTP endpoint like a
+  MinIO in a container - or just paste the `http://` or `https://` URL and the
+  scheme decides. Credentials come from the connect line, a saved bookmark, or
+  the AWS environment variables. Buckets are
   the root listing, prefixes are directories, and a key is a file. Requests are
   signed with SigV4, checked here against the specification's own worked
   example rather than against itself. Listings page, so a bucket larger than

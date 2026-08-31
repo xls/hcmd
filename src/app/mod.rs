@@ -822,6 +822,12 @@ pub struct App {
     /// A password typed into the host form, between the form being answered
     /// and the host list being applied. Taken by `host_form_answered`.
     pub pending_host_secret: Option<String>,
+    /// The file `F4` is about to edit, held while the large-file warning is
+    /// on screen. Taken when the warning is answered yes.
+    pub editor_size_pending: Option<VfsPath>,
+    /// Set for one keystroke after the large-file warning is accepted, so the
+    /// retried `F4` opens the editor rather than asking again.
+    pub editor_size_confirmed: bool,
 }
 
 /// Which popup the design asked for.
@@ -953,6 +959,8 @@ impl App {
             pending_chmod: None,
             pending_keyring: None,
             pending_host_secret: None,
+            editor_size_pending: None,
+            editor_size_confirmed: false,
         }
     }
 

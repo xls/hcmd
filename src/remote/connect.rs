@@ -1236,11 +1236,24 @@ pub fn split_endpoint(typed: &str) -> (Option<Protocol>, String, u16) {
 #[must_use]
 pub fn protocol_for(stepper: Protocol, from_host: Option<Protocol>) -> Protocol {
     let s3_family = matches!(stepper, Protocol::S3 | Protocol::S3Http);
+    let dav_family = matches!(stepper, Protocol::Dav | Protocol::Davs);
     match from_host {
-        // `https://` on an S3 bookmark is S3 over TLS, not WebDAV.
+        // `https://` on an S3 bookmark is S3 over TLS, not WebDAV: on that
+        // stepper the scheme states the transport and nothing else.
         Some(Protocol::Davs) if s3_family => Protocol::S3,
         Some(Protocol::Dav) if s3_family => Protocol::S3Http,
+        Some(Protocol::Davs | Protocol::Dav) if dav_family => {
+            if matches!(from_host, Some(Protocol::Davs)) {
+                Protocol::Davs
+            } else {
+                Protocol::Dav
+            }
+        }
         Some(named) => named,
+        // No scheme in the endpoint. The web protocols default to TLS, which
+        // is the safe half of the choice and the one a public endpoint uses;
+        // a plain-HTTP one has to say so, and says so by being written down.
+        None if matches!(stepper, Protocol::Dav) => Protocol::Davs,
         None => stepper,
     }
 }
@@ -1267,6 +1280,44 @@ fn split_port(text: &str) -> (String, u16) {
 }
 
 /// The protocols the form steps through, in the order.
+/// The auth methods the form's stepper offers.
+///
+/// **`Password` is not among them.** Session-only auth - a password prompted
+/// each connect and never kept - was the thing nobody could tell apart from a
+/// password that did not save, because from the outside they look identical.
+/// Typing a password into the form now always stores it in the keyring, so the
+/// choice is really "stored" versus "an SSH key", and those are the three that
+/// remain. A `hosts.toml` written before this still parses `password`; it
+/// shows in the picker as `keyring`, and saving it makes that so.
+pub const STEPPER_AUTHS: &[AuthMethod] = &[AuthMethod::Agent, AuthMethod::Key, AuthMethod::Keyring];
+
+/// The stepper position an auth method shows at.
+fn auth_stepper_index(method: AuthMethod) -> usize {
+    STEPPER_AUTHS
+        .iter()
+        .position(|a| *a == method)
+        // `password` is gone from the picker; a host that still carries it
+        // shows as `keyring`, which is what saving it will make it.
+        .unwrap_or_else(|| {
+            STEPPER_AUTHS
+                .iter()
+                .position(|a| *a == AuthMethod::Keyring)
+                .unwrap_or(0)
+        })
+}
+
+/// The protocols the form steps through.
+///
+/// **The web ones appear once.** WebDAV and S3 are spoken over HTTP or over
+/// HTTPS, and the endpoint already says which: making the reader choose
+/// `s3` or `s3+http` in a stepper, having just typed `https://` into the
+/// field above it, is asking the same question twice and giving them two
+/// places to disagree with themselves.
+///
+/// So the stepper names the protocol and the endpoint names the transport.
+/// `Protocol::Davs` and `Protocol::S3Http` are still real protocols - a
+/// quick-connect line can name them outright - they are just not a second
+/// choice to make here.
 pub const PROTOCOLS: &[Protocol] = &[
     Protocol::Sftp,
     Protocol::Ftp,
@@ -1274,9 +1325,35 @@ pub const PROTOCOLS: &[Protocol] = &[
     Protocol::FtpsImplicit,
     Protocol::Smb,
     Protocol::Dav,
-    Protocol::Davs,
     Protocol::S3,
 ];
+
+/// The stepper entry that stands for `protocol`.
+///
+/// A saved host on `davs` or `s3+http` shows as `dav` or `s3` with its
+/// transport in the endpoint, which is where it can be seen and edited.
+#[must_use]
+pub fn stepper_family(protocol: Protocol) -> Protocol {
+    match protocol {
+        Protocol::Davs => Protocol::Dav,
+        Protocol::S3Http => Protocol::S3,
+        other => other,
+    }
+}
+
+/// The scheme to show in the endpoint field for a saved host.
+///
+/// `None` for the protocols whose address is not a URL: an SFTP host is a
+/// host, and writing `sftp://` into the field would be noise the reader has
+/// to skip past.
+#[must_use]
+pub fn endpoint_scheme(protocol: Protocol) -> Option<&'static str> {
+    match protocol {
+        Protocol::Dav | Protocol::S3Http => Some("http"),
+        Protocol::Davs | Protocol::S3 => Some("https"),
+        _ => None,
+    }
+}
 
 /// How wide the label column is. `Initial local directory:` is the longest.
 const FORM_LABEL_COLUMN: u16 = 25;
@@ -1288,6 +1365,40 @@ const FORM_LABEL_COLUMN: u16 = 25;
 /// `Initial local directory:` - which is the own phrase for it
 /// ("initial local directory for the other panel") and puts the letter where
 /// a reader looks for it.
+/// The rows for S3, which calls the same fields by their own names.
+///
+/// A form that says `Remote directory` when it means `Bucket`, and `Username`
+/// when it means the access key id, is a form the reader has to translate. The
+/// controls are the same and so is their order; only the words change, and the
+/// underlined letters change with them because a mnemonic has to be a letter
+/// that is in the label.
+const FORM_ROWS_S3: &[(FormControl, &str, char)] = &[
+    (FormControl::Label, "Label:", 'l'),
+    (FormControl::Host, "Endpoint:", 'e'),
+    (FormControl::Port, "Port:", 'r'),
+    (FormControl::User, "Access key:", 'k'),
+    (FormControl::KeyFile, "Key file:", 'f'),
+    (FormControl::Password, "Secret key:", 's'),
+    (FormControl::RemoteDir, "Bucket:", 'b'),
+    (FormControl::LocalDir, "Initial local directory:", 'i'),
+];
+
+/// The mnemonics that go with [`FORM_ROWS_S3`].
+const FORM_MNEMONICS_S3: &[(FormControl, char)] = &[
+    (FormControl::Label, 'l'),
+    (FormControl::Protocol, 'p'),
+    (FormControl::Host, 'e'),
+    (FormControl::Port, 'r'),
+    (FormControl::User, 'k'),
+    (FormControl::Auth, 'a'),
+    (FormControl::KeyFile, 'f'),
+    (FormControl::Password, 's'),
+    (FormControl::RemoteDir, 'b'),
+    (FormControl::LocalDir, 'i'),
+    (FormControl::Save, 'o'),
+    (FormControl::Cancel, 'n'),
+];
+
 const FORM_ROWS: &[(FormControl, &str, char)] = &[
     (FormControl::Label, "Label:", 'l'),
     (FormControl::Host, "Host:", 't'),
@@ -1361,6 +1472,15 @@ impl std::fmt::Debug for HostFormDialog {
 }
 
 impl HostFormDialog {
+    /// The rows this form is drawing, which depend on the protocol it is on.
+    fn rows(&self) -> &'static [(FormControl, &'static str, char)] {
+        if matches!(self.protocol(), Protocol::S3 | Protocol::S3Http) {
+            FORM_ROWS_S3
+        } else {
+            FORM_ROWS
+        }
+    }
+
     /// The password typed into the form, when one was.
     ///
     /// Read once, by the handler that stores it in the keyring, and never
@@ -1384,14 +1504,21 @@ impl HostFormDialog {
             .and_then(|i| hosts.get(i))
             .cloned()
             .unwrap_or_default();
+        // The stepper shows the family; the transport lives in the endpoint,
+        // which is where it can be seen and edited. A host saved on `davs` or
+        // `s3+http` therefore comes back as `dav` or `s3` with `https://` or
+        // `http://` written in front of its address.
         let protocol = PROTOCOLS
             .iter()
-            .position(|p| *p == host.protocol)
+            .position(|p| *p == stepper_family(host.protocol))
             .unwrap_or(0);
-        let auth = AuthMethod::ALL
-            .iter()
-            .position(|a| *a == host.auth)
-            .unwrap_or(0);
+        let endpoint = match endpoint_scheme(host.protocol) {
+            Some(scheme) if !host.host.is_empty() && !host.host.contains("://") => {
+                format!("{scheme}://{}", host.host)
+            }
+            _ => host.host.clone(),
+        };
+        let auth = auth_stepper_index(host.auth);
         // A new host offers the protocol's default port rather than an empty
         // field, so the commonest edit is no edit.
         let port = if host.port == 0 {
@@ -1404,7 +1531,7 @@ impl HostFormDialog {
             editing,
             label: Field::with_text(host.label),
             password: Field::new(),
-            host: Field::with_text(host.host),
+            host: Field::with_text(endpoint),
             port: Field::with_text(port),
             user: Field::with_text(host.username),
             key_file: Field::with_text(host.key_file),
@@ -1435,7 +1562,7 @@ impl HostFormDialog {
 
     /// The `auth` value currently chosen.
     pub fn auth(&self) -> AuthMethod {
-        AuthMethod::ALL
+        STEPPER_AUTHS
             .get(self.auth)
             .copied()
             .unwrap_or(AuthMethod::Agent)
@@ -1533,13 +1660,23 @@ impl HostFormDialog {
         let typed = self.host.text().trim().to_string();
         let (from_host, host_text, port_in_host) = split_endpoint(&typed);
         let port = if port == 0 { port_in_host } else { port };
+        // Typing a password means "keep it": the secret goes to the keyring
+        // and the host is set to read it back from there. Without this the
+        // password was saved but the host still authed some other way, so it
+        // was never read again - which reads exactly like "the password is
+        // not persisted".
+        let auth = if self.password.text().is_empty() {
+            self.auth()
+        } else {
+            AuthMethod::Keyring
+        };
         let host = SavedHost {
             label: self.label.text().trim().to_string(),
             protocol: protocol_for(self.protocol(), from_host),
             host: host_text,
             port,
             username: self.user.text().trim().to_string(),
-            auth: self.auth(),
+            auth,
             key_file: self.key_file.text().trim().to_string(),
             remote_dir: self.remote_dir.text().trim().to_string(),
             local_dir: self.local_dir.text().trim().to_string(),
@@ -1588,7 +1725,11 @@ impl Accelerated for HostFormDialog {
     type Control = FormControl;
 
     fn mnemonics(&self) -> &'static [(FormControl, char)] {
-        FORM_MNEMONICS
+        if matches!(self.protocol(), Protocol::S3 | Protocol::S3Http) {
+            FORM_MNEMONICS_S3
+        } else {
+            FORM_MNEMONICS
+        }
     }
 
     fn accel(&self, control: FormControl) -> Accel<FormControl> {
@@ -1723,12 +1864,12 @@ impl Dialog for HostFormDialog {
                 DialogOutcome::Consumed
             }
             (KeyCode::Left, FormControl::Auth) => {
-                self.auth = Self::step(self.auth, AuthMethod::ALL.len(), false);
+                self.auth = Self::step(self.auth, STEPPER_AUTHS.len(), false);
                 self.error = None;
                 DialogOutcome::Consumed
             }
             (KeyCode::Right, FormControl::Auth) => {
-                self.auth = Self::step(self.auth, AuthMethod::ALL.len(), true);
+                self.auth = Self::step(self.auth, STEPPER_AUTHS.len(), true);
                 self.error = None;
                 DialogOutcome::Consumed
             }
@@ -1749,7 +1890,7 @@ impl Dialog for HostFormDialog {
             return;
         }
         let focused = self.focused();
-        for (index, (control, label, letter)) in FORM_ROWS.iter().enumerate() {
+        for (index, (control, label, letter)) in self.rows().iter().enumerate() {
             let index = u16::try_from(index).unwrap_or(0);
             // The steppers sit between `Username` and `Key file`.
             let y = if index < STEPPER_ROW {
@@ -1804,7 +1945,7 @@ impl Dialog for HostFormDialog {
             ];
             draw_mnemonic_pieces(f, rect, &pieces, style.body());
         }
-        let rows = u16::try_from(FORM_ROWS.len())
+        let rows = u16::try_from(self.rows().len())
             .unwrap_or(0)
             .saturating_add(1);
         if let Some(rect) = row(area, rows)
@@ -1844,7 +1985,7 @@ impl Dialog for HostFormDialog {
     fn cursor(&self, area: Rect) -> Option<(u16, u16)> {
         let focused = self.focused();
         let field = self.field(focused)?;
-        let index = FORM_ROWS.iter().position(|(c, _, _)| *c == focused)?;
+        let index = self.rows().iter().position(|(c, _, _)| *c == focused)?;
         let index = u16::try_from(index).unwrap_or(0);
         let y = if index < STEPPER_ROW {
             index
@@ -2316,6 +2457,61 @@ mod tests {
     }
 
     #[test]
+    fn the_s3_form_calls_the_fields_what_s3_calls_them() {
+        // A form that says `Remote directory` when it means `Bucket`, and
+        // `Username` when it means the access key id, is one the reader has
+        // to translate.
+        let labels: Vec<&str> = FORM_ROWS_S3.iter().map(|(_, label, _)| *label).collect();
+        assert!(labels.contains(&"Bucket:"), "{labels:?}");
+        assert!(labels.contains(&"Access key:"), "{labels:?}");
+        assert!(labels.contains(&"Secret key:"), "{labels:?}");
+        assert!(labels.contains(&"Endpoint:"), "{labels:?}");
+
+        // Both sets carry the same controls, so the field a control edits is
+        // found whichever set is drawn.
+        let default: Vec<FormControl> = FORM_ROWS.iter().map(|(c, _, _)| *c).collect();
+        let s3: Vec<FormControl> = FORM_ROWS_S3.iter().map(|(c, _, _)| *c).collect();
+        assert_eq!(default, s3, "the two sets differ only in their words");
+
+        // A mnemonic has to be a letter that is in its own label, and the
+        // letters have to stay unique or two controls answer one keystroke.
+        for (_, label, letter) in FORM_ROWS_S3 {
+            assert!(
+                label.to_ascii_lowercase().contains(*letter),
+                "{label} has no {letter}"
+            );
+        }
+        let mut letters: Vec<char> = FORM_MNEMONICS_S3.iter().map(|(_, l)| *l).collect();
+        letters.sort_unstable();
+        let mut unique = letters.clone();
+        unique.dedup();
+        assert_eq!(letters, unique, "two controls share a letter: {letters:?}");
+    }
+
+    #[test]
+    fn the_s3_form_underlines_its_own_letters() {
+        let mut book = book();
+        book.push(crate::remote::hosts::SavedHost {
+            label: "minio".to_string(),
+            protocol: Protocol::S3Http,
+            host: "192.0.2.1".to_string(),
+            port: 9000,
+            username: "key".to_string(),
+            auth: crate::remote::hosts::AuthMethod::Keyring,
+            key_file: String::new(),
+            remote_dir: "bucket".to_string(),
+            local_dir: String::new(),
+        });
+        let last = book.len().saturating_sub(1);
+        let form = HostFormDialog::new(book, Some(last));
+        let mut drawn = underlined(&form, 90, 24);
+        drawn.sort_unstable();
+        let mut want: Vec<char> = FORM_MNEMONICS_S3.iter().map(|(_, l)| *l).collect();
+        want.sort_unstable();
+        assert_eq!(drawn, want, "the S3 form draws the S3 letters");
+    }
+
+    #[test]
     fn both_dialogs_lay_themselves_out_against_the_rectangle_they_are_given() {
         // the floor is 60x15, and a dialog is never wider than the
         // terminal.
@@ -2413,7 +2609,7 @@ mod tests {
     }
 
     #[test]
-    fn the_steppers_walk_spec_16_1s_protocols_and_spec_16_3s_four_methods() {
+    fn the_steppers_walk_the_protocols_and_the_offered_auth_methods() {
         let mut form = HostFormDialog::new(Vec::new(), None);
         form.focus_control(FormControl::Protocol);
         let mut seen = vec![form.protocol()];
@@ -2425,15 +2621,69 @@ mod tests {
         form.handle_key(&key(KeyCode::Right));
         assert_eq!(form.protocol(), Protocol::Sftp, "it wraps");
 
+        // Three methods, not four: session-only `password` is gone from the
+        // picker, because typing a password now always stores it and nobody
+        // could tell a session-only password apart from one that failed to
+        // save.
         form.focus_control(FormControl::Auth);
         let mut seen = vec![form.auth()];
-        for _ in 1..AuthMethod::ALL.len() {
+        for _ in 1..STEPPER_AUTHS.len() {
             form.handle_key(&key(KeyCode::Right));
             seen.push(form.auth());
         }
-        assert_eq!(seen, AuthMethod::ALL.to_vec());
-        form.handle_key(&key(KeyCode::Left));
-        assert_eq!(form.auth(), AuthMethod::Password);
+        assert_eq!(seen, STEPPER_AUTHS.to_vec());
+        assert!(
+            !seen.contains(&AuthMethod::Password),
+            "no session-only option"
+        );
+        // From the last, one more step wraps to the first.
+        form.handle_key(&key(KeyCode::Right));
+        assert_eq!(form.auth(), AuthMethod::Agent, "and it wraps");
+    }
+
+    #[test]
+    fn typing_a_password_stores_it_rather_than_prompting_every_time() {
+        // The SMB complaint: a password entered in the edit form did nothing,
+        // and the connection still prompted and offered to save. Typing one
+        // now sets the host to keyring auth, so it is stored and read back.
+        let mut form = HostFormDialog::new(Vec::new(), None);
+        form.label.set_text("nas");
+        form.host.set_text("192.0.2.5");
+        form.user.set_text("thomas");
+        form.protocol = PROTOCOLS
+            .iter()
+            .position(|p| *p == Protocol::Smb)
+            .unwrap_or(0);
+        form.password.set_text("hunter2");
+        let saved = form.to_host().expect("valid");
+        assert_eq!(
+            saved.auth,
+            AuthMethod::Keyring,
+            "a typed password means keep it"
+        );
+        // And the form hands the secret out exactly once, for the keyring.
+        assert_eq!(form.typed_password().as_deref(), Some("hunter2"));
+    }
+
+    #[test]
+    fn a_host_still_saved_as_password_shows_as_keyring_in_the_picker() {
+        // Backward compatibility: an old hosts.toml carries `auth = password`,
+        // which still parses. It appears as keyring, and saving makes it so.
+        let mut book = book();
+        book.push(crate::remote::hosts::SavedHost {
+            label: "legacy".to_string(),
+            protocol: Protocol::Smb,
+            host: "192.0.2.6".to_string(),
+            port: 445,
+            username: "u".to_string(),
+            auth: AuthMethod::Password,
+            key_file: String::new(),
+            remote_dir: String::new(),
+            local_dir: String::new(),
+        });
+        let last = book.len().saturating_sub(1);
+        let form = HostFormDialog::new(book, Some(last));
+        assert_eq!(form.auth(), AuthMethod::Keyring);
     }
 
     #[test]
@@ -2499,8 +2749,8 @@ mod tests {
         // Which is how everybody writes one: MinIO's documentation says
         // `http://host:9000` and a Nextcloud settings page gives an https
         // address. Typing that used to produce `s3://user:pass@https://host`.
-        let (proto, host, port) = split_endpoint("http://192.168.10.180:32768");
-        assert_eq!(host, "192.168.10.180");
+        let (proto, host, port) = split_endpoint("http://192.0.2.10:32768");
+        assert_eq!(host, "192.0.2.10");
         assert_eq!(port, 32768);
         assert_eq!(proto, Some(Protocol::Dav), "a bare http URL names WebDAV");
 
@@ -2557,6 +2807,116 @@ mod tests {
         );
         // And no scheme leaves the stepper alone.
         assert_eq!(protocol_for(Protocol::S3Http, None), Protocol::S3Http);
+    }
+
+    #[test]
+    fn the_web_protocols_appear_once_and_the_endpoint_says_the_transport() {
+        // Asking somebody to choose `s3` or `s3+http` in a stepper, having
+        // just typed `https://` into the field above it, is asking the same
+        // question twice and giving them two places to disagree.
+        assert!(
+            !PROTOCOLS.contains(&Protocol::S3Http),
+            "the stepper names the protocol, not the transport"
+        );
+        assert!(!PROTOCOLS.contains(&Protocol::Davs));
+        assert!(PROTOCOLS.contains(&Protocol::S3));
+        assert!(PROTOCOLS.contains(&Protocol::Dav));
+    }
+
+    #[test]
+    fn a_saved_host_comes_back_with_its_transport_in_the_endpoint() {
+        // Round trip: what was saved as `s3+http` on a bare host shows as the
+        // `s3` stepper entry with `http://` in the endpoint, and saving it
+        // again produces the same protocol.
+        let mut book = book();
+        book.push(crate::remote::hosts::SavedHost {
+            label: "minio".to_string(),
+            protocol: Protocol::S3Http,
+            host: "192.0.2.1".to_string(),
+            port: 9000,
+            username: "key".to_string(),
+            auth: crate::remote::hosts::AuthMethod::Keyring,
+            key_file: String::new(),
+            remote_dir: "bucket".to_string(),
+            local_dir: String::new(),
+        });
+        let last = book.len().saturating_sub(1);
+        let form = HostFormDialog::new(book, Some(last));
+        assert_eq!(
+            form.protocol(),
+            Protocol::S3,
+            "the stepper shows the family"
+        );
+        assert_eq!(
+            form.field(FormControl::Host).map(Field::text),
+            Some("http://192.0.2.1"),
+            "and the transport is in the endpoint, where it can be edited"
+        );
+        let saved = form.to_host().expect("valid");
+        assert_eq!(saved.protocol, Protocol::S3Http, "and it survives the trip");
+        assert_eq!(saved.host, "192.0.2.1", "with the scheme taken back off");
+        assert_eq!(saved.port, 9000);
+    }
+
+    #[test]
+    fn typing_https_into_an_s3_endpoint_means_s3_over_tls() {
+        // The complaint this came from: the endpoint said https and the
+        // connection was still being built as though it had not.
+        let mut form = HostFormDialog::new(book(), None);
+        form.host.set_text("https://s3.example.invalid");
+        form.label.set_text("tls");
+        form.protocol = PROTOCOLS
+            .iter()
+            .position(|p| *p == Protocol::S3)
+            .unwrap_or(0);
+        let saved = form.to_host().expect("valid");
+        assert_eq!(saved.protocol, Protocol::S3);
+        assert_eq!(saved.host, "s3.example.invalid");
+
+        // And http means it is not.
+        form.host.set_text("http://192.0.2.1:9000");
+        form.label.set_text("plain");
+        let saved = form.to_host().expect("valid");
+        assert_eq!(saved.protocol, Protocol::S3Http);
+        assert_eq!(saved.port, 9000);
+    }
+
+    #[test]
+    fn changing_the_endpoint_scheme_re_evaluates_the_protocol() {
+        // The exact complaint: an S3 bookmark saved as https, its endpoint
+        // then changed to http, must connect over http and not keep the old
+        // transport.
+        let mut book = book();
+        book.push(crate::remote::hosts::SavedHost {
+            label: "minio".to_string(),
+            protocol: Protocol::S3, // saved as TLS
+            host: "192.0.2.10".to_string(),
+            port: 9000,
+            username: "root".to_string(),
+            auth: crate::remote::hosts::AuthMethod::Keyring,
+            key_file: String::new(),
+            remote_dir: "test".to_string(),
+            local_dir: String::new(),
+        });
+        let last = book.len().saturating_sub(1);
+        let mut form = HostFormDialog::new(book, Some(last));
+
+        // It comes back showing https, because that is what it was.
+        assert_eq!(
+            form.field(FormControl::Host).map(Field::text),
+            Some("https://192.0.2.10")
+        );
+
+        // The user rewrites the scheme.
+        form.host.set_text("http://192.0.2.10:9000");
+        let saved = form.to_host().expect("valid");
+        assert_eq!(
+            saved.protocol,
+            Protocol::S3Http,
+            "the endpoint's scheme decides the transport, every time it is read"
+        );
+        assert_eq!(saved.host, "192.0.2.10");
+        assert_eq!(saved.port, 9000);
     }
 
     #[test]

@@ -2235,3 +2235,83 @@ fn the_host_form_offers_every_protocol_and_masks_the_password() {
         "the password is drawn as marks:\n{text}"
     );
 }
+
+/// A directory with one file over the 10 MB edit warning.
+struct BigFile {
+    root: PathBuf,
+}
+
+impl BigFile {
+    fn new(tag: &str) -> Self {
+        let root = std::env::temp_dir().join(format!("hcmd-big-{}-{tag}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("dir");
+        let f = std::fs::File::create(root.join("huge.log")).expect("create");
+        f.set_len(12 * 1024 * 1024).expect("12 MB");
+        std::fs::write(root.join("small.txt"), b"tiny").expect("small");
+        Self { root }
+    }
+}
+
+impl Drop for BigFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+
+#[test]
+fn f4_on_a_large_file_warns_first() {
+    let fixture = BigFile::new("warn");
+    let mut run = Run::new(100, 30);
+    run.cwd = Some(fixture.root.clone());
+    // huge.log sorts before small.txt. Down onto it, then F4.
+    let input = keys(&[DOWN, b"\x1b[14~"]);
+    run.input = &input;
+    run.settle = Duration::from_secs(4);
+    let (parser, _) = run_in_pty(run);
+    let text = plain(&parser);
+    assert!(
+        text.contains("huge.log is") && text.contains("warning size"),
+        "F4 on a 12 MB file did not warn:\n{text}"
+    );
+    assert!(
+        text.contains("Edit") && text.contains("Cancel"),
+        "the warning is a confirmation, not a refusal:\n{text}"
+    );
+}
+
+#[test]
+fn f4_on_a_small_file_does_not_warn() {
+    let fixture = BigFile::new("nowarn");
+    let mut run = Run::new(100, 30);
+    run.cwd = Some(fixture.root.clone());
+    // Onto small.txt (sorts after huge.log), then F4. With no editor set and
+    // a throwaway config, this opens nano or reports it, but must not warn.
+    let input = keys(&[DOWN, DOWN, b"\x1b[14~"]);
+    run.input = &input;
+    run.settle = Duration::from_secs(4);
+    let (parser, _) = run_in_pty(run);
+    let text = plain(&parser);
+    assert!(
+        !text.contains("warning size"),
+        "a 4-byte file should not warn:\n{text}"
+    );
+}
+
+#[test]
+#[ignore = "a probe"]
+fn scratch_form_cursor() {
+    let fixture = JsonDoc::new("formcursor");
+    let mut run = Run::new(110, 34);
+    run.cwd = Some(fixture.root.clone());
+    // Connect, Add host, tab to Host, type.
+    let input = keys(&[b"\x06"]);
+    run.input = &input;
+    run.settle = Duration::from_secs(4);
+    let (parser, _) = run_in_pty(run);
+    let screen = parser.screen();
+    let (cy, cx) = screen.cursor_position();
+    let hidden = screen.hide_cursor();
+    eprintln!("cursor at row {cy} col {cx}, hidden={hidden}");
+    eprintln!("{}", plain(&parser));
+}

@@ -492,6 +492,34 @@ impl Book {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn every_protocol_survives_the_hosts_file() {
+        // hosts.toml uses serde's derive and `id()`/`parse()` use a different
+        // spelling (`s3+http` versus `s3http`); as long as each is symmetric
+        // with itself a host round-trips, and this is what says so for every
+        // protocol at once, so a new one cannot be saved and come back wrong.
+        for protocol in Protocol::ALL {
+            let host = SavedHost {
+                label: "h".to_string(),
+                protocol: *protocol,
+                host: "example.invalid".to_string(),
+                port: 1234,
+                username: "u".to_string(),
+                auth: AuthMethod::Keyring,
+                key_file: String::new(),
+                remote_dir: String::new(),
+                local_dir: String::new(),
+            };
+            let toml = toml::to_string(&host).expect("serialize");
+            let back: SavedHost = toml::from_str(&toml).expect("deserialize");
+            assert_eq!(
+                back.protocol, *protocol,
+                "{protocol:?} came back as {:?}\n{toml}",
+                back.protocol
+            );
+        }
+    }
+
     use super::*;
 
     /// the own example, character for character.

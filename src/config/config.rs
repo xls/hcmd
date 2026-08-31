@@ -598,6 +598,13 @@ pub struct EditorConfig {
     pub command: String,
     /// Argument template; `{file}` and `{line}` are substituted.
     pub args: Vec<String>,
+    /// Confirm before `F4` opens a file larger than this.
+    ///
+    /// A big file in a line editor is slow to open and easy to open by
+    /// accident - `F4` on the wrong row of a directory of disk images. The
+    /// warning is a confirmation rather than a refusal: the file may genuinely
+    /// need editing, and the reader is the one who knows. `0` turns it off.
+    pub warn_above: ByteSize,
 }
 
 impl Default for EditorConfig {
@@ -605,6 +612,7 @@ impl Default for EditorConfig {
         Self {
             command: String::new(),
             args: vec!["{file}".to_string()],
+            warn_above: ByteSize::mib(10),
         }
     }
 }

@@ -275,7 +275,7 @@ pub(super) fn open_rename(app: &mut App) {
 ///
 /// Refusals are up front and say why: nothing under the cursor, a directory, a
 /// backend that is not the local filesystem (v0.5).
-pub(super) fn open_editor(app: &mut App) {
+pub fn open_editor(app: &mut App) {
     let tab = app.active_panel().active_tab();
     let Some(entry) = tab.current().filter(|e| !e.is_parent) else {
         app.message = Some("nothing to edit".to_string());
@@ -286,10 +286,34 @@ pub(super) fn open_editor(app: &mut App) {
         return;
     }
     let name = entry.name.clone();
+    let size = entry.size;
     let Some(path) = tab.current_path() else {
         app.message = Some("nothing to edit".to_string());
         return;
     };
+    // A big file in a line editor is slow to open and easy to open by
+    // accident. The warning is a confirmation, not a refusal - the file may
+    // genuinely need editing - and it is skipped once it has been answered, so
+    // `F4 Enter` opens the file the second time without asking again.
+    let warn = app.config.editor.warn_above.bytes();
+    if warn > 0 && size > warn && !app.editor_size_confirmed {
+        let human = crate::panel::format::human_size(size);
+        let over = crate::panel::format::human_size(warn);
+        app.editor_size_pending = Some(path.clone());
+        app.push_dialog(Box::new(
+            crate::dialog::ConfirmDialog::new(
+                DialogId::ConfirmEditLarge,
+                format!("Edit {name}?"),
+                vec![
+                    format!("{name} is {human}B, over the {over}B warning size."),
+                    "A large file can be slow to open in an editor.".to_string(),
+                ],
+            )
+            .with_buttons("Edit", "Cancel"),
+        ));
+        return;
+    }
+    app.editor_size_confirmed = false;
     // The *path's own* backend, not `app.vfs`: a panel showing search results
     // over local files is editable, and an archive member is not.
     let caps = path.backend().capabilities();

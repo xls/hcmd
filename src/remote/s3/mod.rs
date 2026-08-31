@@ -91,7 +91,7 @@ impl S3Fs {
     pub fn connect(
         target: &Target,
         access_key: &str,
-        secret: Option<&[u8]>,
+        secret: Option<&crate::remote::secret::Secret>,
         from_env: bool,
     ) -> Result<Self> {
         let port = target.port;
@@ -114,9 +114,15 @@ impl S3Fs {
         } else {
             access_key.to_string()
         };
-        let secret = match secret {
-            Some(bytes) if !bytes.is_empty() => bytes.to_vec(),
-            _ => env.secret.clone().unwrap_or_default().into_bytes(),
+        // Exposed once, here, where the signing key is derived from it. This
+        // is the one place S3 borrows the secret, counted by the S5 budget.
+        let typed = secret
+            .map(crate::remote::secret::Secret::expose)
+            .unwrap_or_default();
+        let secret = if typed.is_empty() {
+            env.secret.clone().unwrap_or_default().into_bytes()
+        } else {
+            typed.to_vec()
         };
         // A region from the environment beats one guessed from the hostname,
         // because the guess is only ever a guess and `AWS_REGION` is a

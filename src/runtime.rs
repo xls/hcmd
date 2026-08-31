@@ -1076,11 +1076,22 @@ pub async fn run_connect(
         // actor. The user is the access key id and the password is the secret.
         Protocol::S3 | Protocol::S3Http => {
             let target = target.clone();
-            let password = answer.password;
+            // S3 and WebDAV do not run the SSH auth plan, so `Method::Stored`
+            // never reads the keyring for them. Read it here: a saved host's
+            // secret is stored under the account the target names, and without
+            // this the password was written and never read again - which is
+            // exactly "the password is not persisted".
+            let password = answer
+                .password
+                .or_else(|| store.get(&target.keyring_account()).ok().flatten());
             let from_env = config.s3_credentials_from_env;
             tokio::task::spawn_blocking(move || {
-                let secret = password.as_ref().map(crate::remote::secret::Secret::expose);
-                let fs = crate::remote::s3::S3Fs::connect(&target, &target.user, secret, from_env)?;
+                let fs = crate::remote::s3::S3Fs::connect(
+                    &target,
+                    &target.user,
+                    password.as_ref(),
+                    from_env,
+                )?;
                 let start = fs.start_dir().to_string();
                 Ok((Arc::new(fs) as Arc<dyn RemoteTransport>, start))
             })
@@ -1093,10 +1104,12 @@ pub async fn run_connect(
         }
         Protocol::Dav | Protocol::Davs => {
             let target = target.clone();
-            let password = answer.password;
+            let password = answer
+                .password
+                .or_else(|| store.get(&target.keyring_account()).ok().flatten());
             tokio::task::spawn_blocking(move || {
-                let secret = password.as_ref().map(crate::remote::secret::Secret::expose);
-                let fs = crate::remote::dav::DavFs::connect(&target, &target.user, secret)?;
+                let fs =
+                    crate::remote::dav::DavFs::connect(&target, &target.user, password.as_ref())?;
                 let start = fs.start_dir().to_string();
                 Ok((Arc::new(fs) as Arc<dyn RemoteTransport>, start))
             })

@@ -72,7 +72,11 @@ impl DavFs {
     /// Does one `PROPFIND` on the root, because a connection that cannot list
     /// its own starting directory is not connected, and finding that out here
     /// means the panel never opens onto an error.
-    pub fn connect(target: &Target, user: &str, password: Option<&[u8]>) -> Result<Self> {
+    pub fn connect(
+        target: &Target,
+        user: &str,
+        password: Option<&crate::remote::secret::Secret>,
+    ) -> Result<Self> {
         let scheme = if target.protocol == Protocol::Davs {
             "https"
         } else {
@@ -85,9 +89,12 @@ impl DavFs {
         } else {
             format!("{scheme}://{}:{port}", target.host)
         };
-        // The secret stays bytes until the header is built, which is the one
-        // place it has to be text. It is never logged and never stored here.
-        let auth = (!user.is_empty()).then(|| basic_auth(user, password.unwrap_or_default()));
+        // Exposed once, here, where the Basic header is built. The one place
+        // WebDAV borrows the secret, counted by the S5 budget.
+        let bytes = password
+            .map(crate::remote::secret::Secret::expose)
+            .unwrap_or_default();
+        let auth = (!user.is_empty()).then(|| basic_auth(user, bytes));
         let fs = Self {
             origin,
             root: normalise_dir(target.dir.as_deref().unwrap_or("/")),
