@@ -1,6 +1,6 @@
 # Holos Commander
 
-A Total Commander alternative for the terminal, for people whose fingers
+Holos is a Total Commander inspired file explorer for the terminal, for people whose fingers
 learned `F5` in 1998 and have declined every opportunity to learn anything
 else since. The default keys are mapped identical to Total Commander, because
 rewiring twenty years of muscle memory is harder than writing a file manager.
