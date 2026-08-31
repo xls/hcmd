@@ -2,6 +2,10 @@
 
 Notable changes per release, one line each. Newest first.
 
+## v0.9.6
+
+- Compare Directories can now compare by content with Ctrl+Shift+F2, catching a file that differs without differing in size or date. Shift+F2 stays the quick size-and-date compare.
+
 ## v0.9.5
 
 - A git-state column in the local listing: modified, staged, added and untracked flags, shown only inside a repository.
