@@ -354,6 +354,138 @@ pub fn is_dir_at(dir: &Path, sha: &str, subpath: &str) -> bool {
         .is_some_and(|e| e.mode().is_tree())
 }
 
+/// The working-tree state of a file, relative to the index and HEAD.
+///
+/// The states omarchy and every other git-aware listing show, in the order a
+/// single flag has to pick between them: a file staged **and** then edited is
+/// shown as modified, because the edit is the newer fact and the one a reader
+/// is about to lose.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileState {
+    /// Tracked, and the working copy differs from what is staged.
+    Modified,
+    /// A change is staged and the working copy matches it.
+    Staged,
+    /// In the index but not in `HEAD`: a newly added, staged file.
+    Added,
+    /// Not tracked at all.
+    Untracked,
+}
+
+impl FileState {
+    /// The one-character flag. Chosen to read at a glance and to line up in a
+    /// column: no two share a glyph.
+    #[must_use]
+    pub const fn flag(self) -> char {
+        match self {
+            Self::Modified => '~',
+            Self::Staged => '+',
+            Self::Added => 'A',
+            Self::Untracked => '?',
+        }
+    }
+}
+
+/// The git state of the files **directly in** `dir`, keyed by file name.
+///
+/// One index read and one HEAD tree, then a stat-and-maybe-hash per file - the
+/// same fast path `git status` uses, so an unmodified file costs a `stat` and
+/// not a hash. Scoped to the one directory the panel is showing rather than
+/// the whole repository, because that is all a listing needs and a monorepo's
+/// full status is not free.
+///
+/// `None` when `dir` is not in a repository, which is not an error: it is most
+/// directories, and the caller simply shows no flags.
+pub fn dir_status(dir: &Path) -> Option<std::collections::HashMap<String, FileState>> {
+    let repo = repo_at(dir)?;
+    let workdir = repo.workdir()?.to_path_buf();
+    let rel_dir = dir.strip_prefix(&workdir).ok()?;
+    let index = repo.index_or_empty().ok()?;
+    // HEAD's tree, for telling a staged change from an unstaged one. A new
+    // repository has none, and then everything staged is `Added`.
+    let head_tree = repo.head_commit().ok().and_then(|c| c.tree().ok());
+
+    let mut out = std::collections::HashMap::new();
+    let entries = std::fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name == ".git" {
+            continue;
+        }
+        let meta = match entry.metadata() {
+            Ok(m) if m.is_file() => m,
+            // Directories and symlinks are not flagged: a directory's state is
+            // the sum of what is under it, which one glyph cannot honestly say.
+            _ => continue,
+        };
+        let rel = rel_dir.join(&name);
+        let rel_bytes = rel.to_string_lossy().replace('\\', "/");
+        let indexed = index.entry_by_path(rel_bytes.as_str().into());
+        let Some(indexed) = indexed else {
+            out.insert(name, FileState::Untracked);
+            continue;
+        };
+        // Staged: the index differs from HEAD.
+        let head_id = head_tree.as_ref().and_then(|tree| {
+            tree.clone()
+                .peel_to_entry_by_path(&rel)
+                .ok()
+                .flatten()
+                .map(|e| e.oid().to_owned())
+        });
+        let staged = match head_id {
+            Some(id) => id != indexed.id,
+            None => true, // no HEAD entry: newly added
+        };
+        // Modified in the worktree: cheap stat check first, hash only if it
+        // could have changed.
+        let modified = worktree_differs(&entry.path(), &meta, indexed);
+        let state = if modified {
+            FileState::Modified
+        } else if staged && head_id.is_none() {
+            FileState::Added
+        } else if staged {
+            FileState::Staged
+        } else {
+            continue; // clean and unstaged: no flag
+        };
+        out.insert(name, state);
+    }
+    Some(out)
+}
+
+/// Whether a working file differs from its staged version.
+///
+/// The `git status` fast path: if the file's size and mtime match what the
+/// index recorded, it is unmodified and no hash is computed. Only when they
+/// differ is the blob hashed and compared, which is the case a listing pays
+/// for rarely.
+fn worktree_differs(path: &Path, meta: &std::fs::Metadata, indexed: &gix::index::Entry) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    let size_matches = u64::from(indexed.stat.size) == meta.size();
+    let mtime_matches = i64::from(indexed.stat.mtime.secs) == meta.mtime();
+    if size_matches && mtime_matches {
+        return false;
+    }
+    // The stat changed, which is a hint, not proof - `touch` changes mtime
+    // without changing content. Hash the blob the way git stores it and
+    // compare to the recorded id.
+    let Ok(bytes) = std::fs::read(path) else {
+        return true;
+    };
+    let computed = git_blob_id(&bytes);
+    computed.as_deref() != Some(indexed.id.as_slice())
+}
+
+/// The git object id of a blob, computed by gix's own hasher so there is no
+/// second SHA-1 in the tree and no chance of a spelling that disagrees with
+/// what git wrote.
+fn git_blob_id(bytes: &[u8]) -> Option<Vec<u8>> {
+    gix::objs::compute_hash(gix::hash::Kind::Sha1, gix::objs::Kind::Blob, bytes)
+        .ok()
+        .map(|id| id.as_slice().to_vec())
+}
+
 /// The same file at a commit's first parent, for a diff.
 ///
 /// `None` when the commit is a root (nothing came before) or the file did not

@@ -251,3 +251,102 @@ fn a_directory_outside_a_repository_has_no_history() {
     let _ = std::fs::remove_dir_all(&dir);
     assert!(out.is_empty());
 }
+
+#[test]
+fn dir_status_flags_each_state_against_real_git() {
+    let repo = repo_or_skip!("status");
+    // A committed-and-clean file, and one that will be modified.
+    repo.write("clean.txt", "clean\n");
+    repo.write("edited.txt", "before\n");
+    repo.write("staged.txt", "v1\n");
+    if repo.commit("base").is_none() {
+        eprintln!("SKIPPING dir_status: commit failed");
+        return;
+    }
+    // Now produce each state:
+    repo.write("edited.txt", "after\n"); // modified, not staged
+    repo.write("staged.txt", "v2\n");
+    repo.git(&["add", "staged.txt"]); // staged change
+    repo.write("brandnew.txt", "added\n");
+    repo.git(&["add", "brandnew.txt"]); // added (in index, not HEAD)
+    repo.write("untracked.txt", "nobody knows me\n"); // untracked
+
+    let status = dir_status(&repo.root).expect("a repository");
+    assert_eq!(
+        status.get("edited.txt"),
+        Some(&FileState::Modified),
+        "{status:?}"
+    );
+    assert_eq!(
+        status.get("staged.txt"),
+        Some(&FileState::Staged),
+        "{status:?}"
+    );
+    assert_eq!(
+        status.get("brandnew.txt"),
+        Some(&FileState::Added),
+        "{status:?}"
+    );
+    assert_eq!(
+        status.get("untracked.txt"),
+        Some(&FileState::Untracked),
+        "{status:?}"
+    );
+    // A clean tracked file gets no flag at all.
+    assert_eq!(
+        status.get("clean.txt"),
+        None,
+        "clean files are unflagged: {status:?}"
+    );
+}
+
+#[test]
+fn a_staged_file_edited_again_reads_as_modified() {
+    // The edit is the newer fact and the one a reader is about to lose, so a
+    // single flag has to choose it.
+    let repo = repo_or_skip!("stagethenedit");
+    repo.write("f.txt", "one\n");
+    if repo.commit("base").is_none() {
+        eprintln!("SKIPPING: commit failed");
+        return;
+    }
+    repo.write("f.txt", "two\n");
+    repo.git(&["add", "f.txt"]);
+    repo.write("f.txt", "three\n"); // staged as "two", worktree is "three"
+    let status = dir_status(&repo.root).expect("repo");
+    assert_eq!(
+        status.get("f.txt"),
+        Some(&FileState::Modified),
+        "{status:?}"
+    );
+}
+
+#[test]
+fn a_touched_but_unchanged_file_is_not_modified() {
+    // mtime changed, content did not: the hash fallback catches this, so a
+    // `touch` does not light up the whole tree.
+    let repo = repo_or_skip!("touched");
+    repo.write("f.txt", "same\n");
+    if repo.commit("base").is_none() {
+        eprintln!("SKIPPING: commit failed");
+        return;
+    }
+    // Rewrite identical content, which changes mtime.
+    std::thread::sleep(std::time::Duration::from_millis(10));
+    repo.write("f.txt", "same\n");
+    let status = dir_status(&repo.root).expect("repo");
+    assert_eq!(
+        status.get("f.txt"),
+        None,
+        "identical content is not modified: {status:?}"
+    );
+}
+
+#[test]
+fn a_directory_not_in_a_repository_has_no_status() {
+    let dir = std::env::temp_dir().join(format!("hcmd-nostatus-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("dir");
+    assert!(dir_status(&dir).is_none());
+    let _ = std::fs::remove_dir_all(&dir);
+}
