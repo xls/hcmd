@@ -879,6 +879,33 @@ fn dialog_help(id: DialogId) -> (&'static str, &'static str) {
             "Create directory",
             "F7. Intermediate directories are created with it.",
         ),
+        DialogId::Symlink => (
+            "Create symbolic link",
+            "The name of the link. Its target is what the cursor is on, so\n\
+             there is one field rather than two.\n\
+             \n\
+             A symbolic link may point at something that does not exist yet,\n\
+             and a relative one means whatever it means from where the link\n\
+             sits. Neither is resolved when it is written.",
+        ),
+        DialogId::Hardlink => (
+            "Create hard link",
+            "The name of the link: a second name for the same file, on the\n\
+             same filesystem. Deleting either name leaves the other working,\n\
+             and the file itself goes when the last name does.\n\
+             \n\
+             A hard link cannot point at a directory, which every Unix\n\
+             refuses, and cannot cross a filesystem boundary.",
+        ),
+        DialogId::Permissions => (
+            "Permissions",
+            "The new mode, in octal: 644, 755, 600. The field opens on what\n\
+             the file has now.\n\
+             \n\
+             The mode only. Owner and group are a separate question with\n\
+             separate privileges, and a dialog offering all three would imply\n\
+             this can change the first two when it usually cannot.",
+        ),
         DialogId::Split => (
             "Split",
             "How large each part should be: 100M, 700M, 4G, or a plain number\n\

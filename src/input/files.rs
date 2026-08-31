@@ -918,6 +918,90 @@ pub(super) fn merge_parts(app: &mut App) {
     app.request_job(JobSpec::new(JobKind::Merge, vec![path], None));
 }
 
+/// Create a link to the file under the cursor.
+///
+/// `symbolic` chooses which kind. Both ask for the link's **name**, not its
+/// target: the target is what the cursor is on, which is the thing the user
+/// pointed at, and asking for both would make the common case two fields long.
+///
+/// Refused before the dialog opens where the backend has no links, which is
+/// the rule `writable` already follows: a question answered with a form and
+/// then refused is worse than one never asked.
+pub(super) fn open_link(app: &mut App, symbolic: bool) {
+    let tab = app.active_panel().active_tab();
+    if !tab.caps.links {
+        app.message = Some(format!(
+            "this backend has no {} links",
+            if symbolic { "symbolic" } else { "hard" }
+        ));
+        return;
+    }
+    let Some(entry) = tab.current().filter(|e| !e.is_parent) else {
+        app.message = Some("nothing under the cursor to link to".to_string());
+        return;
+    };
+    if !symbolic && entry.is_dir() {
+        // Every Unix refuses this, and saying so here is better than handing
+        // back `EPERM` from three layers down.
+        app.message = Some("a hard link cannot point at a directory".to_string());
+        return;
+    }
+    let name = entry.name.clone();
+    let Some(path) = tab.current_path() else {
+        app.message = Some("that row has no path to link to".to_string());
+        return;
+    };
+    app.draft.sources = vec![path];
+    let (id, title) = if symbolic {
+        (DialogId::Symlink, "Create symbolic link")
+    } else {
+        (DialogId::Hardlink, "Create hard link")
+    };
+    app.push_dialog(Box::new(InputDialog::new(
+        id,
+        title,
+        format!("Name of the link to {name}:"),
+        format!("{name}.link"),
+    )));
+}
+
+/// Change the permissions of the selection.
+///
+/// Octal, because that is how anybody who wants to change a mode already
+/// thinks about it, and because a grid of nine checkboxes is a bigger dialog
+/// that answers the same question less directly.
+pub(super) fn open_permissions(app: &mut App) {
+    let tab = app.active_panel().active_tab();
+    if !tab.caps.settable_mode {
+        app.message = Some(
+            "this backend has no permissions to change; an archive member's mode is in its header"
+                .to_string(),
+        );
+        return;
+    }
+    let sources = tab.operand_paths();
+    if sources.is_empty() {
+        app.message = Some("nothing selected to change".to_string());
+        return;
+    }
+    // The current mode of the first operand, so the field opens on what is
+    // there rather than on a guess. A selection of many shows the first one's,
+    // which is what a reader is looking at.
+    let current = tab.current().map_or(0o644, |e| e.mode & 0o7777);
+    let count = sources.len();
+    app.draft.sources = sources;
+    app.push_dialog(Box::new(InputDialog::new(
+        DialogId::Permissions,
+        "Permissions",
+        if count == 1 {
+            "New mode, octal:".to_string()
+        } else {
+            format!("New mode for {count} items, octal:")
+        },
+        format!("{current:o}"),
+    )));
+}
+
 /// `Alt+F9` / `Ctrl+X Q`: the background queue view.
 pub(super) fn open_job_queue(app: &mut App) {
     let jobs = app.jobs.rows().to_vec();

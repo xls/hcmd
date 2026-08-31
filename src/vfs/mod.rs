@@ -635,6 +635,17 @@ pub struct Capabilities {
     pub paged_listing: bool,
     /// A file here can be handed to the kernel to execute.
     pub can_execute: bool,
+    /// Whether [`Vfs::symlink`] and [`Vfs::hard_link`] do anything here.
+    ///
+    /// Asked **before the dialog opens**, which is the rule the copy engine
+    /// already follows with `writable`: a question answered with a form and
+    /// then refused is worse than one never asked.
+    pub links: bool,
+    /// Whether [`Vfs::set_mode`] does anything here.
+    ///
+    /// False for an archive member, which has a mode in its header and no way
+    /// to change it, and for a FAT image, which has no modes at all.
+    pub settable_mode: bool,
     /// Latency class.
     pub latency: LatencyClass,
 }
@@ -649,6 +660,8 @@ impl Capabilities {
         has_directories: true,
         paged_listing: false,
         can_execute: true,
+        links: true,
+        settable_mode: true,
         latency: LatencyClass::Local,
     };
 
@@ -662,6 +675,8 @@ impl Capabilities {
         has_directories: true,
         paged_listing: false,
         can_execute: false,
+        links: false,
+        settable_mode: false,
         latency: LatencyClass::Local,
     };
 
@@ -679,6 +694,8 @@ impl Capabilities {
         atomic_rename: false,
         paged_listing: true,
         can_execute: false,
+        links: false,
+        settable_mode: false,
         latency: LatencyClass::Network,
     };
 
@@ -696,6 +713,8 @@ impl Capabilities {
         atomic_rename: true,
         paged_listing: true,
         can_execute: false,
+        links: false,
+        settable_mode: false,
         latency: LatencyClass::Network,
     };
 
@@ -715,6 +734,8 @@ impl Capabilities {
         atomic_rename: true,
         paged_listing: true,
         can_execute: false,
+        links: false,
+        settable_mode: false,
         latency: LatencyClass::Network,
     };
 
@@ -733,6 +754,8 @@ impl Capabilities {
         atomic_rename: true,
         paged_listing: true,
         can_execute: false,
+        links: false,
+        settable_mode: false,
         latency: LatencyClass::Network,
     };
 
@@ -753,6 +776,8 @@ impl Capabilities {
         atomic_rename: false,
         paged_listing: false,
         can_execute: false,
+        links: false,
+        settable_mode: false,
         latency: LatencyClass::Local,
     };
 
@@ -765,6 +790,8 @@ impl Capabilities {
         has_directories: false,
         paged_listing: false,
         can_execute: false,
+        links: false,
+        settable_mode: false,
         latency: LatencyClass::Local,
     };
 }
@@ -884,6 +911,40 @@ pub trait Vfs: Send + Sync {
     fn read_link(&self, path: &VfsPath) -> Result<String> {
         let _ = path;
         unsupported("reading a symbolic link on this backend")
+    }
+
+    /// Create a symbolic link at `link` pointing at `target`.
+    ///
+    /// `target` is text and is **not** resolved here: a symbolic link is
+    /// allowed to point at something that does not exist yet, and at a
+    /// relative path whose meaning depends on where the link ends up. What
+    /// the caller must not do is let a target chosen elsewhere decide where
+    /// the *link* goes, which is why only `link` is a [`VfsPath`].
+    ///
+    /// The default is a refusal, so a backend added later compiles unchanged.
+    fn symlink(&self, target: &str, link: &VfsPath) -> Result<()> {
+        let _ = (target, link);
+        unsupported("creating a symbolic link on this backend")
+    }
+
+    /// Create a hard link at `link` for the file at `target`.
+    ///
+    /// Both are real paths on the same filesystem, which is what a hard link
+    /// is: a second name for one file. A backend that has no such concept
+    /// refuses.
+    fn hard_link(&self, target: &VfsPath, link: &VfsPath) -> Result<()> {
+        let _ = (target, link);
+        unsupported("creating a hard link on this backend")
+    }
+
+    /// Set the POSIX permission bits of `path`.
+    ///
+    /// The mode only: owner and group are a separate question with separate
+    /// privileges, and a dialog that offered all three would imply this can
+    /// change the first two when it usually cannot.
+    fn set_mode(&self, path: &VfsPath, mode: u32) -> Result<()> {
+        let _ = (path, mode);
+        unsupported("changing permissions on this backend")
     }
 
     /// What this backend can do.

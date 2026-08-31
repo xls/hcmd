@@ -247,6 +247,48 @@ pub fn dialog_answered(app: &mut App, id: DialogId, job: Option<JobId>, result: 
                 Err(err) => app.message = Some(err.to_string()),
             }
         }
+        (DialogId::Symlink | DialogId::Hardlink, DialogResult::Text(name)) => {
+            let symbolic = id == DialogId::Symlink;
+            let base = app.active_panel().active_tab().path.clone();
+            let sources = std::mem::take(&mut app.draft.sources);
+            let trimmed = name.trim().to_string();
+            match sources.first().cloned() {
+                // The link's name is one component, not a path: a name with a
+                // separator would put the link somewhere the dialog did not
+                // say, which is the rule an archive member's name follows too.
+                Some(_) if trimmed.contains('/') || trimmed == ".." || trimmed == "." => {
+                    app.message = Some(format!("{trimmed}: a link's name is one component"));
+                }
+                Some(target) if !trimmed.is_empty() => {
+                    app.request_link(crate::app::links::LinkRequest {
+                        target,
+                        link: base.join(&trimmed),
+                        symbolic,
+                    });
+                }
+                _ => app.message = Some("a link needs a name".to_string()),
+            }
+        }
+        (DialogId::Permissions, DialogResult::Text(text)) => {
+            let sources = std::mem::take(&mut app.draft.sources);
+            match u32::from_str_radix(text.trim(), 8) {
+                // `0o7777` is the mode bits and the three set-id/sticky bits;
+                // anything above that is not a mode and is more likely a
+                // decimal number typed into an octal field.
+                Ok(mode) if mode <= 0o7777 && !sources.is_empty() => {
+                    app.request_chmod(crate::app::links::ChmodRequest {
+                        paths: sources,
+                        mode,
+                    });
+                }
+                Ok(_) => {
+                    app.message = Some(format!("{text}: not a mode; try 644, 755 or 600"));
+                }
+                Err(_) => {
+                    app.message = Some(format!("{text}: a mode is octal digits, like 644"));
+                }
+            }
+        }
         (DialogId::Split, DialogResult::Text(size)) => {
             let sources = std::mem::take(&mut app.draft.sources);
             let target = app.draft.target.take();

@@ -268,6 +268,8 @@ impl RemoteTransport for DavFs {
             atomic_rename: true,
             paged_listing: false,
             can_execute: false,
+            links: false,
+            settable_mode: false,
             latency: LatencyClass::Network,
         }
     }

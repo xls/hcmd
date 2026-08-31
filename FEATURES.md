@@ -42,6 +42,11 @@ is stated rather than glossed over.
   formats are the ones that already exist, so a file this writes verifies with
   `sha256sum -c` and one `sha256sum` wrote verifies here. A line naming a file
   outside the list's own directory is refused rather than followed.
+- Create symbolic and hard links, and edit permissions. Each is refused before
+  its dialog opens where the backend cannot do it, which is the rule the copy
+  engine already follows: a question answered with a form and then refused is
+  worse than one never asked. An archive member's mode is in its header and a
+  FAT image has no modes at all, so neither offers the dialog.
 - Split a file into numbered parts and merge them back. `name.001`, `name.002`,
   as every other tool writes them. Merging starts at the first part and stops
   at the first number missing rather than producing a short file.

@@ -420,6 +420,8 @@ pub trait ArchiveFormat: Send + Sync + std::fmt::Debug {
             atomic_rename: false,
             paged_listing: false,
             can_execute: false,
+            links: false,
+            settable_mode: false,
             latency: LatencyClass::Local,
         }
     }

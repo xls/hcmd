@@ -346,6 +346,8 @@ pub async fn event_loop() -> Result<()> {
     let (info_tx, mut info_rx) = mpsc::channel::<crate::viewer::fileinfo::FileInfo>(
         crate::app::fileinfo::FILE_INFO_CHANNEL_DEPTH,
     );
+    let (link_tx, mut link_rx) =
+        mpsc::channel::<crate::app::links::LinkOutcome>(crate::app::links::LINK_CHANNEL_DEPTH);
     // The resize action queued one, and this is the header read that tells the
     // dialog what it is about to work on. Named by action rather than by key:
     // every binding is the user's to change, so a comment that says `Shift+R`
@@ -388,6 +390,7 @@ pub async fn event_loop() -> Result<()> {
         // I/O, and this loop is the render thread.
         app.service_update_check(&update_tx);
         app.service_file_info(&info_tx);
+        app.service_links(&link_tx);
         // Text a keystroke asked for: the `OSC 52` write is the loop's, for
         // the same reason the viewer's copy is.
         if let Some(text) = app.take_clipboard_text() {
@@ -727,6 +730,18 @@ pub async fn event_loop() -> Result<()> {
                 app.push_dialog(Box::new(
                     crate::ui::dialog::resize::ResizeDialog::new(subject),
                 ));
+            }
+            Some(outcome) = link_rx.recv() => {
+                // One system call, already made. What is left is a sentence
+                // and, where something was created, the cursor landing on it
+                // once the panel re-reads.
+                if let Some(name) = outcome.select {
+                    let side = app.active_side;
+                    app.panel_mut(side).active_tab_mut().pending_select = Some(name);
+                }
+                app.message = Some(outcome.message);
+                let side = app.active_side;
+                app.reread(side);
             }
             Some(info) = info_rx.recv() => {
                 // The read is done and the dialog is the answer. It is pushed

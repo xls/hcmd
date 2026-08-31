@@ -111,6 +111,12 @@ pub enum DialogId {
     MkdirForTarget,
     /// How large each part of a `split_file` should be.
     Split,
+    /// Naming a symbolic link about to be created.
+    Symlink,
+    /// Naming a hard link about to be created.
+    Hardlink,
+    /// The permission bits of the selection, as an octal number.
+    Permissions,
     /// Naming the checksum file `checksum_create` is about to write. The
     /// extension chooses the digest, so `.sha256` and `.sfv` are the same
     /// question answered two ways.
@@ -210,6 +216,9 @@ impl DialogId {
             Self::MkdirForTarget => "mkdir_for_target",
             Self::Checksum => "checksum",
             Self::Split => "split",
+            Self::Symlink => "symlink",
+            Self::Hardlink => "hardlink",
+            Self::Permissions => "permissions",
             Self::Rename => "rename",
             Self::GotoPath => "goto_path",
             Self::GotoOffset => "goto_offset",
@@ -1203,6 +1212,9 @@ pub(crate) fn run_action(app: &mut App, action: Action, press: KeyPress) -> Resu
         A::ChecksumVerify => files::verify_checksum(app),
         A::SplitFile => files::open_split(app),
         A::MergeFile => files::merge_parts(app),
+        A::CreateSymlink => files::open_link(app, true),
+        A::CreateHardlink => files::open_link(app, false),
+        A::EditPermissions => files::open_permissions(app),
 
         // ------------------------------------------ the design quick view
         A::QuickView => app.quick_view_toggle(),

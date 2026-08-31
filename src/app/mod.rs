@@ -20,6 +20,7 @@ pub mod dialogs;
 pub mod drives;
 pub mod fileinfo;
 pub mod jobs;
+pub mod links;
 pub mod navigate;
 pub mod open;
 pub mod quickview;
@@ -812,6 +813,10 @@ pub struct App {
     ///
     /// [`JobSummary`]: crate::ops::JobSummary
     compare_names: Option<(String, String)>,
+    /// A link the keystroke asked for, waiting for the event loop.
+    pending_link: Option<crate::app::links::LinkRequest>,
+    /// A permission change the keystroke asked for.
+    pending_chmod: Option<crate::app::links::ChmodRequest>,
 }
 
 /// Which popup the design asked for.
@@ -939,6 +944,8 @@ impl App {
             pending_clipboard: None,
             pending_resize: None,
             compare_names: None,
+            pending_link: None,
+            pending_chmod: None,
         }
     }
 

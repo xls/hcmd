@@ -288,6 +288,8 @@ impl RemoteTransport for S3Fs {
             // a large bucket is not a stall.
             paged_listing: true,
             can_execute: false,
+            links: false,
+            settable_mode: false,
             latency: LatencyClass::Network,
         }
     }

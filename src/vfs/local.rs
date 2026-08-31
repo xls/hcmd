@@ -351,6 +351,30 @@ impl Vfs for LocalFs {
     fn capabilities(&self) -> Capabilities {
         Capabilities::LOCAL
     }
+
+    /// `std::os::unix::fs::symlink`, and nothing resolved on the way.
+    ///
+    /// The target is written as it was given. A symbolic link is allowed to
+    /// point at something that does not exist yet, and a relative one means
+    /// whatever it means from where the link sits; resolving it here would
+    /// turn both of those into something else.
+    fn symlink(&self, target: &str, link: &VfsPath) -> Result<()> {
+        let path = Self::resolve(link)?;
+        std::os::unix::fs::symlink(target, path).map_err(|e| Error::io(path, e))
+    }
+
+    fn hard_link(&self, target: &VfsPath, link: &VfsPath) -> Result<()> {
+        let from = Self::resolve(target)?;
+        let to = Self::resolve(link)?;
+        std::fs::hard_link(from, to).map_err(|e| Error::io(to, e))
+    }
+
+    fn set_mode(&self, path: &VfsPath, mode: u32) -> Result<()> {
+        use std::os::unix::fs::PermissionsExt as _;
+        let target = Self::resolve(path)?;
+        std::fs::set_permissions(target, std::fs::Permissions::from_mode(mode))
+            .map_err(|e| Error::io(target, e))
+    }
 }
 
 #[cfg(test)]

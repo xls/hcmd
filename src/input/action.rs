@@ -186,6 +186,9 @@ actions! {
     ChecksumVerify    = "checksum_verify",   V09, "Check the files a checksum file names";
     SplitFile         = "split_file",        V09, "Split the file into numbered parts";
     MergeFile         = "merge_file",        V09, "Merge a numbered set back together";
+    CreateSymlink     = "create_symlink",    V09, "Create a symbolic link to the file under the cursor";
+    CreateHardlink    = "create_hardlink",   V09, "Create a hard link to the file under the cursor";
+    EditPermissions   = "edit_permissions",  V09, "Change the permissions of the selection";
 
     DriveLeft         = "drive_left",        V07, "Choose a device for the left panel";
     DriveRight        = "drive_right",       V07, "Choose a device for the right panel";

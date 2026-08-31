@@ -109,6 +109,8 @@ impl VolumeFormat for Fat {
             atomic_rename: false,
             paged_listing: false,
             can_execute: false,
+            links: false,
+            settable_mode: false,
             latency: LatencyClass::Local,
         }
     }
