@@ -47,11 +47,13 @@ pub mod hosts;
 pub mod keyring;
 pub mod known_hosts;
 pub mod prompt;
+pub mod s3;
 pub mod secret;
 pub mod sftp;
 pub mod smb;
 pub mod transport;
 pub mod url;
+pub mod xml;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -135,6 +137,8 @@ pub enum Protocol {
     Dav,
     /// WebDAV over HTTPS, which is how anybody sensible runs it.
     Davs,
+    /// S3, or anything that speaks it: MinIO, Ceph, Backblaze, R2.
+    S3,
 }
 
 impl Default for Protocol {
@@ -155,6 +159,7 @@ impl Protocol {
         Self::Smb,
         Self::Dav,
         Self::Davs,
+        Self::S3,
     ];
 
     /// `"sftp"`, `"ftp"`, `"ftps"`, `"ftps-implicit"`: the `hosts.toml` value
@@ -168,10 +173,11 @@ impl Protocol {
             Self::Smb => "smb",
             Self::Dav => "dav",
             Self::Davs => "davs",
+            Self::S3 => "s3",
         }
     }
 
-    /// 22, 21, 21, 990, 445, 80, 443.
+    /// 22, 21, 21, 990, 445, 80, 443, 443.
     pub const fn default_port(self) -> u16 {
         match self {
             Self::Sftp => 22,
@@ -179,7 +185,7 @@ impl Protocol {
             Self::FtpsImplicit => 990,
             Self::Smb => 445,
             Self::Dav => 80,
-            Self::Davs => 443,
+            Self::Davs | Self::S3 => 443,
         }
     }
 
@@ -196,6 +202,7 @@ impl Protocol {
             Self::Smb => "smb",
             Self::Dav => "dav",
             Self::Davs => "davs",
+            Self::S3 => "s3",
         }
     }
 
@@ -206,9 +213,13 @@ impl Protocol {
             // TLS verifies a certificate rather than a host key, which is a
             // different question with a different answer and a different
             // prompt: the trust store answers it, not the user.
-            Self::Ftp | Self::Ftps | Self::FtpsImplicit | Self::Smb | Self::Dav | Self::Davs => {
-                false
-            }
+            Self::Ftp
+            | Self::Ftps
+            | Self::FtpsImplicit
+            | Self::Smb
+            | Self::Dav
+            | Self::Davs
+            | Self::S3 => false,
         }
     }
 
@@ -234,6 +245,7 @@ impl Protocol {
             // no other reading of those two.
             "dav" | "http" => Some(Self::Dav),
             "davs" | "https" | "webdav" => Some(Self::Davs),
+            "s3" => Some(Self::S3),
             _ => None,
         }
     }

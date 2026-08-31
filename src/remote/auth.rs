@@ -254,6 +254,10 @@ pub fn is_credential_free(protocol: super::Protocol, user: &str) -> bool {
         // the server answers 401 if it wanted one, which is a better question
         // to ask the network than to ask the user in advance.
         super::Protocol::Dav | super::Protocol::Davs => user.is_empty(),
+        // A bucket may be public, and an empty access key is how somebody says
+        // so: the request goes unsigned and the endpoint answers 403 if it
+        // wanted credentials.
+        super::Protocol::S3 => user.is_empty(),
     }
 }
 

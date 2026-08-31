@@ -115,6 +115,16 @@ Read-only is the feature, not a stage of one: there is no write path to disable.
   an archive that lives on the remote.
 - Saved connections in `hosts.toml`.
 
+- **S3**, and anything that speaks it: MinIO, Ceph, Backblaze, R2. Buckets are
+  the root listing, prefixes are directories, and a key is a file. Requests are
+  signed with SigV4, checked here against the specification's own worked
+  example rather than against itself. Listings page, so a bucket larger than
+  one reply still fills the panel.
+- S3 has no directories and no rename, and both show: an empty directory is a
+  zero-byte object whose key ends in `/`, which is the convention every other
+  tool uses, and renaming copies and then deletes, server side, which is why
+  renaming a large object is not instant. A single upload is held in memory
+  and refused past 512 MB; multipart upload is not built.
 - **WebDAV**, over `dav://`, `davs://`, or the `https://` URL you copied out of
   a browser. Listing, reading, writing, `MKCOL`, `DELETE` and server-side
   `MOVE` for rename. No locking: holding and refreshing a lock for as long as a
