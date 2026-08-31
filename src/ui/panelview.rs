@@ -504,24 +504,19 @@ fn draw_entries(
         let fg = filetype::entry_fg(entry, marked, &app.config, theme);
 
         let style = if is_cursor {
-            // A full-width bar. The file-type colour is dropped on the cursor
-            // row so the bar stays legible at 16 colours - but a *mark* is not
-            // a file-type colour: the entry under the cursor must read as
-            // marked or not, without moving off it.
-            //
-            // A marked row under the cursor turns the bar itself the mark
-            // colour, with the panel background as the text. `marked_fg` is
-            // chosen to read against `bg` already - that is how a marked row
-            // reads when it is not the cursor - so the reverse is legible in
-            // every theme, where `marked_fg` painted as text on the cursor
-            // background was two accent colours on top of each other and, in
-            // almost every theme, barely a difference at all.
+            // The cursor bar is ALWAYS `cursor_bg`; it never changes colour.
+            // The file-type colour is dropped on it so the bar stays legible at
+            // 16 colours. A marked file under the bar keeps the bar and takes
+            // the bar's own text colour with bold and an underline as the mark
+            // accent: `marked_fg` painted as text here was a bright colour on a
+            // bright bar - two highlights on top of each other - and barely a
+            // difference in almost every theme, while `cursor_fg` on
+            // `cursor_bg` is the theme's own tested-legible pair.
+            let base = Style::new().bg(color(cursor_bg)).fg(color(cursor_fg));
             if marked {
-                Style::new()
-                    .bg(color(theme.panel.marked_fg))
-                    .fg(color(theme.panel.bg))
+                base.add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
             } else {
-                Style::new().bg(color(cursor_bg)).fg(color(cursor_fg))
+                base
             }
         } else {
             Style::new().bg(color(theme.panel.bg)).fg(color(fg))
