@@ -2,6 +2,16 @@
 
 Notable changes per release, one line each. Newest first.
 
+## v0.9.8
+
+- Quick search can now filter the listing to matches as you type (panel.quick_search_filter, off by default); the arrows walk what is left and Esc brings the whole listing back.
+- A marked file under the cursor is now legible: the cursor bar keeps its colour and the file takes a dark shade of the mark colour, tuned per theme.
+- Four light themes get a higher-contrast mark colour, held there by a per-theme legibility test.
+- A focused control's label in a dialog takes the mark colour instead of the list cursor bar, consistently across dialogs.
+- Adding a host selects the new host rather than the Add button; a failed connection is now a dismissable dialog; Ctrl+F disconnect defaults to Yes.
+- A keymap.toml from an older version is noticed at startup, and moving between a dialog's controls is rebindable through a [dialog] context.
+- The quit prompt and the About page say "Holos Commander", and the About page names the version.
+
 ## v0.9.7
 
 - A keymap.toml from an older version is now noticed at startup, so bindings added since do not silently do nothing.
