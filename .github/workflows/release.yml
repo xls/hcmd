@@ -226,6 +226,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      # For CHANGELOG.md, which becomes the release notes. Only the file is
+      # needed, so the checkout is shallow.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -264,16 +270,38 @@ jobs:
           shasum -a 256 *.tar.gz *.deb *.rpm *.pkg.tar.zst > SHA256SUMS
           cat SHA256SUMS
 
-      - name: Say so on the release itself when something is missing
-        if: steps.stock.outputs.missing != ''
+      - name: Assemble the release notes from the changelog
+        id: notes
         run: |
-          {
-            echo "> **This release is incomplete.** These did not build and are"
-            echo "> not attached: \`${{ steps.stock.outputs.missing }}\`."
-            echo ">"
-            echo "> Everything else below was built and checksummed as usual."
-            echo
-          } > dist/NOTICE.md
+          set -eu
+          version=$(echo "${{ github.ref_name }}" | sed 's/^v//')
+          : > dist/NOTES.md
+          # The incomplete-release warning goes first, whatever the source of
+          # the notes below it, so it is the first thing read.
+          if [ -n "${{ steps.stock.outputs.missing }}" ]; then
+            {
+              echo "> **This release is incomplete.** These did not build and are"
+              echo "> not attached: \`${{ steps.stock.outputs.missing }}\`."
+              echo ">"
+              echo "> Everything else below was built and checksummed as usual."
+              echo
+            } >> dist/NOTES.md
+          fi
+          # The section between this version's heading and the next `## `. When
+          # the changelog names the tag, those curated one-liners are the notes
+          # and GitHub's generated commit list is left off; when it does not,
+          # fall back to the generated list so a release is never noteless.
+          section=$(awk -v v="## v${version}" '
+            $0 == v { grab = 1; next }
+            grab && /^## / { exit }
+            grab { print }
+          ' CHANGELOG.md)
+          if [ -n "$(printf '%s' "$section" | tr -d '[:space:]')" ]; then
+            printf '%s\n' "$section" >> dist/NOTES.md
+            echo "generate=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "generate=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: softprops/action-gh-release@v2
         with:
@@ -283,8 +311,8 @@ jobs:
             dist/*.rpm
             dist/*.pkg.tar.zst
             dist/SHA256SUMS
-          body_path: ${{ steps.stock.outputs.missing != '' && 'dist/NOTICE.md' || '' }}
-          generate_release_notes: true
+          body_path: dist/NOTES.md
+          generate_release_notes: ${{ steps.notes.outputs.generate }}
 
       # After the upload, so the assets are on the page either way. A red run
       # against a published release is the honest state for "these platforms
