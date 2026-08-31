@@ -520,12 +520,15 @@ fn resolve(target: &Target, _timeout: Duration) -> Result<SocketAddr> {
 fn dial(target: &Target, addr: SocketAddr, timeout: Duration) -> Result<Box<dyn Session>> {
     let authority = target.authority();
     match target.protocol {
-        Protocol::Sftp | Protocol::Smb | Protocol::Dav | Protocol::Davs | Protocol::S3 => {
-            Err(Error::msg(format!(
-                "{authority}: {} is not this backend's protocol",
-                target.protocol
-            )))
-        }
+        Protocol::Sftp
+        | Protocol::Smb
+        | Protocol::Dav
+        | Protocol::Davs
+        | Protocol::S3
+        | Protocol::S3Http => Err(Error::msg(format!(
+            "{authority}: {} is not this backend's protocol",
+            target.protocol
+        ))),
         Protocol::Ftp => {
             let stream = greet(addr, timeout, &authority)?;
             let mut session = FtpStream::connect_with_stream(stream)

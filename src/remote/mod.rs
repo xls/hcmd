@@ -137,8 +137,16 @@ pub enum Protocol {
     Dav,
     /// WebDAV over HTTPS, which is how anybody sensible runs it.
     Davs,
-    /// S3, or anything that speaks it: MinIO, Ceph, Backblaze, R2.
+    /// S3 over HTTPS, which is how a hosted endpoint is reached.
     S3,
+    /// S3 over plain HTTP: a MinIO in a container, a Ceph on a LAN, anything
+    /// behind its own proxy.
+    ///
+    /// Its own protocol rather than a guess, because the guess would have to
+    /// be "try TLS and fall back", and silently sending an access key over
+    /// plaintext because the first attempt failed is not a decision this
+    /// program should make on somebody's behalf.
+    S3Http,
 }
 
 impl Default for Protocol {
@@ -160,6 +168,7 @@ impl Protocol {
         Self::Dav,
         Self::Davs,
         Self::S3,
+        Self::S3Http,
     ];
 
     /// `"sftp"`, `"ftp"`, `"ftps"`, `"ftps-implicit"`: the `hosts.toml` value
@@ -174,10 +183,11 @@ impl Protocol {
             Self::Dav => "dav",
             Self::Davs => "davs",
             Self::S3 => "s3",
+            Self::S3Http => "s3+http",
         }
     }
 
-    /// 22, 21, 21, 990, 445, 80, 443, 443.
+    /// 22, 21, 21, 990, 445, 80, 443, 443, 80.
     pub const fn default_port(self) -> u16 {
         match self {
             Self::Sftp => 22,
@@ -186,6 +196,7 @@ impl Protocol {
             Self::Smb => 445,
             Self::Dav => 80,
             Self::Davs | Self::S3 => 443,
+            Self::S3Http => 80,
         }
     }
 
@@ -203,6 +214,7 @@ impl Protocol {
             Self::Dav => "dav",
             Self::Davs => "davs",
             Self::S3 => "s3",
+            Self::S3Http => "s3+http",
         }
     }
 
@@ -219,7 +231,8 @@ impl Protocol {
             | Self::Smb
             | Self::Dav
             | Self::Davs
-            | Self::S3 => false,
+            | Self::S3
+            | Self::S3Http => false,
         }
     }
 
@@ -245,7 +258,10 @@ impl Protocol {
             // no other reading of those two.
             "dav" | "http" => Some(Self::Dav),
             "davs" | "https" | "webdav" => Some(Self::Davs),
-            "s3" => Some(Self::S3),
+            "s3" | "s3s" => Some(Self::S3),
+            // The spelling MinIO's own documentation uses for an endpoint is
+            // `http://host:port`, so this is the one people arrive with.
+            "s3+http" | "s3h" | "minio" => Some(Self::S3Http),
             _ => None,
         }
     }

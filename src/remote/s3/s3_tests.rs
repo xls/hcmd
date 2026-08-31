@@ -145,3 +145,38 @@ fn the_region_comes_from_an_aws_hostname_and_nowhere_else() {
     assert_eq!(region_of("minio.example.invalid"), "us-east-1");
     assert_eq!(region_of("localhost"), "us-east-1");
 }
+
+#[test]
+fn a_refusal_is_reported_in_the_endpoints_own_words() {
+    // The status code alone is not the answer. `InvalidAccessKeyId` and
+    // `SignatureDoesNotMatch` are different problems with different fixes,
+    // and both are 403.
+    let body = r#"<?xml version="1.0" encoding="UTF-8"?>
+        <Error><Code>InvalidAccessKeyId</Code>
+        <Message>The Access Key Id you provided does not exist in our records.</Message>
+        </Error>"#;
+    let err = endpoint_error(403, body).to_string();
+    assert!(err.contains("InvalidAccessKeyId"), "{err}");
+    assert!(err.contains("does not exist in our records"), "{err}");
+
+    // A body that says nothing still leaves a number rather than silence.
+    assert!(endpoint_error(500, "").to_string().contains("500"));
+}
+
+#[test]
+fn the_scheme_follows_the_protocol_rather_than_being_guessed() {
+    // A MinIO in a container is plain HTTP. Speaking TLS at it produces
+    // `InvalidContentType`, which is rustls reading an HTTP reply where a
+    // handshake should be and is not a sentence anybody can act on.
+    assert_eq!(Protocol::S3.default_port(), 443);
+    assert_eq!(Protocol::S3Http.default_port(), 80);
+    assert_eq!(
+        crate::remote::Protocol::parse("s3+http"),
+        Some(Protocol::S3Http)
+    );
+    assert_eq!(
+        crate::remote::Protocol::parse("minio"),
+        Some(Protocol::S3Http)
+    );
+    assert_eq!(crate::remote::Protocol::parse("s3"), Some(Protocol::S3));
+}

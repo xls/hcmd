@@ -1199,6 +1199,73 @@ const FORM_CONTROLS: &[FormControl] = &[
     FormControl::Cancel,
 ];
 
+/// Split a typed endpoint into the protocol it names, the host, and the port.
+///
+/// `https://minio.example.invalid:9000` is TLS, that host, and that port.
+/// A field with no scheme in it answers `None` for the protocol and leaves
+/// the stepper's choice alone.
+///
+/// The scheme is mapped through the protocol the *stepper* is on where that
+/// matters: `https://` with S3 selected means S3 over TLS, and with WebDAV
+/// selected it means WebDAV over TLS. Only the secure/insecure half of the
+/// answer comes from the URL, because that is the only half a URL states.
+#[must_use]
+pub fn split_endpoint(typed: &str) -> (Option<Protocol>, String, u16) {
+    let Some((scheme, rest)) = typed.split_once("://") else {
+        // No scheme: the whole thing is a host, possibly with a port.
+        let (host, port) = split_port(typed);
+        return (None, host, port);
+    };
+    let rest = rest.trim_start_matches('/');
+    // Anything after the first slash is a path, which the form has its own
+    // field for; taking it silently would put a directory in the host.
+    let authority = rest.split('/').next().unwrap_or(rest);
+    let (host, port) = split_port(authority);
+    (Protocol::parse(scheme), host, port)
+}
+
+/// The protocol to use, given what the stepper is on and what the host field
+/// said.
+///
+/// `http` and `https` are the ambiguous pair: on their own they name WebDAV,
+/// because that is the only thing in this program that a bare HTTP URL can
+/// be. But an endpoint typed into an **S3** bookmark is an S3 endpoint, and
+/// what its scheme states is only whether it is TLS. So the two are mapped
+/// through the family the stepper is on, and every other scheme means what it
+/// says.
+#[must_use]
+pub fn protocol_for(stepper: Protocol, from_host: Option<Protocol>) -> Protocol {
+    let s3_family = matches!(stepper, Protocol::S3 | Protocol::S3Http);
+    match from_host {
+        // `https://` on an S3 bookmark is S3 over TLS, not WebDAV.
+        Some(Protocol::Davs) if s3_family => Protocol::S3,
+        Some(Protocol::Dav) if s3_family => Protocol::S3Http,
+        Some(named) => named,
+        None => stepper,
+    }
+}
+
+/// A `host:port` pair, where there is a port and it is a number.
+///
+/// An IPv6 literal is bracketed and its colons are not separators, which is
+/// why this looks at the last one rather than the first.
+fn split_port(text: &str) -> (String, u16) {
+    let text = text.trim();
+    if text.starts_with('[') {
+        if let Some((host, rest)) = text.split_once("]:") {
+            return (format!("{host}]"), rest.parse::<u16>().unwrap_or(0));
+        }
+        return (text.to_string(), 0);
+    }
+    match text.rsplit_once(':') {
+        Some((host, port)) => match port.parse::<u16>() {
+            Ok(port) => (host.to_string(), port),
+            Err(_) => (text.to_string(), 0),
+        },
+        None => (text.to_string(), 0),
+    }
+}
+
 /// The protocols the form steps through, in the order.
 pub const PROTOCOLS: &[Protocol] = &[
     Protocol::Sftp,
@@ -1454,10 +1521,22 @@ impl HostFormDialog {
             port.parse::<u16>()
                 .map_err(|_| format!("{port}: not a port number"))?
         };
+        // The host field is allowed to hold a whole endpoint URL, because that
+        // is how everybody writes one: MinIO's own documentation says
+        // `http://host:9000`, and a Nextcloud settings page gives an
+        // `https://` address. Typing that here used to produce
+        // `s3://user:pass@https://host`, which is not an address at all.
+        //
+        // A scheme in the field is a **statement**, so it wins over the
+        // stepper: `https://` means TLS and `http://` means not, and for S3
+        // those are two different protocols rather than a flag.
+        let typed = self.host.text().trim().to_string();
+        let (from_host, host_text, port_in_host) = split_endpoint(&typed);
+        let port = if port == 0 { port_in_host } else { port };
         let host = SavedHost {
             label: self.label.text().trim().to_string(),
-            protocol: self.protocol(),
-            host: self.host.text().trim().to_string(),
+            protocol: protocol_for(self.protocol(), from_host),
+            host: host_text,
             port,
             username: self.user.text().trim().to_string(),
             auth: self.auth(),
@@ -2413,6 +2492,71 @@ mod tests {
         assert_eq!(d.cursor, last, "the last row");
         d.handle_key(&key(KeyCode::Down));
         assert_ne!(d.focused(), Control::Hosts, "and out the bottom");
+    }
+
+    #[test]
+    fn a_host_field_may_hold_a_whole_endpoint_url() {
+        // Which is how everybody writes one: MinIO's documentation says
+        // `http://host:9000` and a Nextcloud settings page gives an https
+        // address. Typing that used to produce `s3://user:pass@https://host`.
+        let (proto, host, port) = split_endpoint("http://192.168.10.180:32768");
+        assert_eq!(host, "192.168.10.180");
+        assert_eq!(port, 32768);
+        assert_eq!(proto, Some(Protocol::Dav), "a bare http URL names WebDAV");
+
+        // A field with no scheme is left entirely alone.
+        let (proto, host, port) = split_endpoint("nas.example.invalid");
+        assert_eq!(
+            (proto, host.as_str(), port),
+            (None, "nas.example.invalid", 0)
+        );
+
+        // A port without a scheme still counts.
+        let (_, host, port) = split_endpoint("nas.example.invalid:2222");
+        assert_eq!((host.as_str(), port), ("nas.example.invalid", 2222));
+
+        // A path is the form's own field, and taking it silently would put a
+        // directory in the host.
+        let (_, host, _) = split_endpoint("https://dav.example.invalid/remote.php/dav");
+        assert_eq!(host, "dav.example.invalid");
+
+        // An IPv6 literal's colons are not separators.
+        let (_, host, port) = split_endpoint("https://[2001:db8::1]:9000");
+        assert_eq!((host.as_str(), port), ("[2001:db8::1]", 9000));
+        let (_, host, port) = split_endpoint("[2001:db8::1]");
+        assert_eq!((host.as_str(), port), ("[2001:db8::1]", 0));
+    }
+
+    #[test]
+    fn a_scheme_on_an_s3_bookmark_chooses_tls_and_not_webdav() {
+        // `https://` on its own names WebDAV, because that is the only thing
+        // here a bare HTTP URL can be. On an S3 bookmark it states one thing
+        // only: whether the endpoint is TLS.
+        assert_eq!(
+            protocol_for(Protocol::S3, Some(Protocol::Davs)),
+            Protocol::S3
+        );
+        assert_eq!(
+            protocol_for(Protocol::S3, Some(Protocol::Dav)),
+            Protocol::S3Http,
+            "an http endpoint on an S3 bookmark is S3 over http"
+        );
+        assert_eq!(
+            protocol_for(Protocol::S3Http, Some(Protocol::Davs)),
+            Protocol::S3,
+            "and it can correct the stepper the other way"
+        );
+        // On anything else the scheme means what it says.
+        assert_eq!(
+            protocol_for(Protocol::Sftp, Some(Protocol::Davs)),
+            Protocol::Davs
+        );
+        assert_eq!(
+            protocol_for(Protocol::Sftp, Some(Protocol::Smb)),
+            Protocol::Smb
+        );
+        // And no scheme leaves the stepper alone.
+        assert_eq!(protocol_for(Protocol::S3Http, None), Protocol::S3Http);
     }
 
     #[test]

@@ -95,7 +95,7 @@ impl S3Fs {
         from_env: bool,
     ) -> Result<Self> {
         let port = target.port;
-        let host = if port == Protocol::S3.default_port() {
+        let host = if port == target.protocol.default_port() {
             target.host.clone()
         } else {
             format!("{}:{port}", target.host)
@@ -125,8 +125,17 @@ impl S3Fs {
             .region
             .clone()
             .unwrap_or_else(|| region_of(&target.host));
+        // The scheme the protocol says, not a guess. A MinIO in a container is
+        // plain HTTP, and speaking TLS at it produces `InvalidContentType` -
+        // rustls reading an HTTP reply where a handshake should be, which is
+        // not a sentence anybody can act on.
+        let scheme = if target.protocol == Protocol::S3Http {
+            "http"
+        } else {
+            "https"
+        };
         let fs = Self {
-            origin: format!("https://{host}"),
+            origin: format!("{scheme}://{host}"),
             region,
             host,
             access_key,
@@ -232,9 +241,31 @@ impl S3Fs {
         let request = builder
             .body(body.to_vec())
             .map_err(|err| Error::msg(format!("{method} {uri}: {err}")))?;
-        agent()
+        let response = agent()
             .run(request)
-            .map_err(|err| translate(method, &uri, &err))
+            .map_err(|err| translate(method, &uri, &err))?;
+        Self::checked(response, &uri)
+    }
+
+    /// A response, or the endpoint's own account of why there is not one.
+    fn checked(
+        response: ureq::http::Response<ureq::Body>,
+        uri: &str,
+    ) -> Result<ureq::http::Response<ureq::Body>> {
+        let status = response.status().as_u16();
+        if (200..300).contains(&status) {
+            return Ok(response);
+        }
+        let mut body = String::new();
+        let _ = response
+            .into_body()
+            .into_reader()
+            .take(64 * 1024)
+            .read_to_string(&mut body);
+        Err(Error::msg(format!(
+            "{uri}: {}",
+            endpoint_error(status, &body)
+        )))
     }
 }
 
@@ -242,8 +273,25 @@ impl S3Fs {
 fn agent() -> ureq::Agent {
     let config = ureq::Agent::config_builder()
         .timeout_global(Some(std::time::Duration::from_secs(60)))
+        // **Off**: a 4xx from S3 carries an XML body saying which of several
+        // possible things went wrong, and turning the status into an error
+        // before that body is read throws away the only useful part of the
+        // answer. `InvalidAccessKeyId` and `SignatureDoesNotMatch` are
+        // different problems with different fixes, and "403" is neither.
+        .http_status_as_error(false)
         .build();
     ureq::Agent::new_with_config(config)
+}
+
+/// The endpoint's own words for a failure, from the XML it sends with it.
+fn endpoint_error(status: u16, body: &str) -> Error {
+    let code = crate::remote::xml::first_text(body, "Code");
+    let message = crate::remote::xml::first_text(body, "Message");
+    match (code, message) {
+        (Some(code), Some(message)) => Error::msg(format!("{}: {}", code.trim(), message.trim())),
+        (Some(code), None) => Error::msg(code.trim().to_string()),
+        _ => Error::msg(format!("the endpoint answered {status}")),
+    }
 }
 
 /// `20130524T000000Z`, now.
@@ -291,6 +339,15 @@ fn translate(method: &str, path: &str, err: &ureq::Error) -> Error {
     }
     if text.contains("404") {
         return Error::msg(format!("{path}: no such bucket or key"));
+    }
+    // rustls reading an HTTP reply where a handshake should be. Its own
+    // message is about content types and says nothing anybody can act on;
+    // what it means is that the endpoint is plain HTTP.
+    if text.contains("InvalidContentType") || text.contains("corrupt message") {
+        return Error::msg(format!(
+            "{path}: that endpoint is not speaking TLS; for a plain HTTP one \
+             (a MinIO in a container, say) use s3+http:// instead of s3://"
+        ));
     }
     Error::msg(format!("{path}: {method} failed: {text}"))
 }

@@ -1074,7 +1074,7 @@ pub async fn run_connect(
         // S3 is synchronous and stateless in the same way WebDAV is: every
         // request carries its own signature, so there is no session and no
         // actor. The user is the access key id and the password is the secret.
-        Protocol::S3 => {
+        Protocol::S3 | Protocol::S3Http => {
             let target = target.clone();
             let password = answer.password;
             let from_env = config.s3_credentials_from_env;

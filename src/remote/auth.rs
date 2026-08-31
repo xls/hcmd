@@ -257,7 +257,7 @@ pub fn is_credential_free(protocol: super::Protocol, user: &str) -> bool {
         // A bucket may be public, and an empty access key is how somebody says
         // so: the request goes unsigned and the endpoint answers 403 if it
         // wanted credentials.
-        super::Protocol::S3 => user.is_empty(),
+        super::Protocol::S3 | super::Protocol::S3Http => user.is_empty(),
     }
 }
 
