@@ -1,6 +1,6 @@
 {
   "name": "hcmd-installer",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "Install hcmd, a Total Commander alternative for the terminal",
   "bin": { "hcmd-installer": "install.js" },
   "files": ["install.js", "README.md"],
