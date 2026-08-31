@@ -280,6 +280,34 @@ mod tests {
     }
 
     #[test]
+    fn an_s3_quick_connect_line_parses() {
+        let parsed = parse(
+            "s3://AKIAEXAMPLE:secretkey@s3.eu-west-1.amazonaws.com/photos/2024",
+            Protocol::Sftp,
+            "thomas",
+        )
+        .expect("parses");
+        assert_eq!(parsed.target.protocol, Protocol::S3);
+        assert_eq!(parsed.target.host, "s3.eu-west-1.amazonaws.com");
+        assert_eq!(parsed.target.user, "AKIAEXAMPLE", "the access key id");
+        assert_eq!(parsed.target.dir.as_deref(), Some("/photos/2024"));
+        assert!(parsed.password.is_some(), "the secret came with it");
+    }
+
+    #[test]
+    fn a_webdav_quick_connect_line_parses() {
+        let parsed = parse(
+            "https://me:pw@dav.example.invalid/remote.php/dav",
+            Protocol::Sftp,
+            "thomas",
+        )
+        .expect("parses");
+        assert_eq!(parsed.target.protocol, Protocol::Davs);
+        assert_eq!(parsed.target.user, "me");
+        assert_eq!(parsed.target.dir.as_deref(), Some("/remote.php/dav"));
+    }
+
+    #[test]
     fn every_example_in_spec_16_2_parses() {
         let one = sftp("thorin:pass@192.168.1.10");
         assert_eq!(one.target.host, "192.168.1.10");

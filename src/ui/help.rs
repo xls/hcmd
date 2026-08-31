@@ -1142,9 +1142,21 @@ fn dialog_help(id: DialogId) -> (&'static str, &'static str) {
              \x20 ftp://     plain FTP\n\
              \x20 ftps://    FTP with TLS\n\
              \x20 smb://     an SMB or Windows share\n\
+             \x20 dav://     WebDAV, and davs:// or https:// for TLS\n\
+             \x20 s3://      S3, and anything that speaks it\n\
              \n\
              A share is the first component of an SMB path, so\n\
              smb://nas/Media/photos is the share Media. //nas/Media works too.\n\
+             \n\
+             For S3 the user is the access key id and the password is the\n\
+             secret key, the host is the endpoint, and the path is the bucket\n\
+             and prefix. The region is read from an AWS endpoint name and is\n\
+             us-east-1 for anything else, which MinIO and Ceph accept:\n\
+             \n\
+             \x20 s3://AKIA...:secret@s3.eu-west-1.amazonaws.com/my-bucket\n\
+             \x20 s3://minioadmin:minioadmin@localhost:9000/my-bucket\n\
+             \n\
+             Leave the path off to open on the list of buckets.\n\
              \n\
              With no user, SFTP tries your SSH agent and your key files before\n\
              it asks for anything; a password is only requested when those\n\
