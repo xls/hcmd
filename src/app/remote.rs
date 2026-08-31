@@ -58,11 +58,13 @@ impl App {
                     "An operation is still running on this connection and will stop.".to_string(),
                 );
             }
-            self.push_dialog(Box::new(crate::dialog::ConfirmDialog::new(
-                DialogId::ConfirmDisconnect,
-                "Disconnect",
-                lines,
-            )));
+            self.push_dialog(Box::new(
+                crate::dialog::ConfirmDialog::new(DialogId::ConfirmDisconnect, "Disconnect", lines)
+                    // Pressing the key again is the answer, so `Enter` takes it:
+                    // disconnecting is what `Ctrl+F` on a connected panel is for,
+                    // and it is reversible in a keystroke.
+                    .defaulting_to_yes(),
+            ));
             return;
         }
         self.open_connect_dialog(String::new());

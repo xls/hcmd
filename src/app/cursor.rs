@@ -25,8 +25,15 @@ impl App {
     ///
     /// Cursor movement clears the quick-search buffer.
     pub fn move_cursor(&mut self, delta: isize) {
+        // In filter mode the arrows walk what the filter left, so the search is
+        // kept rather than cleared; `Esc` is what ends it. Everywhere else a
+        // cursor move ends the quick search, as it always has.
+        let keep_filter = self.config.panel.quick_search_filter
+            && self.active_panel().active_tab().is_quick_filtered();
         let panel = self.active_panel_mut();
-        panel.quick.clear();
+        if !keep_filter {
+            panel.quick.clear();
+        }
         let len = panel.active_tab().entries.len();
         if len == 0 {
             return;
@@ -50,8 +57,12 @@ impl App {
 
     /// Put the cursor on a row, clamping. Clears the quick-search buffer.
     pub fn move_cursor_to(&mut self, index: usize) {
+        let keep_filter = self.config.panel.quick_search_filter
+            && self.active_panel().active_tab().is_quick_filtered();
         let panel = self.active_panel_mut();
-        panel.quick.clear();
+        if !keep_filter {
+            panel.quick.clear();
+        }
         let last = panel.active_tab().entries.len().saturating_sub(1);
         panel.active_tab_mut().cursor = index.min(last);
         let rows = panel.view_rows;

@@ -53,6 +53,10 @@ pub(super) fn panel_printable(app: &mut App, c: char) {
 /// The refusal is not silent: the status line says which character was
 /// refused, so a key that appears to do nothing is explained.
 pub(super) fn type_into_quick_search(app: &mut App, c: char) {
+    if app.config.panel.quick_search_filter {
+        filter_type(app, c);
+        return;
+    }
     let mut candidate = app.active_panel().quick.buffer.clone();
     candidate.push(c);
     // Asked of the candidate before it is committed. `move_cursor_to_match`
@@ -81,8 +85,59 @@ pub(super) fn type_into_quick_search(app: &mut App, c: char) {
     app.active_panel_mut().quick.push(c);
 }
 
+/// `quick_search_filter` on: narrow the listing to the matches instead of
+/// jumping. A character that would leave nothing matched is refused and undone,
+/// exactly as the jump behaviour refuses one that matches nothing, so the
+/// buffer keeps whatever last matched.
+fn filter_type(app: &mut App, c: char) {
+    app.active_panel_mut().quick.push(c);
+    refilter(app);
+    let nothing_left = app
+        .active_panel()
+        .active_tab()
+        .entries
+        .iter()
+        .all(|e| e.is_parent);
+    if nothing_left {
+        let candidate = app.active_panel().quick.buffer.clone();
+        app.active_panel_mut().quick.pop();
+        refilter(app);
+        let case = app.config.panel.quick_search_case;
+        app.message = Some(format!(
+            "no match: {candidate} {}",
+            quicksearch::case_indicator(&candidate, case)
+        ));
+    }
+}
+
+/// Re-apply the quick-search filter to the active panel from the current
+/// buffer, or restore the whole listing when the buffer is empty.
+pub(super) fn refilter(app: &mut App) {
+    let mode = app.config.panel.quick_search;
+    let case = app.config.panel.quick_search_case;
+    let query = app.active_panel().quick.buffer.clone();
+    let tab = app.active_panel_mut().active_tab_mut();
+    if query.is_empty() {
+        tab.clear_filter();
+    } else {
+        tab.filter_to(|e| quicksearch::quick_match(&e.name, &query, mode, case));
+    }
+    let rows = app.active_panel().view_rows;
+    app.active_panel_mut()
+        .active_tab_mut()
+        .scroll_into_view(rows);
+    app.note_quick_view_cursor();
+}
+
 /// Move the cursor to the first entry matching the current buffer, or flash.
+///
+/// In filter mode this re-narrows the listing instead, which is what
+/// `Backspace` wants after it widens the query.
 pub(super) fn rematch(app: &mut App) {
+    if app.config.panel.quick_search_filter {
+        refilter(app);
+        return;
+    }
     let query = app.active_panel().quick.buffer.clone();
     if query.is_empty() {
         return;
@@ -230,6 +285,10 @@ pub(super) fn clear_search_then_marks(app: &mut App) {
     let panel = app.active_panel_mut();
     let had_buffer = !panel.quick.is_empty();
     panel.quick.clear();
+    // In filter mode the whole listing was narrowed to the matches; `Esc`
+    // brings it back with the cursor on the file that was reached. A no-op when
+    // nothing was filtered, so it is safe on every `Esc`.
+    panel.active_tab_mut().clear_filter();
     if had_buffer {
         return;
     }

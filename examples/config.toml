@@ -37,6 +37,11 @@ quick_search       = "prefix"        # prefix | substring | fuzzy
 #   sensitive   - "tho" matches thorin only
 #   smart       - insensitive until you type an uppercase letter
 quick_search_case  = "smart"         # insensitive | sensitive | smart
+# Off, quick search jumps the cursor to the first match and leaves the rest of
+# the listing in place. On, it filters the listing to the matches as you type,
+# and the arrow keys walk what is left; Esc or clearing the search brings the
+# whole listing back with the cursor on the file you had reached.
+quick_search_filter = false          # true | false
 # Bare digits feed quick search; tabs are on alt+1..alt+9. Set to "tabs" to
 # swap that round (digits switch tabs, ctrl+s starts a search).
 digit_keys         = "quick_search"  # quick_search | tabs

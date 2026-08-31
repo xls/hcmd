@@ -275,6 +275,9 @@ pub struct PanelConfig {
     pub quick_search: QuickSearchMode,
     /// How case is handled.
     pub quick_search_case: QuickSearchCase,
+    /// Whether typing filters the listing to matches instead of only jumping
+    /// to the first one. Off by default: the classic type-to-jump.
+    pub quick_search_filter: bool,
     /// What bare digits do.
     pub digit_keys: DigitKeys,
     /// Nine, which is what makes single-key switching sufficient.
@@ -308,6 +311,7 @@ impl Default for PanelConfig {
             date_format: "%Y-%m-%d %H:%M".to_string(),
             quick_search: QuickSearchMode::Prefix,
             quick_search_case: QuickSearchCase::Smart,
+            quick_search_filter: false,
             digit_keys: DigitKeys::QuickSearch,
             max_tabs: 9,
             show_tab_bar: TabBar::Auto,

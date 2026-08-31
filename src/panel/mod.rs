@@ -462,6 +462,11 @@ pub struct Tab {
     pub marks: HashSet<String>,
     /// This tab's sort order.
     pub sort: SortState,
+    /// The full listing saved while a quick-search filter is narrowing the
+    /// view. `None` when nothing is filtered - the ordinary case. Held so the
+    /// filter can widen and, on `Esc`, restore the whole listing without a
+    /// re-read. Reset whenever a fresh listing replaces `entries`.
+    prefilter: Option<Vec<Entry>>,
     /// The tab-bar label.
     pub title: String,
     /// True while a listing is still streaming in.
@@ -565,6 +570,7 @@ impl Tab {
             scroll: 0,
             marks: HashSet::new(),
             sort: SortState::default(),
+            prefilter: None,
             loading: false,
             generation: 0,
             pending_select: None,
@@ -578,6 +584,49 @@ impl Tab {
     /// The entry under the cursor, or `None` for an empty listing.
     pub fn current(&self) -> Option<&Entry> {
         self.entries.get(self.cursor)
+    }
+
+    /// True while a quick-search filter is narrowing the listing.
+    pub const fn is_quick_filtered(&self) -> bool {
+        self.prefilter.is_some()
+    }
+
+    /// Narrow the listing to the entries a predicate keeps, saving the full
+    /// listing the first time so it can be restored. The `..` row is always
+    /// kept, and the filter is always re-applied to the *saved* listing rather
+    /// than the already-narrowed one, so widening the query brings rows back.
+    /// The cursor lands on the first real entry that survives.
+    pub fn filter_to(&mut self, keep: impl Fn(&Entry) -> bool) {
+        if self.prefilter.is_none() {
+            self.prefilter = Some(self.entries.clone());
+        }
+        let Some(source) = self.prefilter.as_ref() else {
+            return;
+        };
+        let filtered: Vec<Entry> = source
+            .iter()
+            .filter(|e| e.is_parent || keep(e))
+            .cloned()
+            .collect();
+        self.entries = filtered;
+        self.cursor = self.entries.iter().position(|e| !e.is_parent).unwrap_or(0);
+        self.scroll = 0;
+    }
+
+    /// Restore the full listing a filter saved, putting the cursor back on the
+    /// entry it was on so ending a filter keeps the file the user had reached.
+    /// A no-op when nothing was filtered.
+    pub fn clear_filter(&mut self) {
+        let selected = self.current().map(|e| e.name.clone());
+        let Some(full) = self.prefilter.take() else {
+            return;
+        };
+        self.entries = full;
+        if let Some(name) = selected
+            && let Some(index) = self.entries.iter().position(|e| e.name == name)
+        {
+            self.cursor = index;
+        }
     }
 
     /// True when the entry under the cursor is marked.
@@ -651,6 +700,10 @@ impl Tab {
     pub fn clear_entries(&mut self) {
         self.entries.clear();
         self.sorted_rows = 0;
+        // A fresh listing is about to arrive, so the filter's saved copy of the
+        // old one is stale: drop it rather than restore it. The quick-search
+        // buffer is cleared on the same read.
+        self.prefilter = None;
     }
 
     /// Try to satisfy [`Tab::pending_select`] against the entries read so far.
@@ -1566,6 +1619,58 @@ fn git_sort_key(entry: &Entry) -> u8 {
 
 #[cfg(test)]
 mod tests {
+    use crate::vfs::Entry;
+
+    fn listed(names: &[&str]) -> Tab {
+        let mut tab = Tab::new(VfsPath::local("/x"));
+        tab.entries = std::iter::once(Entry::parent_entry())
+            .chain(names.iter().map(|n| Entry::file(*n)))
+            .collect();
+        tab
+    }
+
+    #[test]
+    fn a_filter_narrows_to_the_matches_and_keeps_the_parent_row() {
+        let mut tab = listed(&["alpha", "beta", "album", "gamma"]);
+        tab.cursor = 4;
+        tab.filter_to(|e| e.name.starts_with("al"));
+        let shown: Vec<&str> = tab.entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(shown, ["..", "alpha", "album"], "only the matches, plus ..");
+        assert_eq!(tab.cursor, 1, "the cursor lands on the first real match");
+        assert!(tab.is_quick_filtered());
+    }
+
+    #[test]
+    fn widening_a_filter_brings_rows_back_from_the_saved_listing() {
+        let mut tab = listed(&["alpha", "beta", "album"]);
+        tab.filter_to(|e| e.name.starts_with("alp"));
+        assert_eq!(tab.entries.len(), 2, "'..' and alpha");
+        // A shorter query filters the *original* listing, not the narrowed one.
+        tab.filter_to(|e| e.name.starts_with("al"));
+        let shown: Vec<&str> = tab.entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(shown, ["..", "alpha", "album"]);
+    }
+
+    #[test]
+    fn clearing_a_filter_restores_the_listing_on_the_reached_file() {
+        let mut tab = listed(&["alpha", "beta", "album", "gamma"]);
+        tab.filter_to(|e| e.name.starts_with("al"));
+        tab.cursor = 2; // "album" within the filtered view
+        tab.clear_filter();
+        assert!(!tab.is_quick_filtered());
+        let shown: Vec<&str> = tab.entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(
+            shown,
+            ["..", "alpha", "beta", "album", "gamma"],
+            "whole listing back"
+        );
+        assert_eq!(
+            tab.entries.get(tab.cursor).map(|e| e.name.as_str()),
+            Some("album"),
+            "cursor stays on the file that was reached"
+        );
+    }
+
     /// the design leaves the case tiebreak unstated. It matters because quick
     /// search walks this ordering, so it is pinned to what the
     /// user's own `ls` does under `en_US.UTF-8`: lowercase first.

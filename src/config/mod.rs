@@ -690,6 +690,7 @@ static CONFIG_SCHEMA: std::sync::LazyLock<Schema> = std::sync::LazyLock::new(|| 
             "date_format",
             "quick_search",
             "quick_search_case",
+            "quick_search_filter",
             "digit_keys",
             "max_tabs",
             "show_tab_bar",
