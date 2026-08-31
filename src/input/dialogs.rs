@@ -406,6 +406,11 @@ pub fn dialog_answered(app: &mut App, id: DialogId, job: Option<JobId>, result: 
         (DialogId::CopyMove, DialogResult::CopyMove(answer)) => {
             files::copy_move_accepted(app, answer);
         }
+        // `synchronize`. The dry run was the dialog; the plan the user left it
+        // with becomes the copy and delete jobs, queued together.
+        (DialogId::Synchronize, DialogResult::Synchronize(plan)) => {
+            files::synchronize_accepted(app, plan);
+        }
         // `Alt+F5`. The archive does not exist yet and making
         // one is filesystem work, so what the dialog leaves behind is the
         // request; the event loop creates it and then queues the copy, for the

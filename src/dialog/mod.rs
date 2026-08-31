@@ -200,6 +200,10 @@ pub enum DialogResult {
     Secret(Box<SecretAnswer>),
     /// the host book was edited: the list as the dialog left it.
     Hosts(Vec<crate::remote::hosts::SavedHost>),
+    /// The synchronise plan the user accepted, ready to become copy and delete
+    /// jobs. The plan itself, not an answer struct: nothing the dialog decides
+    /// that [`crate::ops::sync::SyncPlan::into_jobs`] does not read.
+    Synchronize(Box<crate::ops::sync::SyncPlan>),
 }
 
 impl DialogResult {

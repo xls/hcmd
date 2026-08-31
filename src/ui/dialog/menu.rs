@@ -139,13 +139,14 @@ const FILES: [Action; 15] = [
 
 /// the `Mark` menu: the marking, the compare and the clipboard, which
 /// are the operations that act on a selection.
-const MARK: [Action; 10] = [
+const MARK: [Action; 11] = [
     Action::SelectAll,
     Action::InvertSelection,
     Action::SelectMask,
     Action::UnselectMask,
     Action::CompareDirs,
     Action::CompareFiles,
+    Action::Synchronize,
     Action::DirSize,
     Action::ClipboardCopy,
     Action::ClipboardCut,
