@@ -2081,13 +2081,16 @@ mod tests {
     fn a_marked_entry_still_shows_its_mark_under_the_cursor() {
         // There is no mark glyph, so a mark under the cursor needs its own
         // indicator - a cursor row that showed nothing made a marked entry
-        // indistinguishable from an unmarked one. The bar stays `cursor_bg`
-        // with `cursor_fg` text (its tested-legible pair, unlike `marked_fg`
-        // on the bright bar) and the mark shows as an underline.
+        // indistinguishable from an unmarked one. The bar's BACKGROUND stays
+        // `cursor_bg`; only the foreground changes, to a dark accent of the mark
+        // colour that reads on the bar in every theme.
         let mut a = app();
         let slot = |c: crate::config::Rgb| Color::from_u32(u32::from_be_bytes([0, c.r, c.g, c.b]));
         let cursor_bg = slot(a.theme.panel.cursor_bg);
-        let cursor_fg = slot(a.theme.panel.cursor_fg);
+        let accent = slot(crate::ui::panelview::dark_mark_accent(
+            a.theme.panel.marked_fg,
+            a.theme.panel.cursor_bg,
+        ));
         {
             let tab = a.left.active_tab_mut();
             tab.move_to(1, 10);
@@ -2097,15 +2100,11 @@ mod tests {
         let marked_cursor_cells = buf
             .content()
             .iter()
-            .filter(|c| {
-                c.bg == cursor_bg
-                    && c.fg == cursor_fg
-                    && c.modifier.contains(ratatui::style::Modifier::UNDERLINED)
-            })
+            .filter(|c| c.bg == cursor_bg && c.fg == accent)
             .count();
         assert!(
             marked_cursor_cells > 0,
-            "the marked entry under the cursor lost its underline accent"
+            "the marked entry under the cursor lost its dark mark accent on the unchanged bar"
         );
     }
 

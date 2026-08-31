@@ -504,20 +504,19 @@ fn draw_entries(
         let fg = filetype::entry_fg(entry, marked, &app.config, theme);
 
         let style = if is_cursor {
-            // The cursor bar is ALWAYS `cursor_bg`; it never changes colour.
-            // The file-type colour is dropped on it so the bar stays legible at
-            // 16 colours. A marked file under the bar keeps the bar and takes
-            // the bar's own text colour with bold and an underline as the mark
-            // accent: `marked_fg` painted as text here was a bright colour on a
-            // bright bar - two highlights on top of each other - and barely a
-            // difference in almost every theme, while `cursor_fg` on
-            // `cursor_bg` is the theme's own tested-legible pair.
-            let base = Style::new().bg(color(cursor_bg)).fg(color(cursor_fg));
-            if marked {
-                base.add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+            // The cursor bar's BACKGROUND is ALWAYS `cursor_bg` and never
+            // changes; only the foreground does. A marked file under the bar
+            // takes a dark accent of the mark colour - the same hue, darkened
+            // just enough to read on this theme's bar. A fixed darkening does
+            // not work: a mid-tone bar and a half-dark yellow land on the same
+            // luminance and vanish, so the darkening is chosen per theme to
+            // clear a real contrast bar.
+            let fg = if marked {
+                dark_mark_accent(theme.panel.marked_fg, cursor_bg)
             } else {
-                base
-            }
+                cursor_fg
+            };
+            Style::new().bg(color(cursor_bg)).fg(color(fg))
         } else {
             Style::new().bg(color(theme.panel.bg)).fg(color(fg))
         };
@@ -543,6 +542,87 @@ fn draw_entries(
             Rect::new(area.x, y, area.width, 1),
         );
     }
+}
+
+/// A dark accent of the mark colour that reads on the cursor bar.
+///
+/// The mark's own hue, scaled toward black by as little as it takes to clear a
+/// contrast bar against `bar`, so a marked file under the cursor keeps the mark
+/// colour rather than the bar's plain text. A fixed darkening does not work: a
+/// mid-tone bar and a half-dark yellow can share a luminance and vanish, so the
+/// amount is chosen per theme. Where the bar is too dark for any dark accent to
+/// read, the mark is lightened toward white instead.
+pub(crate) fn dark_mark_accent(mark: Rgb, bar: Rgb) -> Rgb {
+    const TARGET: f64 = 3.5;
+    // From the full mark colour toward black; the lightest step that reads
+    // keeps the most of the hue.
+    for step in (0..=20).rev() {
+        let candidate = scale_rgb(mark, f64::from(step) / 20.0);
+        if contrast_ratio(candidate, bar) >= TARGET {
+            return candidate;
+        }
+    }
+    for step in 1..=20 {
+        let candidate = lighten_rgb(mark, f64::from(step) / 20.0);
+        if contrast_ratio(candidate, bar) >= TARGET {
+            return candidate;
+        }
+    }
+    mark
+}
+
+/// Clamp a computed channel into a byte.
+fn channel_byte(value: f64) -> u8 {
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "clamped to 0..=255 before the cast, so nothing is lost"
+    )]
+    {
+        value.round().clamp(0.0, 255.0) as u8
+    }
+}
+
+/// Scale a colour toward black: `f == 1.0` is the colour, `f == 0.0` is black.
+fn scale_rgb(c: Rgb, f: f64) -> Rgb {
+    let s = |v: u8| channel_byte(f64::from(v) * f);
+    Rgb {
+        r: s(c.r),
+        g: s(c.g),
+        b: s(c.b),
+    }
+}
+
+/// Blend a colour toward white: `f == 0.0` is the colour, `f == 1.0` is white.
+fn lighten_rgb(c: Rgb, f: f64) -> Rgb {
+    let l = |v: u8| {
+        let v = f64::from(v);
+        channel_byte(v + (255.0 - v) * f)
+    };
+    Rgb {
+        r: l(c.r),
+        g: l(c.g),
+        b: l(c.b),
+    }
+}
+
+/// The relative luminance of a colour, for [`contrast_ratio`].
+fn relative_luminance(c: Rgb) -> f64 {
+    fn channel(v: u8) -> f64 {
+        let s = f64::from(v) / 255.0;
+        if s <= 0.03928 {
+            s / 12.92
+        } else {
+            ((s + 0.055) / 1.055).powf(2.4)
+        }
+    }
+    0.2126 * channel(c.r) + 0.7152 * channel(c.g) + 0.0722 * channel(c.b)
+}
+
+/// The WCAG contrast ratio between two colours.
+fn contrast_ratio(a: Rgb, b: Rgb) -> f64 {
+    let (la, lb) = (relative_luminance(a), relative_luminance(b));
+    (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
 }
 
 /// The formatted, padded cells of one entry, joined by single spaces.
