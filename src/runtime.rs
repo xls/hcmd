@@ -1053,6 +1053,25 @@ pub async fn run_connect(
             )
             .await
         }
+        // WebDAV is synchronous and stateless: every request carries its own
+        // credentials, so there is no session to hold and no actor to run. The
+        // whole of it is one `spawn_blocking`.
+        Protocol::Dav | Protocol::Davs => {
+            let target = target.clone();
+            let password = answer.password;
+            tokio::task::spawn_blocking(move || {
+                let secret = password.as_ref().map(crate::remote::secret::Secret::expose);
+                let fs = crate::remote::dav::DavFs::connect(&target, &target.user, secret)?;
+                let start = fs.start_dir().to_string();
+                Ok((Arc::new(fs) as Arc<dyn RemoteTransport>, start))
+            })
+            .await
+            .unwrap_or_else(|join| {
+                Err(crate::error::Error::msg(format!(
+                    "the connection task did not finish: {join}"
+                )))
+            })
+        }
     };
     let (transport, start_dir) = match opened {
         Ok(pair) => pair,

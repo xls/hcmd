@@ -249,6 +249,11 @@ pub fn is_credential_free(protocol: super::Protocol, user: &str) -> bool {
             is_anonymous(user)
         }
         super::Protocol::Smb => super::smb::connect::is_guest(user),
+        // A WebDAV server may well be open, and an empty user is how somebody
+        // says so. The request is made without an `Authorization` header and
+        // the server answers 401 if it wanted one, which is a better question
+        // to ask the network than to ask the user in advance.
+        super::Protocol::Dav | super::Protocol::Davs => user.is_empty(),
     }
 }
 

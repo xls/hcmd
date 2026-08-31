@@ -115,6 +115,13 @@ Read-only is the feature, not a stage of one: there is no write path to disable.
   an archive that lives on the remote.
 - Saved connections in `hosts.toml`.
 
+- **WebDAV**, over `dav://`, `davs://`, or the `https://` URL you copied out of
+  a browser. Listing, reading, writing, `MKCOL`, `DELETE` and server-side
+  `MOVE` for rename. No locking: holding and refreshing a lock for as long as a
+  panel is open is a background obligation this program does not otherwise
+  have, and without it two writers can overwrite each other exactly as they can
+  over FTP or on a share.
+
 ## Search
 
 - By name (glob or regex) and by content, over local trees, remote connections

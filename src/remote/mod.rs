@@ -40,6 +40,7 @@
 
 pub mod auth;
 pub mod connect;
+pub mod dav;
 pub mod fs;
 pub mod ftp;
 pub mod hosts;
@@ -130,6 +131,10 @@ pub enum Protocol {
     FtpsImplicit,
     /// SMB2/SMB3, the protocol a Windows share and a NAS box speak.
     Smb,
+    /// WebDAV over HTTP.
+    Dav,
+    /// WebDAV over HTTPS, which is how anybody sensible runs it.
+    Davs,
 }
 
 impl Default for Protocol {
@@ -148,6 +153,8 @@ impl Protocol {
         Self::Ftps,
         Self::FtpsImplicit,
         Self::Smb,
+        Self::Dav,
+        Self::Davs,
     ];
 
     /// `"sftp"`, `"ftp"`, `"ftps"`, `"ftps-implicit"`: the `hosts.toml` value
@@ -159,16 +166,20 @@ impl Protocol {
             Self::Ftps => "ftps",
             Self::FtpsImplicit => "ftps-implicit",
             Self::Smb => "smb",
+            Self::Dav => "dav",
+            Self::Davs => "davs",
         }
     }
 
-    /// 22, 21, 21, 990, 445.
+    /// 22, 21, 21, 990, 445, 80, 443.
     pub const fn default_port(self) -> u16 {
         match self {
             Self::Sftp => 22,
             Self::Ftp | Self::Ftps => 21,
             Self::FtpsImplicit => 990,
             Self::Smb => 445,
+            Self::Dav => 80,
+            Self::Davs => 443,
         }
     }
 
@@ -183,6 +194,8 @@ impl Protocol {
             Self::Ftp => "ftp",
             Self::Ftps | Self::FtpsImplicit => "ftps",
             Self::Smb => "smb",
+            Self::Dav => "dav",
+            Self::Davs => "davs",
         }
     }
 
@@ -190,7 +203,12 @@ impl Protocol {
     pub const fn verifies_host_key(self) -> bool {
         match self {
             Self::Sftp => true,
-            Self::Ftp | Self::Ftps | Self::FtpsImplicit | Self::Smb => false,
+            // TLS verifies a certificate rather than a host key, which is a
+            // different question with a different answer and a different
+            // prompt: the trust store answers it, not the user.
+            Self::Ftp | Self::Ftps | Self::FtpsImplicit | Self::Smb | Self::Dav | Self::Davs => {
+                false
+            }
         }
     }
 
@@ -209,6 +227,13 @@ impl Protocol {
             // `cifs` is the same protocol under the name a mount table and a
             // decade of documentation still use for it.
             "smb" | "cifs" => Some(Self::Smb),
+            // `http` and `https` are accepted as well as `dav` and `davs`,
+            // because a WebDAV endpoint is nearly always written as the URL
+            // somebody copied out of a browser or a Nextcloud settings page.
+            // Nothing else in this program speaks HTTP to a panel, so there is
+            // no other reading of those two.
+            "dav" | "http" => Some(Self::Dav),
+            "davs" | "https" | "webdav" => Some(Self::Davs),
             _ => None,
         }
     }
@@ -568,13 +593,22 @@ mod tests {
             Some(Protocol::FtpsImplicit)
         );
         assert_eq!(Protocol::parse("ssh"), Some(Protocol::Sftp));
-        assert_eq!(Protocol::parse("http"), None);
+        assert_eq!(Protocol::parse("http"), Some(Protocol::Dav));
+        assert_eq!(Protocol::parse("https"), Some(Protocol::Davs));
+        assert_eq!(Protocol::parse("dav"), Some(Protocol::Dav));
+        assert_eq!(Protocol::parse("gopher"), None);
     }
 
     #[test]
     fn only_sftp_verifies_a_host_key() {
         assert!(Protocol::Sftp.verifies_host_key());
-        for other in [Protocol::Ftp, Protocol::Ftps, Protocol::FtpsImplicit] {
+        for other in [
+            Protocol::Ftp,
+            Protocol::Ftps,
+            Protocol::FtpsImplicit,
+            Protocol::Dav,
+            Protocol::Davs,
+        ] {
             assert!(!other.verifies_host_key(), "{other} has no host key");
         }
     }
