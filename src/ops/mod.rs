@@ -66,7 +66,6 @@ pub mod pack;
 pub mod queue;
 pub mod resize;
 pub mod split;
-pub mod sync;
 pub mod walk;
 
 use std::fmt;

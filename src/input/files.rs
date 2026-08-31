@@ -1026,26 +1026,6 @@ pub(super) fn open_permissions(app: &mut App) {
     )));
 }
 
-/// `synchronize` accepted: turn the plan into copy and delete jobs.
-///
-/// The deletions go to the trash, not past it: a synchronise that removes the
-/// wrong file is the expensive mistake this feature exists to make visible
-/// first, and the trash is the one place that mistake is still recoverable.
-/// The jobs are queued rather than run at once so a large synchronise goes
-/// through admission control like any other batch.
-pub(super) fn synchronize_accepted(app: &mut App, plan: &crate::ops::sync::SyncPlan) {
-    let jobs = plan.into_jobs(true);
-    if jobs.is_empty() {
-        app.message = Some("Synchronize: nothing to do".to_string());
-        return;
-    }
-    let count = jobs.len();
-    for spec in jobs {
-        app.queue_job(spec);
-    }
-    app.message = Some(format!("Synchronize: queued {count} job(s)"));
-}
-
 /// `Alt+F9` / `Ctrl+X Q`: the background queue view.
 pub(super) fn open_job_queue(app: &mut App) {
     let jobs = app.jobs.rows().to_vec();

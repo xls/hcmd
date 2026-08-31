@@ -30,7 +30,6 @@ pub mod rename;
 pub mod resize;
 pub mod search;
 pub mod settings;
-pub mod synchronize;
 pub mod update;
 pub mod viewer;
 
@@ -820,8 +819,6 @@ pub struct App {
     pending_chmod: Option<crate::app::links::ChmodRequest>,
     /// A directory whose git flags are being computed off the loop.
     pending_git_status: Option<crate::app::reads::GitStatusRequest>,
-    /// A synchronise whose plan is being walked off the loop.
-    pending_sync: Option<crate::app::synchronize::SyncRequest>,
     /// A password to put in the keyring, from the host form.
     pending_keyring: Option<crate::app::links::KeyringWrite>,
     /// A password typed into the host form, between the form being answered
@@ -963,7 +960,6 @@ impl App {
             pending_link: None,
             pending_chmod: None,
             pending_git_status: None,
-            pending_sync: None,
             pending_keyring: None,
             pending_host_secret: None,
             editor_size_pending: None,

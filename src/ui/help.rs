@@ -101,7 +101,6 @@ const DIALOG_ORDER: &[DialogId] = &[
     DialogId::JobSummary,
     DialogId::Pack,
     DialogId::Resize,
-    DialogId::Synchronize,
     DialogId::MultiRename,
     DialogId::RenameResult,
     DialogId::Find,
@@ -1010,14 +1009,6 @@ fn dialog_help(id: DialogId) -> (&'static str, &'static str) {
              compression; and a prefix and postfix for the new names. The\n\
              images are written into the other panel's directory, and a name\n\
              already there goes through the usual conflict dialog.",
-        ),
-        DialogId::Synchronize => (
-            "Synchronize directories",
-            "Ctrl+Shift+F2. Compare the two panels' trees and show every copy\n\
-             and deletion it would make, before it makes any. Space cycles one\n\
-             row through its choices; Tab changes the direction - Both never\n\
-             deletes, the two Mirror directions make one side match the other.\n\
-             Enter applies exactly what is listed; Esc changes nothing.",
         ),
         DialogId::MultiRename => (
             "Multi-rename",

@@ -349,9 +349,6 @@ pub async fn event_loop() -> Result<()> {
     let (link_tx, mut link_rx) =
         mpsc::channel::<crate::app::links::LinkOutcome>(crate::app::links::LINK_CHANNEL_DEPTH);
     let (git_tx, mut git_rx) = mpsc::channel::<crate::app::reads::GitStatusEvent>(4);
-    let (sync_tx, mut sync_rx) = mpsc::channel::<crate::app::synchronize::SyncOutcome>(
-        crate::app::synchronize::SYNC_CHANNEL_DEPTH,
-    );
     // The resize action queued one, and this is the header read that tells the
     // dialog what it is about to work on. Named by action rather than by key:
     // every binding is the user's to change, so a comment that says `Shift+R`
@@ -396,7 +393,6 @@ pub async fn event_loop() -> Result<()> {
         app.service_file_info(&info_tx);
         app.service_links(&link_tx);
         service_git_status(&mut app, &git_tx);
-        app.service_synchronize(&sync_tx);
         // Text a keystroke asked for: the `OSC 52` write is the loop's, for
         // the same reason the viewer's copy is.
         if let Some(text) = app.take_clipboard_text() {
@@ -741,25 +737,6 @@ pub async fn event_loop() -> Result<()> {
                 // A directory's git flags arrived; merge them into the rows
                 // that asked, if that listing is still on screen.
                 app.apply_git_status_event(event);
-            }
-            Some(outcome) = sync_rx.recv() => {
-                // The two trees were walked. A plan with something in it opens
-                // the dialog; an empty one and a failed walk are each one
-                // status line, because a dialog listing nothing is not the
-                // answer to "what would synchronising do".
-                match outcome.result {
-                    Ok(plan) if !plan.is_empty() => app.push_dialog(Box::new(
-                        crate::ui::dialog::synchronize::SynchronizeDialog::new(
-                            &outcome.left,
-                            &outcome.right,
-                            plan,
-                        ),
-                    )),
-                    Ok(_) => {
-                        app.message = Some("Synchronize: the two trees are already the same".to_string());
-                    }
-                    Err(err) => app.message = Some(format!("Synchronize: {err}")),
-                }
             }
             Some(outcome) = link_rx.recv() => {
                 // One system call, already made. What is left is a sentence

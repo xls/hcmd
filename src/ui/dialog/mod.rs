@@ -68,7 +68,6 @@ pub mod rename;
 pub mod renameresult;
 pub mod resize;
 pub mod summary;
-pub mod synchronize;
 pub mod tabbed;
 pub mod template;
 pub mod theme;

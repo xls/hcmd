@@ -43,7 +43,6 @@ delete_permanent  = ["shift+f8", "shift+delete"]
 # and e reads as edit.
 context_menu      = ["shift+f10", "alt+k"]
 compare_dirs      = ["shift+f2"]
-synchronize       = ["ctrl+shift+f2", "alt+shift+s"]
 # The git history of the panel's directory: commits as folders, the files each
 # changed inside them, readable and diffable at that commit. Alt+V.
 git_history       = ["alt+v"]

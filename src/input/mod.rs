@@ -197,9 +197,6 @@ pub enum DialogId {
     FileSummary,
     /// `Shift+R`: resize and convert the marked images.
     Resize,
-    /// `synchronize`: the plan of what to copy and delete between two trees,
-    /// shown before anything happens and applied only on accept.
-    Synchronize,
 }
 
 impl DialogId {
@@ -255,7 +252,6 @@ impl DialogId {
             Self::Template => "template",
             Self::FileSummary => "file_summary",
             Self::Resize => "resize",
-            Self::Synchronize => "synchronize",
         }
     }
 }
@@ -1213,7 +1209,6 @@ pub(crate) fn run_action(app: &mut App, action: Action, press: KeyPress) -> Resu
 
         // -------------------------------------------- the design compare -
         A::CompareDirs => app.compare_lists(),
-        A::Synchronize => app.request_synchronize(),
         A::GitHistory => app.open_git_history(),
         A::CompareFiles => app.compare_files(),
         A::DiffFiles => app.diff_files(),
