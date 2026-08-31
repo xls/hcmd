@@ -879,6 +879,18 @@ fn dialog_help(id: DialogId) -> (&'static str, &'static str) {
             "Create directory",
             "F7. Intermediate directories are created with it.",
         ),
+        DialogId::Split => (
+            "Split",
+            "How large each part should be: 100M, 700M, 4G, or a plain number\n\
+             of bytes. The parts are written to the other panel as\n\
+             name.001, name.002 and so on, which is what every tool that\n\
+             reads split files expects.\n\
+             \n\
+             Merging starts at the first part and finds the rest by counting\n\
+             up from it. It stops at the first number that is missing rather\n\
+             than producing a short file, because a short file looks like a\n\
+             file and is not one.",
+        ),
         DialogId::Checksum => (
             "Checksum",
             "Names the checksum file to write. The extension chooses the\n\

@@ -480,6 +480,8 @@ pub(super) fn open_copy_move(app: &mut App, kind: JobKind, same_dir: bool) {
         | JobKind::Compare
         | JobKind::CompareFiles
         | JobKind::Checksum { .. }
+        | JobKind::Split
+        | JobKind::Merge
         | JobKind::Resize => false,
     };
     if takes_the_source_away && !app.active_panel().active_tab().caps.writable {
@@ -857,6 +859,63 @@ pub(super) fn verify_checksum(app: &mut App) {
         vec![path],
         None,
     ));
+}
+
+/// Split the file under the cursor into numbered parts.
+///
+/// The size is asked for because there is no sensible default: a part that
+/// fits a medium is the whole point, and which medium is not something this
+/// program can know. The parts go into the other panel's directory, as `F5`
+/// and `Alt+F5` do.
+pub(super) fn open_split(app: &mut App) {
+    let tab = app.active_panel().active_tab();
+    let Some(entry) = tab.current().filter(|e| !e.is_parent && !e.is_dir()) else {
+        app.message = Some("no file under the cursor to split".to_string());
+        return;
+    };
+    let Some(path) = tab.current_path() else {
+        app.message = Some("that row has no path to split".to_string());
+        return;
+    };
+    let size = entry.size;
+    let name = entry.name.clone();
+    let target = app.panel(app.active_side.other()).active_tab().path.clone();
+    app.draft.sources = vec![path];
+    app.draft.target = Some(target);
+    app.push_dialog(Box::new(InputDialog::new(
+        DialogId::Split,
+        "Split",
+        format!(
+            "Part size for {name} ({}B):",
+            crate::panel::format::human_size(size)
+        ),
+        "100M",
+    )));
+}
+
+/// Merge the numbered set the cursor is on.
+///
+/// Only from the **first** part: merging from the middle would produce a file
+/// missing its head, which looks like a file and is not one. No dialog, since
+/// the set names itself and the output name is the parts' own stem.
+pub(super) fn merge_parts(app: &mut App) {
+    let tab = app.active_panel().active_tab();
+    let Some(entry) = tab.current().filter(|e| !e.is_parent && !e.is_dir()) else {
+        app.message = Some("no file under the cursor to merge".to_string());
+        return;
+    };
+    if !crate::ops::split::is_first_part(&entry.name) {
+        app.message = Some(format!(
+            "{}: merge starts at the first part, the one ending .001",
+            entry.name
+        ));
+        return;
+    }
+    let Some(path) = tab.current_path() else {
+        app.message = Some("that row has no path to merge".to_string());
+        return;
+    };
+    app.request_job(JobSpec::new(JobKind::Merge, vec![path], None));
 }
 
 /// `Alt+F9` / `Ctrl+X Q`: the background queue view.

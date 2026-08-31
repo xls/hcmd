@@ -38,6 +38,13 @@ is stated rather than glossed over.
   same file, or the offset at which they stop agreeing.
 - Copy the full path of the selection to the system clipboard, for pasting into
   a terminal or another program.
+- Checksums: write and verify SHA-256 (`.sha256`) and CRC32 (`.sfv`). The
+  formats are the ones that already exist, so a file this writes verifies with
+  `sha256sum -c` and one `sha256sum` wrote verifies here. A line naming a file
+  outside the list's own directory is refused rather than followed.
+- Split a file into numbered parts and merge them back. `name.001`, `name.002`,
+  as every other tool writes them. Merging starts at the first part and stops
+  at the first number missing rather than producing a short file.
 - Resize and convert images, with the source's own pixel size, format and
   channel count carried through rather than promoted.
 

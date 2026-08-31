@@ -109,6 +109,8 @@ pub enum DialogId {
     /// The copy/move dialog's `+ F7`: a directory **for the target**,
     /// which is not the same directory as `F7`'s.
     MkdirForTarget,
+    /// How large each part of a `split_file` should be.
+    Split,
     /// Naming the checksum file `checksum_create` is about to write. The
     /// extension chooses the digest, so `.sha256` and `.sfv` are the same
     /// question answered two ways.
@@ -207,6 +209,7 @@ impl DialogId {
             Self::Mkdir => "mkdir",
             Self::MkdirForTarget => "mkdir_for_target",
             Self::Checksum => "checksum",
+            Self::Split => "split",
             Self::Rename => "rename",
             Self::GotoPath => "goto_path",
             Self::GotoOffset => "goto_offset",
@@ -1198,6 +1201,8 @@ pub(crate) fn run_action(app: &mut App, action: Action, press: KeyPress) -> Resu
         A::DiffFiles => app.diff_files(),
         A::ChecksumCreate => files::open_checksum(app),
         A::ChecksumVerify => files::verify_checksum(app),
+        A::SplitFile => files::open_split(app),
+        A::MergeFile => files::merge_parts(app),
 
         // ------------------------------------------ the design quick view
         A::QuickView => app.quick_view_toggle(),

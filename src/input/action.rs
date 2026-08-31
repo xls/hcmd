@@ -184,6 +184,8 @@ actions! {
     ToggleDiff        = "toggle_diff",       V09, "Swap mode 3 between the document and the diff";
     ChecksumCreate    = "checksum_create",   V09, "Write a checksum file for the selection";
     ChecksumVerify    = "checksum_verify",   V09, "Check the files a checksum file names";
+    SplitFile         = "split_file",        V09, "Split the file into numbered parts";
+    MergeFile         = "merge_file",        V09, "Merge a numbered set back together";
 
     DriveLeft         = "drive_left",        V07, "Choose a device for the left panel";
     DriveRight        = "drive_right",       V07, "Choose a device for the right panel";

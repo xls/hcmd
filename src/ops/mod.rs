@@ -65,6 +65,7 @@ pub mod open;
 pub mod pack;
 pub mod queue;
 pub mod resize;
+pub mod split;
 pub mod walk;
 
 use std::fmt;
@@ -138,6 +139,10 @@ pub enum JobKind {
     /// it is a separate kind because its answer is a sentence about one pair,
     /// not a set of names to mark.
     CompareFiles,
+    /// Cutting one file into numbered parts.
+    Split,
+    /// Putting a numbered set back together.
+    Merge,
     /// Hashing files and writing a sidecar, or reading one and checking what
     /// it names. [`crate::ops::checksum`] does both; the flag says which.
     Checksum {
@@ -162,6 +167,8 @@ impl JobKind {
             Self::Rename => "rename",
             Self::Compare => "compare",
             Self::CompareFiles => "compare_files",
+            Self::Split => "split",
+            Self::Merge => "merge",
             Self::Checksum { verify: false } => "checksum",
             Self::Checksum { verify: true } => "verify",
             Self::Resize => "resize",
@@ -180,6 +187,8 @@ impl JobKind {
             Self::Rename => "Renaming",
             Self::Compare => "Comparing",
             Self::CompareFiles => "Comparing files",
+            Self::Split => "Splitting",
+            Self::Merge => "Merging",
             Self::Checksum { verify: false } => "Checksumming",
             Self::Checksum { verify: true } => "Verifying",
             Self::Resize => "Resizing",
@@ -372,6 +381,9 @@ pub struct JobOptions {
     /// Set only by `Alt+F5`: this job writes a **new archive** rather than
     /// copying into an existing destination.
     pub pack: Option<PackInto>,
+    /// How many bytes go in each part of a [`JobKind::Split`]. Zero everywhere
+    /// else, and refused there.
+    pub part_size: u64,
     /// Set only by `Shift+R`: what the resize dialog collected.
     ///
     /// It rides here rather than on [`JobSpec`] for the reason [`PackInto`]
@@ -390,6 +402,7 @@ impl Default for JobOptions {
             file_mask: String::new(),
             conflict: None,
             pack: None,
+            part_size: 0,
             resize: None,
         }
     }
@@ -409,6 +422,7 @@ impl JobOptions {
                 Some(ConflictChoice::Overwrite)
             },
             pack: None,
+            part_size: 0,
             resize: None,
         }
     }
@@ -583,6 +597,8 @@ impl JobSummary {
             JobKind::Compare | JobKind::CompareFiles => "compared",
             JobKind::Checksum { verify: false } => "checksummed",
             JobKind::Checksum { verify: true } => "verified",
+            JobKind::Split => "split",
+            JobKind::Merge => "merged",
             JobKind::Resize => "resized",
         };
         let mut out = format!(
@@ -1723,6 +1739,8 @@ pub fn run(vfs: &dyn Vfs, spec: &JobSpec, ctx: &mut JobContext) {
         JobKind::Rename => crate::rename::exec::run(vfs, spec, ctx),
         JobKind::Compare | JobKind::CompareFiles => compare::run(vfs, spec, ctx),
         JobKind::Checksum { verify } => checksum::run(vfs, spec, ctx, verify),
+        JobKind::Split => split::run_split(vfs, spec, ctx),
+        JobKind::Merge => split::run_merge(vfs, spec, ctx),
         JobKind::Resize => resize::run(vfs, spec, ctx),
     }
 }

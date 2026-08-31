@@ -247,6 +247,19 @@ pub fn dialog_answered(app: &mut App, id: DialogId, job: Option<JobId>, result: 
                 Err(err) => app.message = Some(err.to_string()),
             }
         }
+        (DialogId::Split, DialogResult::Text(size)) => {
+            let sources = std::mem::take(&mut app.draft.sources);
+            let target = app.draft.target.take();
+            match crate::config::ByteSize::parse(size.trim()) {
+                Ok(part) if part.bytes() > 0 && !sources.is_empty() => {
+                    let mut spec = JobSpec::new(JobKind::Split, sources, target);
+                    spec.options.part_size = part.bytes();
+                    app.request_job(spec);
+                }
+                Ok(_) => app.message = Some("a part size of zero splits nothing".to_string()),
+                Err(err) => app.message = Some(format!("{size}: {err}")),
+            }
+        }
         (DialogId::Checksum, DialogResult::Text(name)) => {
             let base = app.active_panel().active_tab().path.clone();
             let sources = std::mem::take(&mut app.draft.sources);

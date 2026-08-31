@@ -49,6 +49,11 @@ compare_files     = ["ctrl+f2"]
 # the cursor and needs no dialog at all.
 checksum_create   = ["alt+f10"]
 checksum_verify   = ["alt+shift+f10"]
+# Split and merge. Merge starts at the first part and finds the rest by
+# counting, so it needs no dialog; split asks for a size, there being no
+# sensible default for "how big is the medium this has to fit".
+split_file        = ["alt+f11"]
+merge_file        = ["alt+f12"]
 # The pair of ctrl+f2: that one answers whether two files differ, this one
 # answers how. alt+shift+f2 rather than a ctrl+F<n>, because ctrl+f3 to ctrl+f6
 # are the sort keys Total Commander puts there.
