@@ -41,11 +41,16 @@ pub(super) fn dialog_key(app: &mut App, press: KeyPress, ctx: KeyContext) -> Res
     // one of them would swallow it - which would leave the reference's whole
     // `Dialogs` section unreachable by the key that names it.
     if action == Some(Action::Help) {
+        // On top of the dialog, not behind it. This used to open the whole
+        // reference in a viewer, and dialogs draw over viewers, so the answer
+        // appeared underneath the question that prompted it. `Esc` closes the
+        // explanation and leaves the reader on the dialog they asked about.
         let id = app.top_dialog().map(crate::dialog::Dialog::id);
         if let Some(id) = id {
-            app.request_view(crate::app::ViewRequest::Help {
-                topic: crate::ui::help::HelpTopic::Dialog(id),
-            });
+            let (title, body) = crate::ui::help::dialog_help_text(id);
+            app.push_dialog(Box::new(crate::ui::dialog::fileinfo::FileInfoDialog::help(
+                title, body,
+            )));
         }
         return Ok(());
     }

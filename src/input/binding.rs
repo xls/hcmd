@@ -41,6 +41,17 @@ impl KeyPress {
         Self { code, mods }
     }
 
+    /// A printable key with no modifier but `Shift`: text, in other words.
+    ///
+    /// What the command line must never let a fallback swallow. `Space` is the
+    /// panel's `select_and_size` and `d` is nothing at all, but on the command
+    /// line both are characters somebody is typing, and a key that inserts a
+    /// character cannot also be a command.
+    #[must_use]
+    pub fn is_bare_character(self) -> bool {
+        matches!(self.code, KeyCode::Char(_)) && (self.mods - KeyModifiers::SHIFT).is_empty()
+    }
+
     /// An unmodified key.
     pub const fn plain(code: KeyCode) -> Self {
         Self::new(code, KeyModifiers::NONE)

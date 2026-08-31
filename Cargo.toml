@@ -173,6 +173,9 @@ smb2 = "0.20.1"
 ext4-view = "0.9.3"
 squashfs_reader = "0.1.1"
 gix                       = { version = "0.87", default-features = false, features = ["basic", "sha1"] }
+sha2                      = { version = "0.11", default-features = false }
+crc32fast                 = { version = "1", default-features = false, features = ["std"] }
+hmac                      = { version = "0.13", default-features = false }
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Release profile. There was none at all before this, so the shipped binary

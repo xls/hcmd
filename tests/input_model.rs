@@ -988,15 +988,20 @@ fn f1_asks_for_the_section_of_the_reference_it_was_pressed_in() {
     press(&mut app, KeyCode::F(1), NONE);
     assert_eq!(topic(&mut app), HelpTopic::Keyboard);
 
-    // From a dialog: that dialog's paragraph. Answered before the dialog is
-    // handed the key, because every dialog would swallow it.
+    // From a dialog: that dialog's paragraph, **on top of it**. It used to
+    // queue a viewer, and dialogs draw over viewers, so the answer appeared
+    // behind the question that prompted it.
     press(&mut app, KeyCode::Char('g'), CTRL);
     assert_eq!(app.focus, Focus::Dialog(DialogId::GotoPath));
     press(&mut app, KeyCode::F(1), NONE);
-    assert_eq!(topic(&mut app), HelpTopic::Dialog(DialogId::GotoPath));
     assert!(
-        app.dialog_is_open(),
-        "and the dialog is still there underneath it"
+        app.take_pending_view().is_none(),
+        "the explanation is a popup, not a viewer underneath the dialog"
+    );
+    assert_eq!(
+        app.focus,
+        Focus::Dialog(DialogId::Help),
+        "and it is the thing now on top"
     );
 }
 
@@ -3063,9 +3068,13 @@ fn a_key_the_viewer_swallows_says_so_rather_than_naming_a_milestone() {
         app.message = None;
         press(&mut app, code, mods);
         let said = app.message.clone().unwrap_or_default();
+        // Swallowed **and silent**. These are the panel's keys, and the panels
+        // are not what the reader is looking at; answering "not available in
+        // the viewer" on every stray keystroke turned the status line into a
+        // list of things that had not happened.
         assert!(
-            said.contains("not available in the viewer"),
-            "{code:?}: {said:?}"
+            said.is_empty(),
+            "{code:?} was answered rather than ignored: {said:?}"
         );
         assert!(
             !said.contains("nothing bound to do yet"),

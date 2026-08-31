@@ -656,16 +656,26 @@ fn viewer_action(app: &mut App, action: Action, extend: Extend) -> Result<()> {
         // `F5`, `Ctrl+O` and `Tab` are all shipped and all one keystroke away;
         // telling the user they do not exist yet would be the wrong answer to
         // the right question.
+        // A key the viewer has no use for is **ignored**, not answered.
+        //
+        // It used to report "choose a device for the left panel: not available
+        // in the viewer", which is a key busy doing nothing: the viewer is a
+        // whole screen of its own and the panels behind it are not what the
+        // reader is looking at. Saying so on every stray keystroke turned the
+        // status line into a list of things that had not happened.
+        //
+        // This is not the "never a silent no-op" rule being broken. That rule
+        // is about a key that *is* the program's, doing nothing without
+        // saying why. These keys are the panel's, and in here they are not
+        // keys at all.
+        //
+        // An action of a later milestone still says so, because that is a
+        // promise about the program rather than about this screen.
         other => {
             let _ = rows;
-            app.message = Some(if other.implemented() {
-                format!(
-                    "{}: not available in the viewer - Esc closes it",
-                    other.description()
-                )
-            } else {
-                other.not_implemented_message()
-            });
+            if !other.implemented() {
+                app.message = Some(other.not_implemented_message());
+            }
             return Ok(());
         }
     };

@@ -2067,14 +2067,14 @@ fn a_modified_markdown_file_still_opens_as_markdown() {
 }
 
 #[test]
-fn alt_v_swaps_the_document_for_the_diff() {
+fn alt_d_swaps_the_document_for_the_diff() {
     let Some(fixture) = GitTree::new("toggle") else {
-        eprintln!("SKIPPING alt_v_swaps: git is not installed");
+        eprintln!("SKIPPING alt_d_swaps: git is not installed");
         return;
     };
     let mut run = Run::new(100, 30);
     run.cwd = Some(fixture.root.clone());
-    let input = keys(&[DOWN, DOWN, DOWN, b"\x1b[13~", b"\x1bv"]);
+    let input = keys(&[DOWN, DOWN, DOWN, b"\x1b[13~", b"\x1bd"]);
     run.input = &input;
     run.settle = Duration::from_secs(6);
     let (parser, _) = run_in_pty(run);
@@ -2082,10 +2082,60 @@ fn alt_v_swaps_the_document_for_the_diff() {
 
     assert!(
         text.contains("--- readme.md (HEAD)"),
-        "Alt+V did not swap the document for the diff:\n{text}"
+        "Alt+D did not swap the document for the diff:\n{text}"
     );
     assert!(
         text.contains("-committed body") && text.contains("+working body"),
         "the diff is not showing the change:\n{text}"
+    );
+}
+
+#[test]
+fn a_panel_key_does_nothing_in_the_viewer() {
+    // Alt+D used to resolve in the viewer, to a panel action, and answer
+    // "choose a device for the left panel: not available in the viewer". A key
+    // busy doing nothing is a key that cannot be used for anything else - and
+    // in the viewer Alt+D is the diff.
+    let fixture = JsonDoc::new("panelkey");
+    let mut run = Run::new(100, 30);
+    run.cwd = Some(fixture.root.clone());
+    // View the file, then Alt+D.
+    let input = keys(&[DOWN, b"\x1b[13~", b"\x1bd"]);
+    run.input = &input;
+    run.settle = Duration::from_secs(5);
+    let (parser, _) = run_in_pty(run);
+    let text = plain(&parser);
+    assert!(
+        !text.contains("not available in the viewer"),
+        "a panel action still resolves inside the viewer:\n{text}"
+    );
+    assert!(
+        !text.contains("device for the left panel"),
+        "a panel action still resolves inside the viewer:\n{text}"
+    );
+}
+
+#[test]
+fn f1_in_a_dialog_explains_it_on_top_of_it() {
+    // The explanation used to open in a viewer, and dialogs draw over viewers,
+    // so the answer appeared behind the question.
+    let fixture = JsonDoc::new("dialoghelp");
+    let mut run = Run::new(100, 30);
+    run.cwd = Some(fixture.root.clone());
+    // F7 makes a directory, which is a dialog with a field; then F1.
+    let input = keys(&[b"\x1b[18~", b"\x1bOP"]);
+    run.input = &input;
+    run.settle = Duration::from_secs(5);
+    let (parser, _) = run_in_pty(run);
+    let text = plain(&parser);
+    assert!(
+        text.contains("Create directory") || text.contains("New folder"),
+        "the F7 dialog did not open:\n{text}"
+    );
+    // The help is a box on top, not the whole reference underneath: the
+    // keyboard reference's own heading must not be what is showing.
+    assert!(
+        !text.contains("Keyboard reference"),
+        "F1 opened the whole reference instead of explaining the dialog:\n{text}"
     );
 }

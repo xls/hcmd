@@ -50,6 +50,7 @@
 //! [`JobEvent::Failed`] so the UI can show it as it happens; the runner keeps
 //! going. The failures ride home on [`JobSummary::failures`].
 
+pub mod checksum;
 pub mod clipboard;
 pub mod compare;
 pub mod conflict;

@@ -676,6 +676,25 @@ impl Keymap {
                 self.layer_mut(layer).table_mut(ctx).remove_action(action);
                 if layer == LayerId::User {
                     self.builtin.table_mut(ctx).remove_action(action);
+                    // A `[global]` mention is a statement about everywhere, so
+                    // it clears the action's built-in bindings in every
+                    // context and not merely in the built-in `[global]` table.
+                    //
+                    // Without this, what a user's override means depends on
+                    // which section the default happens to be declared in -
+                    // which the user cannot see and has no reason to think
+                    // about. `[global] hotlist = ["backspace"]` left the
+                    // built-in `[panel] hotlist = ["ctrl+d"]` alive, so asking
+                    // for one binding produced two.
+                    //
+                    // A *context* mention stays local, because that is what it
+                    // says: `[cmdline] line_start = ["ctrl+a"]` is about the
+                    // command line and has no opinion about anywhere else.
+                    if ctx.is_none() {
+                        for other in KeyContext::ALL {
+                            self.builtin.table_mut(Some(*other)).remove_action(action);
+                        }
+                    }
                 }
 
                 for item in list {

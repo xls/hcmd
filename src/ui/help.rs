@@ -838,6 +838,10 @@ const SORT_SECONDARY: [Action; 9] = [
 /// An exhaustive `match`, which is what makes a new [`DialogId`] a compile
 /// error here rather than a dialog with no help. A new variant needs an arm
 /// here **and** an entry in [`DIALOG_ORDER`].
+pub fn dialog_help_text(id: DialogId) -> (&'static str, &'static str) {
+    dialog_help(id)
+}
+
 fn dialog_help(id: DialogId) -> (&'static str, &'static str) {
     match id {
         DialogId::Help => (
