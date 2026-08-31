@@ -479,6 +479,7 @@ pub(super) fn open_copy_move(app: &mut App, kind: JobKind, same_dir: bool) {
         | JobKind::Rename
         | JobKind::Compare
         | JobKind::CompareFiles
+        | JobKind::Checksum { .. }
         | JobKind::Resize => false,
     };
     if takes_the_source_away && !app.active_panel().active_tab().caps.writable {
@@ -786,6 +787,76 @@ pub(super) fn open_mkdir(app: &mut App) {
         "New directory name:",
         "",
     )));
+}
+
+/// Write a checksum file for the selection.
+///
+/// The name is asked for rather than assumed, because its **extension chooses
+/// the digest**: `.sha256` writes SHA-256 in the format `sha256sum -c` reads,
+/// `.sfv` writes CRC32. One question, two answers, and no dialog full of radio
+/// buttons for a choice that a file name already expresses.
+///
+/// The default sits beside the files rather than in the other panel: a sidecar
+/// names its files relative to itself, so it and they belong together, and a
+/// checksum written into a directory you were not looking at is one nobody
+/// will find again.
+pub(super) fn open_checksum(app: &mut App) {
+    let tab = app.active_panel().active_tab();
+    let sources = tab.operand_paths();
+    if sources.is_empty() {
+        app.message = Some("nothing to checksum".to_string());
+        return;
+    }
+    if !tab.caps.writable {
+        app.message =
+            Some("this backend is read-only; a checksum file cannot be written here".to_string());
+        return;
+    }
+    // One file gets its own name; several get the directory's, which is what
+    // somebody checksumming a folder meant.
+    let stem = match sources.as_slice() {
+        [only] => crate::input::search::stem_of(&only.display_title()),
+        _ => tab
+            .path
+            .file_name()
+            .filter(|n| !n.is_empty())
+            .unwrap_or_else(|| "checksums".to_string()),
+    };
+    app.draft.sources = sources;
+    app.push_dialog(Box::new(InputDialog::new(
+        DialogId::Checksum,
+        "Checksum",
+        "Write to (.sha256 or .sfv):",
+        format!("{stem}.sha256"),
+    )));
+}
+
+/// Check the files a checksum file under the cursor names.
+///
+/// No dialog: the file says which digest it carries and which files it is
+/// about, so there is nothing left to ask.
+pub(super) fn verify_checksum(app: &mut App) {
+    let tab = app.active_panel().active_tab();
+    let Some(entry) = tab.current().filter(|e| !e.is_parent && !e.is_dir()) else {
+        app.message = Some("no checksum file under the cursor".to_string());
+        return;
+    };
+    if crate::ops::checksum::Digest::of_name(&entry.name).is_none() {
+        app.message = Some(format!(
+            "{}: not a checksum file (.sha256 or .sfv)",
+            entry.name
+        ));
+        return;
+    }
+    let Some(path) = tab.current_path() else {
+        app.message = Some("that row has no path to read".to_string());
+        return;
+    };
+    app.request_job(JobSpec::new(
+        JobKind::Checksum { verify: true },
+        vec![path],
+        None,
+    ));
 }
 
 /// `Alt+F9` / `Ctrl+X Q`: the background queue view.

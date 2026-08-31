@@ -774,6 +774,22 @@ mod tests {
     }
 
     #[test]
+    fn the_checksum_keys_resolve() {
+        let km = Keymap::builtin();
+        assert_eq!(
+            km.resolve(KeyContext::Panel, press(KeyCode::F(10), KeyModifiers::ALT)),
+            Resolution::Action(Action::ChecksumCreate)
+        );
+        assert_eq!(
+            km.resolve(
+                KeyContext::Panel,
+                press(KeyCode::F(10), KeyModifiers::ALT | KeyModifiers::SHIFT)
+            ),
+            Resolution::Action(Action::ChecksumVerify)
+        );
+    }
+
+    #[test]
     fn the_builtin_keymap_loads_without_warnings() {
         let km = Keymap::builtin();
         assert!(km.warnings.is_empty(), "{:?}", km.warnings);

@@ -109,6 +109,10 @@ pub enum DialogId {
     /// The copy/move dialog's `+ F7`: a directory **for the target**,
     /// which is not the same directory as `F7`'s.
     MkdirForTarget,
+    /// Naming the checksum file `checksum_create` is about to write. The
+    /// extension chooses the digest, so `.sha256` and `.sfv` are the same
+    /// question answered two ways.
+    Checksum,
     /// `F2` / `Shift+F6`, pure rename.
     Rename,
     /// `Ctrl+G` go to a typed path.
@@ -202,6 +206,7 @@ impl DialogId {
             Self::Message => "message",
             Self::Mkdir => "mkdir",
             Self::MkdirForTarget => "mkdir_for_target",
+            Self::Checksum => "checksum",
             Self::Rename => "rename",
             Self::GotoPath => "goto_path",
             Self::GotoOffset => "goto_offset",
@@ -1191,6 +1196,8 @@ pub(crate) fn run_action(app: &mut App, action: Action, press: KeyPress) -> Resu
         A::CompareDirs => app.compare_lists(),
         A::CompareFiles => app.compare_files(),
         A::DiffFiles => app.diff_files(),
+        A::ChecksumCreate => files::open_checksum(app),
+        A::ChecksumVerify => files::verify_checksum(app),
 
         // ------------------------------------------ the design quick view
         A::QuickView => app.quick_view_toggle(),

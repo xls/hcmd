@@ -2146,3 +2146,65 @@ fn f1_in_a_dialog_explains_it_on_top_of_it() {
         "the help box has no way to dismiss it:\n{text}"
     );
 }
+
+/// Three files to checksum, in a directory of their own.
+struct SumTree {
+    root: PathBuf,
+}
+
+impl SumTree {
+    fn new(tag: &str) -> Self {
+        let root = std::env::temp_dir().join(format!("hcmd-sum-{}-{tag}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("fixture dir");
+        std::fs::write(root.join("alpha.txt"), b"alpha contents\n").expect("a");
+        std::fs::write(root.join("beta.txt"), b"beta contents\n").expect("b");
+        Self { root }
+    }
+}
+
+impl Drop for SumTree {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+
+/// `Alt+F10`, in the encoding a legacy terminal sends.
+const ALT_F10: &[u8] = b"\x1b[21;3~";
+
+#[test]
+fn a_checksum_file_this_writes_verifies_with_sha256sum() {
+    // The whole reason for using an existing format rather than a better one.
+    let fixture = SumTree::new("interop");
+    let mut run = Run::new(100, 30);
+    run.cwd = Some(fixture.root.clone());
+    // Mark both files with Insert, then Alt+F10 and accept the default name.
+    let input = keys(&[DOWN, b"\x1b[2~", b"\x1b[2~", ALT_F10, ENTER]);
+    run.input = &input;
+    run.settle = Duration::from_secs(6);
+    let (parser, _) = run_in_pty(run);
+    let text = plain(&parser);
+
+    let sidecar = std::fs::read_dir(&fixture.root)
+        .expect("the fixture directory")
+        .filter_map(std::result::Result::ok)
+        .find(|e| e.path().extension().is_some_and(|x| x == "sha256"))
+        .unwrap_or_else(|| panic!("no .sha256 was written:\n{text}"));
+
+    // Read by the tool whose format it claims to be.
+    let checked = std::process::Command::new("sha256sum")
+        .arg("-c")
+        .arg(sidecar.path().file_name().expect("a name"))
+        .current_dir(&fixture.root)
+        .output();
+    let Ok(out) = checked else {
+        eprintln!("SKIPPING the sha256sum half: it is not installed");
+        return;
+    };
+    assert!(
+        out.status.success(),
+        "sha256sum -c rejected our file:\n{}\n{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}

@@ -138,6 +138,12 @@ pub enum JobKind {
     /// it is a separate kind because its answer is a sentence about one pair,
     /// not a set of names to mark.
     CompareFiles,
+    /// Hashing files and writing a sidecar, or reading one and checking what
+    /// it names. [`crate::ops::checksum`] does both; the flag says which.
+    Checksum {
+        /// True to check an existing sidecar, false to write a new one.
+        verify: bool,
+    },
     /// `Shift+R`: decode each source, resample it and write it into `dest`
     /// under the new format and the new name.
     Resize,
@@ -156,6 +162,8 @@ impl JobKind {
             Self::Rename => "rename",
             Self::Compare => "compare",
             Self::CompareFiles => "compare_files",
+            Self::Checksum { verify: false } => "checksum",
+            Self::Checksum { verify: true } => "verify",
             Self::Resize => "resize",
         }
     }
@@ -172,6 +180,8 @@ impl JobKind {
             Self::Rename => "Renaming",
             Self::Compare => "Comparing",
             Self::CompareFiles => "Comparing files",
+            Self::Checksum { verify: false } => "Checksumming",
+            Self::Checksum { verify: true } => "Verifying",
             Self::Resize => "Resizing",
         }
     }
@@ -181,7 +191,10 @@ impl JobKind {
     /// neither does a [`JobKind::Compare`]: the contents comparison
     /// reads both sides and writes nothing at all.
     pub const fn is_destructive(&self) -> bool {
-        !matches!(self, Self::Size | Self::Compare | Self::CompareFiles)
+        !matches!(
+            self,
+            Self::Size | Self::Compare | Self::CompareFiles | Self::Checksum { verify: true }
+        )
     }
 
     /// True for a job whose sources are paired positionally with
@@ -568,6 +581,8 @@ impl JobSummary {
             JobKind::Size => "measured",
             JobKind::Rename => "renamed",
             JobKind::Compare | JobKind::CompareFiles => "compared",
+            JobKind::Checksum { verify: false } => "checksummed",
+            JobKind::Checksum { verify: true } => "verified",
             JobKind::Resize => "resized",
         };
         let mut out = format!(
@@ -1707,6 +1722,7 @@ pub fn run(vfs: &dyn Vfs, spec: &JobSpec, ctx: &mut JobContext) {
         JobKind::Delete { trash } => delete::run(vfs, spec, ctx, trash),
         JobKind::Rename => crate::rename::exec::run(vfs, spec, ctx),
         JobKind::Compare | JobKind::CompareFiles => compare::run(vfs, spec, ctx),
+        JobKind::Checksum { verify } => checksum::run(vfs, spec, ctx, verify),
         JobKind::Resize => resize::run(vfs, spec, ctx),
     }
 }

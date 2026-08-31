@@ -879,6 +879,15 @@ fn dialog_help(id: DialogId) -> (&'static str, &'static str) {
             "Create directory",
             "F7. Intermediate directories are created with it.",
         ),
+        DialogId::Checksum => (
+            "Checksum",
+            "Names the checksum file to write. The extension chooses the\n\
+             digest: .sha256 for SHA-256 and .sfv for CRC32.\n\
+             \n\
+             The names inside it are relative to the file itself, so a\n\
+             directory and its checksum file move together. Verify one with\n\
+             the same key on the checksum file, or with sha256sum -c.",
+        ),
         DialogId::MkdirForTarget => (
             "Create directory (for the target)",
             "+ F7 inside the copy dialog: a directory for the target side, not\n\

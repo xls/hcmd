@@ -216,6 +216,164 @@ pub fn name_is_safe(name: &str) -> bool {
         .any(|part| part == ".." || part == ".")
 }
 
+/// The [`crate::ops::JobKind::Checksum`] worker, both ways round.
+///
+/// **Writing**: every source is hashed and one sidecar is written, at
+/// `spec.dest`. The names in it are relative to that sidecar, so the directory
+/// and its `.sha256` move together.
+///
+/// **Verifying**: `spec.sources` is the sidecar. Each line names a file beside
+/// it, which is hashed and compared. A file that does not match is one entry
+/// in [`crate::ops::JobSummary::differing`], which is the same place the
+/// contents comparison puts its answer and is what the caller reports.
+///
+/// A file that cannot be read is a failure, not a mismatch: "could not be
+/// read" and "is not what it should be" are different answers.
+pub fn run(
+    vfs: &dyn Vfs,
+    spec: &crate::ops::JobSpec,
+    ctx: &mut crate::ops::JobContext,
+    verify: bool,
+) {
+    if verify {
+        verify_sidecar(vfs, spec, ctx);
+    } else {
+        write_for(vfs, spec, ctx);
+    }
+}
+
+/// Hash every source and write one sidecar.
+fn write_for(vfs: &dyn Vfs, spec: &crate::ops::JobSpec, ctx: &mut crate::ops::JobContext) {
+    let Some(dest) = spec.dest.as_ref() else {
+        ctx.fail(
+            &VfsPath::local(""),
+            Error::msg("no file to write the checksums to"),
+        );
+        return;
+    };
+    let digest = Digest::of_name(&dest.display_title()).unwrap_or(Digest::Sha256);
+    let sizes: Vec<u64> = spec
+        .sources
+        .iter()
+        .map(|s| vfs.stat(s).map_or(0, |e| e.size))
+        .collect();
+    let total = sizes.iter().fold(0_u64, |a, n| a.saturating_add(*n));
+    ctx.start(u64::try_from(spec.sources.len()).unwrap_or(u64::MAX), total);
+
+    let mut entries: Vec<Entry> = Vec::new();
+    for (index, source) in spec.sources.iter().enumerate() {
+        if ctx.cancelled() {
+            return;
+        }
+        let name = source.file_name().unwrap_or_else(|| source.to_string());
+        ctx.set_file(&name, sizes.get(index).copied().unwrap_or(0));
+        let mut last = 0_u64;
+        let mut tick = |so_far: u64| -> bool {
+            let delta = so_far.saturating_sub(last);
+            last = so_far;
+            ctx.add_bytes(delta)
+        };
+        match hash_file(vfs, source, digest, &mut tick) {
+            Ok(hex) => {
+                entries.push(Entry { name, digest: hex });
+                ctx.add_file();
+            }
+            Err(Error::Cancelled) => return,
+            Err(err) => ctx.fail(source, err),
+        }
+    }
+
+    let body = write_sidecar(&entries, digest);
+    match vfs.open_write(dest) {
+        Ok(mut out) => {
+            if let Err(err) = std::io::Write::write_all(&mut out, body.as_bytes()) {
+                ctx.fail(dest, Error::Bare(err));
+            }
+        }
+        Err(err) => ctx.fail(dest, err),
+    }
+}
+
+/// Read a sidecar and check everything it names.
+fn verify_sidecar(vfs: &dyn Vfs, spec: &crate::ops::JobSpec, ctx: &mut crate::ops::JobContext) {
+    let Some(sidecar) = spec.sources.first() else {
+        ctx.fail(
+            &VfsPath::local(""),
+            Error::msg("no checksum file to verify"),
+        );
+        return;
+    };
+    let name = sidecar.file_name().unwrap_or_else(|| sidecar.to_string());
+    let Some(digest) = Digest::of_name(&name) else {
+        ctx.fail(sidecar, Error::msg("not a .sha256 or .sfv file"));
+        return;
+    };
+    let text = match read_to_string(vfs, sidecar) {
+        Ok(text) => text,
+        Err(err) => {
+            ctx.fail(sidecar, err);
+            return;
+        }
+    };
+    let entries = read_sidecar(&text, digest);
+    let base = sidecar.parent();
+    ctx.start(u64::try_from(entries.len()).unwrap_or(u64::MAX), 0);
+
+    for entry in entries {
+        if ctx.cancelled() {
+            return;
+        }
+        if !name_is_safe(&entry.name) {
+            // A sidecar is data from wherever it came from. A line naming
+            // `../../etc/passwd` is an instruction to read that file and
+            // report on it, and it is refused by name rather than followed.
+            ctx.add_differing(format!(
+                "{} (refused: not a name beside the list)",
+                entry.name
+            ));
+            ctx.add_file();
+            continue;
+        }
+        let Some(base) = base.as_ref() else {
+            ctx.fail(
+                sidecar,
+                Error::msg("nowhere to look for the files it names"),
+            );
+            return;
+        };
+        let path = base.join(&entry.name);
+        ctx.set_file(&entry.name, vfs.stat(&path).map_or(0, |e| e.size));
+        let mut tick = |_: u64| -> bool { !ctx.cancelled() };
+        match hash_file(vfs, &path, digest, &mut tick) {
+            Ok(hex) if hex.eq_ignore_ascii_case(&entry.digest) => ctx.add_file(),
+            Ok(_) => {
+                ctx.add_differing(entry.name.clone());
+                ctx.add_file();
+            }
+            Err(Error::Cancelled) => return,
+            Err(err) => ctx.fail(&path, err),
+        }
+    }
+}
+
+/// A whole small file, for the sidecar itself.
+fn read_to_string(vfs: &dyn Vfs, path: &VfsPath) -> Result<String> {
+    let mut reader = vfs.open_read(path)?;
+    let mut bytes = Vec::new();
+    // A sidecar is a list of names and hashes; one that is larger than this is
+    // not one, and reading it whole would be the allocation this program does
+    // not make on a number it read out of a file.
+    reader
+        .by_ref()
+        .take(MAX_SIDECAR)
+        .read_to_end(&mut bytes)
+        .map_err(Error::Bare)?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// The most a checksum file may be: about 200,000 lines of SHA-256.
+const MAX_SIDECAR: u64 = 32 * 1024 * 1024;
+
 #[cfg(test)]
 #[path = "checksum_tests.rs"]
 mod tests;

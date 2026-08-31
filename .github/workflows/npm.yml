@@ -115,7 +115,28 @@ jobs:
           (startsWith(github.ref, 'refs/tags/v')
             || github.event_name == 'workflow_dispatch')
           && env.NODE_AUTH_TOKEN != ''
-        run: cd packaging/npm && npm publish --access public
+        run: |
+          set -o pipefail
+          cd packaging/npm
+          if npm publish --access public 2>&1 | tee /tmp/publish.log; then
+            exit 0
+          fi
+          # npm answers 404 to a PUT it will not authorise, rather than 403,
+          # so that it does not reveal whether a package exists. Read as-is it
+          # says the package is missing, which is the opposite of the truth and
+          # sends the reader looking in the wrong place entirely.
+          if grep -q 'E404' /tmp/publish.log; then
+            echo "::error::NPM_TOKEN cannot publish hcmd-installer."
+            echo "::error::npm answers 404 to a PUT it will not authorise, so this"
+            echo "::error::is a permissions answer and not a missing package."
+            echo "::error::Replace the secret with a Classic Automation token, or a"
+            echo "::error::granular token with read-and-write covering this package."
+            echo "::error::Nothing is lost meanwhile: the installer fetches the"
+            echo "::error::latest release, so the published package installs this"
+            echo "::error::version already. A republish is only needed when"
+            echo "::error::install.js itself changes."
+          fi
+          exit 1
 
       - name: Say why nothing was published
         if: env.NODE_AUTH_TOKEN == ''

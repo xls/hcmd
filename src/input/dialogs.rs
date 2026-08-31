@@ -247,6 +247,19 @@ pub fn dialog_answered(app: &mut App, id: DialogId, job: Option<JobId>, result: 
                 Err(err) => app.message = Some(err.to_string()),
             }
         }
+        (DialogId::Checksum, DialogResult::Text(name)) => {
+            let base = app.active_panel().active_tab().path.clone();
+            let sources = std::mem::take(&mut app.draft.sources);
+            if sources.is_empty() || name.trim().is_empty() {
+                app.message = Some("nothing to checksum".to_string());
+            } else {
+                app.request_job(JobSpec::new(
+                    JobKind::Checksum { verify: false },
+                    sources,
+                    Some(base.join(name.trim())),
+                ));
+            }
+        }
         (DialogId::Mkdir, DialogResult::Text(name)) => {
             let base = app.active_panel().active_tab().path.clone();
             // Land the cursor on what was just created once the panel re-reads

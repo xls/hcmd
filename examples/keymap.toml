@@ -44,6 +44,11 @@ delete_permanent  = ["shift+f8", "shift+delete"]
 context_menu      = ["shift+f10", "alt+k"]
 compare_dirs      = ["shift+f2"]
 compare_files     = ["ctrl+f2"]
+# Checksums. The extension of the name you give chooses the digest, so there is
+# one key rather than one per algorithm; verify runs on a .sha256 or .sfv under
+# the cursor and needs no dialog at all.
+checksum_create   = ["alt+f10"]
+checksum_verify   = ["alt+shift+f10"]
 # The pair of ctrl+f2: that one answers whether two files differ, this one
 # answers how. alt+shift+f2 rather than a ctrl+F<n>, because ctrl+f3 to ctrl+f6
 # are the sort keys Total Commander puts there.

@@ -1,6 +1,7 @@
 //! Checksums: the formats, and what a sidecar is allowed to name.
 
 use super::*;
+use crate::vfs::VfsPath;
 
 #[test]
 fn a_sha256_sidecar_is_what_sha256sum_writes() {
@@ -109,4 +110,102 @@ fn the_digest_is_recognised_from_the_sidecars_name() {
     assert_eq!(Digest::of_name("SUMS.SHA256"), Some(Digest::Sha256));
     assert_eq!(Digest::of_name("disc.sfv"), Some(Digest::Crc32));
     assert_eq!(Digest::of_name("notes.txt"), None);
+}
+
+/// A directory with two files, and a `sums.sha256` written by `sha256sum`.
+///
+/// `None` when `sha256sum` is not installed, which the caller reports as a
+/// skip: the point of this test is interoperability, and there is nothing to
+/// interoperate with.
+fn tree_with_real_sums(tag: &str) -> Option<std::path::PathBuf> {
+    let root = std::env::temp_dir().join(format!("hcmd-sumop-{}-{tag}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).ok()?;
+    std::fs::write(root.join("alpha.txt"), b"alpha contents\n").ok()?;
+    std::fs::write(root.join("beta.txt"), b"beta contents\n").ok()?;
+    let made = std::process::Command::new("sh")
+        .arg("-c")
+        .arg("sha256sum alpha.txt beta.txt > sums.sha256")
+        .current_dir(&root)
+        .output()
+        .ok()?;
+    made.status.success().then_some(root)
+}
+
+/// Drive a checksum job to completion, as the event loop would.
+fn drive(spec: crate::ops::JobSpec) -> crate::ops::JobSummary {
+    let (mut ctx, rx, _dtx, _flag) = crate::ops::JobContext::for_test(spec.kind);
+    let fs_impl = crate::vfs::LocalFs::new();
+    crate::ops::run(&fs_impl, &spec, &mut ctx);
+    let summary = ctx.finish();
+    drop(rx);
+    summary
+}
+
+#[test]
+fn a_file_sha256sum_wrote_verifies_here() {
+    // The half that matters when the `.sha256` arrived with a download.
+    let Some(root) = tree_with_real_sums("good") else {
+        eprintln!("SKIPPING a_file_sha256sum_wrote_verifies_here: sha256sum is not installed");
+        return;
+    };
+    let summary = drive(crate::ops::JobSpec::new(
+        crate::ops::JobKind::Checksum { verify: true },
+        vec![VfsPath::local(root.join("sums.sha256"))],
+        None,
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(summary.failures.is_empty(), "{:?}", summary.failures);
+    assert_eq!(summary.files_done, 2, "both files were checked");
+    assert!(
+        summary.differing.is_empty(),
+        "two matching files were reported as differing: {:?}",
+        summary.differing
+    );
+}
+
+#[test]
+fn a_file_that_changed_since_is_named() {
+    let Some(root) = tree_with_real_sums("changed") else {
+        eprintln!("SKIPPING a_file_that_changed_since_is_named: sha256sum is not installed");
+        return;
+    };
+    // Edited after the list was made, which is the whole point of having one.
+    std::fs::write(root.join("beta.txt"), b"tampered\n").expect("rewrite");
+    let summary = drive(crate::ops::JobSpec::new(
+        crate::ops::JobKind::Checksum { verify: true },
+        vec![VfsPath::local(root.join("sums.sha256"))],
+        None,
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(summary.failures.is_empty(), "{:?}", summary.failures);
+    assert_eq!(
+        summary.differing,
+        vec!["beta.txt".to_string()],
+        "the changed file is named, and only it"
+    );
+}
+
+#[test]
+fn a_line_naming_a_file_outside_the_directory_is_refused_not_read() {
+    // A checksum file is data from wherever it came from. This one is hostile.
+    let root = std::env::temp_dir().join(format!("hcmd-sumesc-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).expect("dir");
+    std::fs::write(
+        root.join("evil.sha256"),
+        "0000000000000000000000000000000000000000000000000000000000000000  ../../etc/passwd\n",
+    )
+    .expect("write");
+    let summary = drive(crate::ops::JobSpec::new(
+        crate::ops::JobKind::Checksum { verify: true },
+        vec![VfsPath::local(root.join("evil.sha256"))],
+        None,
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(
+        summary.differing.iter().any(|d| d.contains("refused")),
+        "a name outside the directory was followed rather than refused: {:?}",
+        summary.differing
+    );
 }
