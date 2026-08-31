@@ -153,3 +153,101 @@ fn a_file_outside_any_repository_is_not_an_error() {
     let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(answer, None);
 }
+
+#[test]
+fn history_lists_commits_newest_first() {
+    let repo = repo_or_skip!("history");
+    repo.write("a.txt", "one\n");
+    if repo.commit("first").is_none() {
+        eprintln!("SKIPPING history: commit failed");
+        return;
+    }
+    repo.write("b.txt", "two\n");
+    repo.commit("second").expect("second commit");
+
+    let commits = history(&repo.root).expect("history");
+    assert_eq!(commits.len(), 2, "two commits");
+    assert_eq!(commits[0].subject, "second", "newest first");
+    assert_eq!(commits[1].subject, "first");
+    assert_eq!(commits[0].short.len(), 8);
+    assert!(commits[0].time.is_some());
+}
+
+#[test]
+fn changed_lists_what_a_commit_touched() {
+    let repo = repo_or_skip!("changed");
+    repo.write("keep.txt", "unchanged\n");
+    repo.write("edit.txt", "before\n");
+    if repo.commit("base").is_none() {
+        eprintln!("SKIPPING changed: commit failed");
+        return;
+    }
+    // Second commit changes one file and adds another; keep.txt is untouched.
+    repo.write("edit.txt", "after\n");
+    repo.write("new.txt", "fresh\n");
+    repo.commit("change").expect("commit");
+
+    let commits = history(&repo.root).expect("history");
+    let touched = changed(&repo.root, &commits[0].id).expect("changed");
+    let names: Vec<&str> = touched.iter().map(|c| c.path.as_str()).collect();
+    assert_eq!(
+        names,
+        vec!["edit.txt", "new.txt"],
+        "only what changed, sorted"
+    );
+    assert!(
+        !names.contains(&"keep.txt"),
+        "an untouched file is not listed"
+    );
+}
+
+#[test]
+fn the_root_commit_lists_everything_it_created() {
+    let repo = repo_or_skip!("root");
+    repo.write("a.txt", "a\n");
+    repo.write("b.txt", "b\n");
+    if repo.commit("root").is_none() {
+        eprintln!("SKIPPING root: commit failed");
+        return;
+    }
+    let commits = history(&repo.root).expect("history");
+    let touched = changed(&repo.root, &commits[0].id).expect("changed");
+    let names: Vec<&str> = touched.iter().map(|c| c.path.as_str()).collect();
+    assert_eq!(
+        names,
+        vec!["a.txt", "b.txt"],
+        "a root commit created every file"
+    );
+}
+
+#[test]
+fn file_at_reads_a_file_as_of_a_commit() {
+    let repo = repo_or_skip!("fileat");
+    repo.write("notes.txt", "first version\n");
+    if repo.commit("v1").is_none() {
+        eprintln!("SKIPPING file_at: commit failed");
+        return;
+    }
+    repo.write("notes.txt", "second version\n");
+    repo.commit("v2").expect("commit");
+    let commits = history(&repo.root).expect("history");
+
+    // The older commit's version, not the working copy's.
+    let old = file_at(&repo.root, &commits[1].id, "notes.txt").expect("file at v1");
+    assert_eq!(String::from_utf8_lossy(&old), "first version\n");
+    let new = file_at(&repo.root, &commits[0].id, "notes.txt").expect("file at v2");
+    assert_eq!(String::from_utf8_lossy(&new), "second version\n");
+
+    // A path that is not in that commit is an error, not an empty file.
+    assert!(file_at(&repo.root, &commits[0].id, "absent.txt").is_err());
+}
+
+#[test]
+fn a_directory_outside_a_repository_has_no_history() {
+    let dir = std::env::temp_dir().join(format!("hcmd-nogit-hist-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("dir");
+    let out = history(&dir).expect("no repository is not an error");
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(out.is_empty());
+}

@@ -182,6 +182,7 @@ actions! {
     CompareFiles      = "compare_files",     V09, "Compare the two files byte for byte";
     DiffFiles         = "diff_files",        V09, "Show the two files as a diff";
     ToggleDiff        = "toggle_diff",       V09, "Swap mode 3 between the document and the diff";
+    GitHistory        = "git_history",       V09, "Browse the git history of the current directory";
     ChecksumCreate    = "checksum_create",   V09, "Write a checksum file for the selection";
     ChecksumVerify    = "checksum_verify",   V09, "Check the files a checksum file names";
     SplitFile         = "split_file",        V09, "Split the file into numbered parts";

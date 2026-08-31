@@ -386,6 +386,14 @@ impl VfsRouter {
                     .ok_or_else(|| Error::msg(format!("{path}: that listing has been closed")))
             }
             BackendKind::Local => Ok(Arc::clone(&self.local) as Arc<dyn Vfs>),
+            // The history of the repository the path's outer segment names.
+            // Rebuilt per call rather than cached: gix discovers the repo from
+            // the directory each time, and holding an open handle would pin a
+            // `.git` a panel may have left.
+            BackendKind::Git => {
+                let fs = crate::vfs::git::GitFs::open(path.clone())?;
+                Ok(Arc::new(fs) as Arc<dyn Vfs>)
+            }
             // An explicit arm per backend as v0.6 made it: a connection that
             // has been closed names nothing, and the message says so rather
             // than listing `/`.
@@ -460,7 +468,7 @@ impl Vfs for VfsRouter {
             // A registered listing is a `Vfs` like any other, and streaming
             // from it is what makes the "results stream back over
             // a channel" the ordinary directory-read channel.
-            BackendKind::List => {
+            BackendKind::List | BackendKind::Git => {
                 return match self.backend_for(path) {
                     Ok(listing) => {
                         self.capabilities

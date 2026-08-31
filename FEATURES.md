@@ -167,6 +167,12 @@ Read-only is the feature, not a stage of one: there is no write path to disable.
   too, as its fields; one they do not still shows what can be read of it.
 - In hex mode a template paints the regions it knows, and stepping the cursor
   into one reads it out in the status bar: what the field is, and its value.
+- **Git history as a directory.** `Alt+V` opens the repository's history:
+  commits are folders named by their short id and subject, each browsable as
+  the tree at that commit - real directories you enter, files you view with
+  `F3`, diff with `Alt+D` against the previous commit, or copy out with `F5`.
+  Read-only. `Alt+V` again leaves it. It reads the object store directly, no
+  `git` process.
 - **Diffs.** `Alt+D` shows the file's diff against `HEAD`, and `Alt+Shift+F2`
   diffs the file under each panel's cursor. Unified format, `+` and `-`
   coloured, unchanged runs collapsed behind `... 27 unchanged lines` and

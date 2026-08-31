@@ -168,20 +168,23 @@ binary-size)
   # renders JSON, HTML and markdown is a bigger program than one that does
   # not, and the alternative was leaving the features out.
   #
-  # 29 MB buys the diff viewer, and the split is worth recording because it is
-  # lopsided. Measured on this machine, one part at a time:
+  # 29 MB bought the diff viewer, and 31.5 MB buys the git history browser on
+  # top of it. Measured on this machine, one part at a time:
   #
-  #   27,050,192   before it
+  #   27,050,192   before the diff viewer
   #   27,215,312   with the diff renderer      (+161 KB, `similar`)
-  #   28,376,880   with git as well            (+1.11 MB, `gix`)
+  #   28,376,880   with git blob reads         (+1.11 MB, `gix`, HEAD only)
+  #   30,848,616   with the history browser    (+2.4 MB, gix rev-walk + tree diff)
   #
-  # So reading git's object store costs seven times what diffing does. It buys
-  # the half of the feature that gets used daily - F3 on a file you have edited
-  # since committing it - and the alternative was writing a packfile reader,
-  # which is a week of work to save a megabyte and a way to be subtly wrong
-  # about which bytes the diff is against.
+  # The last step is the largest because the browser *exercises* gix code the
+  # diff viewer only linked: rev-walk, commit lookup and tree-to-tree diff were
+  # dead-stripped before and are reached now. It buys browsing a repository's
+  # history as a directory - commits as folders, the files each changed inside
+  # them, readable and diffable at that commit - which is a feature the owner
+  # asked for outright, and there is no cheaper way to walk a real object store
+  # than the crate that already reads it.
   b=$(stat -c %s target/release/hcmd)
-  [ "$b" -lt 29000000 ] || { echo "binary is $b bytes, expected under 29000000"; exit 1; }
+  [ "$b" -lt 31500000 ] || { echo "binary is $b bytes, expected under 31500000"; exit 1; }
   echo "BINARY-SIZE-OK bytes=$b"
   ;;
 

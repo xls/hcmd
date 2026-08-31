@@ -1214,6 +1214,11 @@ fn git_side(
     if !cfg.diff_against_git {
         return (None, None);
     }
+    // A file opened from the history browser diffs against the same file one
+    // commit earlier, which is what "what did this commit change here" means.
+    if path.backend() == crate::vfs::BackendKind::Git {
+        return git_history_side(path);
+    }
     let Some(local) = path.local_path() else {
         return (None, None);
     };
@@ -1239,6 +1244,37 @@ fn git_side(
         }),
         Some(crate::git::State::Modified),
     )
+}
+
+/// The diff side for a file inside the history browser: the same file at the
+/// commit's first parent.
+///
+/// `repo#git/<sha>/<file>` diffs against `repo#git/<sha>^/<file>`. A file added
+/// in this commit has no left side, which the diff shows as all-added, and the
+/// git state is `Modified` because the commit did change it.
+fn git_history_side(
+    path: &crate::vfs::VfsPath,
+) -> (Option<viewer::DiffSide>, Option<crate::git::State>) {
+    // The `#git` tail is `<sha>/<file>`, and the repository is the outermost
+    // local segment.
+    let Some((crate::vfs::BackendKind::Local, dir)) = path.segments().first().cloned() else {
+        return (None, None);
+    };
+    let tail = path.tail().to_string_lossy().trim_matches('/').to_string();
+    let Some((sha, file)) = tail.split_once('/') else {
+        return (None, None);
+    };
+    match crate::git::file_at_parent(dir.as_path(), sha, file) {
+        Some(bytes) if bytes.len() as u64 <= DIFF_SIDE_MAX => (
+            Some(viewer::DiffSide {
+                label: format!("{file} ({sha}^)"),
+                text: String::from_utf8_lossy(&bytes).into_owned(),
+            }),
+            Some(crate::git::State::Modified),
+        ),
+        // Added in this commit, or too big: nothing on the left.
+        _ => (None, Some(crate::git::State::Modified)),
+    }
 }
 
 /// The most either side of a diff may be.

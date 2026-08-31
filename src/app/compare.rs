@@ -21,6 +21,42 @@ use crate::ui::dialog::fileinfo::FileInfoDialog;
 use crate::vfs::VfsPath;
 
 impl App {
+    /// `Alt+V`: browse the git history of the active panel's directory.
+    ///
+    /// Opens `dir#git/` as a virtual listing: commits are folders, a commit's
+    /// changed files are inside it, and each is readable at that commit - so
+    /// `F3`, `Alt+D` and `F5` all work on them because they are ordinary
+    /// paths. Refused with a sentence when the directory is not in a
+    /// repository, rather than opening onto an empty listing.
+    pub fn open_git_history(&mut self) {
+        let side = self.active_side;
+        let dir = self.panel(side).active_tab().path.clone();
+        // Already in the history: `Alt+V` is a toggle, so it leaves. Back to
+        // the local directory the `#git` segment hangs off, which is the
+        // outermost segment.
+        if dir.backend() == crate::vfs::BackendKind::Git {
+            if let Some((crate::vfs::BackendKind::Local, root)) = dir.segments().first() {
+                let home = crate::vfs::VfsPath::local(root.clone());
+                self.navigate(side, home);
+            }
+            return;
+        }
+        let Some(local) = dir.local_path() else {
+            self.message = Some("git history is only for a local directory".to_string());
+            return;
+        };
+        match crate::git::history(local) {
+            Ok(commits) if !commits.is_empty() => {
+                let git = dir.with_segment(crate::vfs::BackendKind::Git, "/");
+                self.navigate(side, git);
+            }
+            Ok(_) => {
+                self.message = Some(format!("{}: no git history here", local.display()));
+            }
+            Err(err) => self.message = Some(err.to_string()),
+        }
+    }
+
     /// the `Shift+F2`: mark, in both panels, every entry that is not
     /// the same on the other side, and nothing else.
     ///

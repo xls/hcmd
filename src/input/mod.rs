@@ -1209,6 +1209,7 @@ pub(crate) fn run_action(app: &mut App, action: Action, press: KeyPress) -> Resu
 
         // -------------------------------------------- the design compare -
         A::CompareDirs => app.compare_lists(),
+        A::GitHistory => app.open_git_history(),
         A::CompareFiles => app.compare_files(),
         A::DiffFiles => app.diff_files(),
         A::ChecksumCreate => files::open_checksum(app),

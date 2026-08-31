@@ -23,6 +23,16 @@ use crate::vfs::VfsPath;
 /// (which is `Alt+Shift+F7`).
 pub(super) fn open_find(app: &mut App) {
     let tab = app.active_panel().active_tab();
+    if tab.path.backend() == crate::vfs::BackendKind::Git {
+        // A recursive walk from a git view would descend every commit's tree -
+        // the whole history - and pour it into the panel. That is never what
+        // "find in here" means. Quick search (just type) filters the listing
+        // in front of you, which is what searching a commit's files wants.
+        app.message = Some(
+            "search walks a directory; in git history, just type to filter the listing".to_string(),
+        );
+        return;
+    }
     let start = tab
         .virtual_view()
         .map_or_else(|| tab.path.clone(), |view| view.origin.clone());
@@ -43,6 +53,12 @@ pub(super) fn open_find(app: &mut App) {
 /// reads the same on a real directory as on a set of results.
 pub(super) fn open_find_in_panel(app: &mut App) {
     let tab = app.active_panel().active_tab();
+    if tab.path.backend() == crate::vfs::BackendKind::Git {
+        app.message = Some(
+            "search walks a directory; in git history, just type to filter the listing".to_string(),
+        );
+        return;
+    }
     let roots = tab.operand_paths();
     if roots.is_empty() {
         app.message = Some("nothing to search within; mark some rows first".to_string());

@@ -26,6 +26,7 @@
 //!
 
 pub mod archive;
+pub mod git;
 pub mod image;
 pub mod list;
 pub mod local;
@@ -80,6 +81,14 @@ pub enum BackendKind {
     /// partition is a segment, not a directory inside one". An image with no
     /// partition table has one segment and it is the filesystem's root.
     Image,
+    /// One repository's history: commits, and the files each one touched.
+    ///
+    /// A segment of this kind addresses the git object store of the repository
+    /// that contains the path above it. `~/src#git/` is the commit list,
+    /// `~/src#git/<sha>/` is what that commit changed, and a file below that
+    /// is the file **as of** that commit. Read-only entirely: history is not
+    /// something a file manager edits by copying onto it.
+    Git,
 }
 
 impl BackendKind {
@@ -88,6 +97,7 @@ impl BackendKind {
         match self {
             Self::Local => "local",
             Self::List => "list",
+            Self::Git => "git",
             Self::Archive => "archive",
             Self::Remote(_) => "remote",
             Self::Image => "image",
@@ -121,6 +131,10 @@ impl BackendKind {
             // and a FAT member is not, and this is the answer for a path whose
             // backend is not at hand.
             Self::Image => Capabilities::IMAGE,
+            // Read-only, local, and seekable because a git blob is
+            // materialised whole from the object store. The feature, not a
+            // placeholder.
+            Self::Git => Capabilities::READ_ONLY_LIST,
         }
     }
 }

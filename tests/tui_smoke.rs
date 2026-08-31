@@ -2315,3 +2315,30 @@ fn scratch_form_cursor() {
     eprintln!("cursor at row {cy} col {cx}, hidden={hidden}");
     eprintln!("{}", plain(&parser));
 }
+
+/// `Alt+V` in a real git directory.
+const ALT_V: &[u8] = b"\x1bv";
+
+#[test]
+fn alt_v_browses_the_git_history() {
+    let Some(fixture) = GitTree::new("altv") else {
+        eprintln!("SKIPPING alt_v_browses_the_git_history: git is not installed");
+        return;
+    };
+    let mut run = Run::new(100, 30);
+    run.cwd = Some(fixture.root.clone());
+    // Alt+V opens the history; the fixture has one commit named "one".
+    let input = keys(&[ALT_V]);
+    run.input = &input;
+    run.settle = Duration::from_secs(6);
+    let (parser, _) = run_in_pty(run);
+    let text = plain(&parser);
+    assert!(
+        text.contains("#git") || text.contains("git"),
+        "the panel title does not show the git view:\n{text}"
+    );
+    assert!(
+        text.contains("one"),
+        "the commit subject is not listed:\n{text}"
+    );
+}

@@ -467,9 +467,11 @@ fn entry_for(path: VfsPath) -> Entry {
         // A row inside a disk image is the same case again: it needs the
         // open `ImageFs`, and the bytes behind it are read-only whatever the
         // row turns out to be.
-        BackendKind::List | BackendKind::Archive | BackendKind::Remote(_) | BackendKind::Image => {
-            None
-        }
+        BackendKind::List
+        | BackendKind::Archive
+        | BackendKind::Remote(_)
+        | BackendKind::Image
+        | BackendKind::Git => None,
     };
     let mut entry = stated.unwrap_or_else(|| {
         let name = path.file_name().unwrap_or_else(|| path.to_string());

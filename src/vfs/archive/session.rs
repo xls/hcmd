@@ -614,7 +614,7 @@ impl ArchiveSession {
                 // container. See `ArchiveFs::open_nested`.
                 self.get_or_open_nested(key, cached, display)
             }
-            BackendKind::List => Err(Error::InvalidPath(format!(
+            BackendKind::List | BackendKind::Git => Err(Error::InvalidPath(format!(
                 "{path}: a virtual listing cannot hold an archive"
             ))),
             // An archive stored **inside** a disk image is the nesting of
@@ -791,7 +791,7 @@ impl ArchiveSession {
                 let fresh = Arc::new(outer.partition_view(number)?);
                 Ok(self.register_image(key, fresh))
             }
-            BackendKind::List => Err(Error::InvalidPath(format!(
+            BackendKind::List | BackendKind::Git => Err(Error::InvalidPath(format!(
                 "{path}: a virtual listing cannot hold a disk image"
             ))),
         }
@@ -1098,7 +1098,7 @@ fn image_key(display: &VfsPath, partition: Option<usize>) -> Result<ArchiveKey> 
     let mut key = match kind {
         BackendKind::Local => local_key(root)?,
         BackendKind::Remote(id) => remote_key(*id, root),
-        BackendKind::List | BackendKind::Archive | BackendKind::Image => {
+        BackendKind::List | BackendKind::Archive | BackendKind::Image | BackendKind::Git => {
             return Err(Error::InvalidPath(format!(
                 "{display}: a disk image must start at a file"
             )));
@@ -1110,7 +1110,8 @@ fn image_key(display: &VfsPath, partition: Option<usize>) -> Result<ArchiveKey> 
             BackendKind::Local
             | BackendKind::List
             | BackendKind::Remote(_)
-            | BackendKind::Image => {
+            | BackendKind::Image
+            | BackendKind::Git => {
                 return Err(Error::InvalidPath(format!(
                     "{display}: only an archive holds a disk image"
                 )));
@@ -1142,7 +1143,7 @@ fn outer_key(archive: &ArchiveFs) -> Result<ArchiveKey> {
         // an archive on a remote is keyed by its connection and
         // its remote path, which is what `materialise_remote` filed it under.
         BackendKind::Remote(id) => remote_key(*id, root),
-        BackendKind::List | BackendKind::Archive | BackendKind::Image => {
+        BackendKind::List | BackendKind::Archive | BackendKind::Image | BackendKind::Git => {
             return Err(Error::InvalidPath(format!(
                 "{}: an archive must start at a file",
                 archive.display_path()

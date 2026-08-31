@@ -102,6 +102,8 @@ impl RemoteId {
         // to get home with.
         path.segments().iter().find_map(|(kind, _)| match kind {
             BackendKind::Remote(id) => Some(*id),
+            // A git-history segment is local; it names no connection.
+            BackendKind::Git => None,
             // An image keeps its connection segment outermost, and that
             // segment is what this finds; an `Image` segment itself never
             // names a connection.

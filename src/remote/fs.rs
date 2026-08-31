@@ -188,7 +188,11 @@ impl RemoteFs {
             }
             (BackendKind::Remote(_), _) => {}
             (
-                BackendKind::Local | BackendKind::List | BackendKind::Archive | BackendKind::Image,
+                BackendKind::Local
+                | BackendKind::List
+                | BackendKind::Archive
+                | BackendKind::Image
+                | BackendKind::Git,
                 _,
             ) => {
                 return Err(Error::InvalidPath(format!(
