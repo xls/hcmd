@@ -47,7 +47,7 @@ a 40 GB file as fast as a 4 KB one. Everything runs in process: no `rg`, no
   PNG says `1920 x 1080 px`, `RGBA`, `deflate`; an ELF says `x86-64`, `shared
   object`. In hex mode the same templates paint the regions they know, and
   stepping the cursor into one reads it out in the status bar.
-- **Diffs where you already are.** `Ctrl+D` in the viewer shows a file's diff
+- **Diffs where you already are.** `Alt+V` in the viewer shows a file's diff
   against `HEAD`, unchanged runs folded away; `Alt+Shift+F2` diffs the two
   files under the panel cursors. A source file you have edited since committing
   opens on its diff straight away, while a `.md` opens as markdown and keeps

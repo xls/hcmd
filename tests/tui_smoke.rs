@@ -2067,14 +2067,14 @@ fn a_modified_markdown_file_still_opens_as_markdown() {
 }
 
 #[test]
-fn ctrl_d_swaps_the_document_for_the_diff() {
+fn alt_v_swaps_the_document_for_the_diff() {
     let Some(fixture) = GitTree::new("toggle") else {
-        eprintln!("SKIPPING ctrl_d_swaps: git is not installed");
+        eprintln!("SKIPPING alt_v_swaps: git is not installed");
         return;
     };
     let mut run = Run::new(100, 30);
     run.cwd = Some(fixture.root.clone());
-    let input = keys(&[DOWN, DOWN, DOWN, b"\x1b[13~", b"\x04"]);
+    let input = keys(&[DOWN, DOWN, DOWN, b"\x1b[13~", b"\x1bv"]);
     run.input = &input;
     run.settle = Duration::from_secs(6);
     let (parser, _) = run_in_pty(run);
@@ -2082,7 +2082,7 @@ fn ctrl_d_swaps_the_document_for_the_diff() {
 
     assert!(
         text.contains("--- readme.md (HEAD)"),
-        "Ctrl+D did not swap the document for the diff:\n{text}"
+        "Alt+V did not swap the document for the diff:\n{text}"
     );
     assert!(
         text.contains("-committed body") && text.contains("+working body"),

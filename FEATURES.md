@@ -135,14 +135,14 @@ Read-only is the feature, not a stage of one: there is no write path to disable.
   too, as its fields; one they do not still shows what can be read of it.
 - In hex mode a template paints the regions it knows, and stepping the cursor
   into one reads it out in the status bar: what the field is, and its value.
-- **Diffs.** `Ctrl+D` shows the file's diff against `HEAD`, and `Alt+Shift+F2`
+- **Diffs.** `Alt+V` shows the file's diff against `HEAD`, and `Alt+Shift+F2`
   diffs the file under each panel's cursor. Unified format, `+` and `-`
   coloured, unchanged runs collapsed behind `... 27 unchanged lines` and
   expandable.
 - The diff lives in the document mode rather than in one of its own, so `1` and
   `2` still give the file's own text and bytes and find still searches what is
   on screen. **The file's own format wins**: a modified `.md` opens as
-  markdown and `Ctrl+D` swaps to the diff, while a file no renderer claims -
+  markdown and `Alt+V` swaps to the diff, while a file no renderer claims -
   most source code - opens on the diff directly, there being no document for it
   to displace.
 - The status line says what git knows: `git modified`, or `git unmodified` for

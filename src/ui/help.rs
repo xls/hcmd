@@ -1166,7 +1166,17 @@ fn extend(lines: &mut Vec<String>, block: &str) {
 pub fn viewer_page(keymap: &crate::config::Keymap, enhanced: bool) -> String {
     use crate::input::Action;
     let mut out = String::from("Viewer keys\n\n");
-    let actions = [
+    // The order below is a *preference*, not the list. Every action with a
+    // viewer binding of its own is printed, whether or not it is named here,
+    // and anything unnamed follows in declaration order.
+    //
+    // It used to be the list, and that is how `Ctrl+D` came to be missing from
+    // this page on the day it was bound, and `F2` for reload for far longer: a
+    // hand-kept table of what the program does drifts from what the program
+    // does the moment somebody adds a key. The whole-program page has been
+    // generated from the keymap since it existed; there was never a reason for
+    // this one not to be.
+    let preferred = [
         Action::Close,
         Action::ModeText,
         Action::ModeHex,
@@ -1225,6 +1235,14 @@ pub fn viewer_page(keymap: &crate::config::Keymap, enhanced: bool) -> String {
         Action::FileInfo,
         Action::Help,
     ];
+    // Every viewer key: the preferred order first, then anything bound in the
+    // viewer context that the order does not mention.
+    let mut actions: Vec<Action> = preferred.to_vec();
+    for action in Action::ALL {
+        if group_of(keymap, *action) == Group::Viewer && !actions.contains(action) {
+            actions.push(*action);
+        }
+    }
     let width = actions
         .iter()
         .map(|a| bindings_text(keymap, *a, enhanced).chars().count())
@@ -1298,6 +1316,9 @@ fn bindings_text(
 const fn viewer_description(action: crate::input::Action) -> &'static str {
     use crate::input::Action;
     match action {
+        // What mode 3 is showing, which is the file's own document by default
+        // and its diff against git when there is one to show.
+        Action::ToggleDiff => "Swap mode 3 between the document and the diff",
         Action::Edit => "Toggle between text and hex",
         Action::CaretLeft => "Move the cursor left one character or column",
         Action::CaretRight => "Move the cursor right one character or column",
@@ -1347,6 +1368,28 @@ const fn viewer_description(action: crate::input::Action) -> &'static str {
 mod tests {
     use super::*;
     use crate::config::Config;
+
+    #[test]
+    fn every_viewer_key_is_on_the_viewer_page() {
+        // The page is generated from the keymap, and this is what says so. It
+        // was a hand-written list of actions, and two keys went missing that
+        // way: `Ctrl+D` on the day it was bound, and `F2` for reload for far
+        // longer. A page that documents what somebody remembered to add is not
+        // a reference.
+        let app = app();
+        let page = viewer_page(&app.keymap, app.keyboard.enhanced);
+        for action in Action::ALL {
+            if group_of(&app.keymap, *action) != Group::Viewer {
+                continue;
+            }
+            let keys = bindings_text(&app.keymap, *action, app.keyboard.enhanced);
+            assert!(
+                page.contains(&keys),
+                "{} is bound in the viewer to {keys} and is not on the viewer page",
+                action.id()
+            );
+        }
+    }
 
     fn app() -> App {
         App::headless(
