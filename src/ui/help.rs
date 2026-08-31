@@ -1085,8 +1085,24 @@ fn dialog_help(id: DialogId) -> (&'static str, &'static str) {
         ),
         DialogId::Connect => (
             "Connect",
-            "Ctrl+F: a quick-connect line or a saved host. See the Remote\n\
- connections section.",
+            "Ctrl+F: a quick-connect line, or a saved host from the list.\n\
+             \n\
+             The line takes [scheme://][user[:pass]@]host[:port][/path], and\n\
+             the scheme decides the protocol:\n\
+             \n\
+             \x20 sftp://    SSH file transfer, the default when none is given\n\
+             \x20 ftp://     plain FTP\n\
+             \x20 ftps://    FTP with TLS\n\
+             \x20 smb://     an SMB or Windows share\n\
+             \n\
+             A share is the first component of an SMB path, so\n\
+             smb://nas/Media/photos is the share Media. //nas/Media works too.\n\
+             \n\
+             With no user, SFTP tries your SSH agent and your key files before\n\
+             it asks for anything; a password is only requested when those\n\
+             have been tried and refused. A password typed here is used for\n\
+             this connection and offered to the keyring, never written to\n\
+             hosts.toml.",
         ),
         DialogId::HostForm => (
             "Add host",

@@ -48,8 +48,18 @@ pub(super) fn dialog_key(app: &mut App, press: KeyPress, ctx: KeyContext) -> Res
         let id = app.top_dialog().map(crate::dialog::Dialog::id);
         if let Some(id) = id {
             let (title, body) = crate::ui::help::dialog_help_text(id);
-            app.push_dialog(Box::new(crate::ui::dialog::fileinfo::FileInfoDialog::help(
-                title, body,
+            // A message box, which is what every other multi-line answer in
+            // this program already is. It takes its width from the longest
+            // line and its height from how many there are, so the paragraph is
+            // laid out rather than folded into a corner.
+            //
+            // The file-information box was used here first and was the wrong
+            // shape: it measures its height in *rows of facts*, and a wrapped
+            // paragraph is one row, so a whole page of text arrived in a
+            // two-line window.
+            app.push_dialog(Box::new(crate::dialog::MessageDialog::new(
+                title,
+                body.lines().map(str::to_string).collect(),
             )));
         }
         return Ok(());

@@ -80,20 +80,6 @@ fn pairs(lines: &[SummaryLine]) -> impl Iterator<Item = Row> + '_ {
 }
 
 impl FileInfoDialog {
-    /// The same box, answering `F1` for another dialog.
-    ///
-    /// `F1` inside a dialog used to open the whole reference in a viewer, and
-    /// dialogs draw over viewers, so the answer appeared **behind** the
-    /// question. A popup on top of the stack is what "explains that dialog"
-    /// has to mean, and `Esc` puts the reader back on the dialog they asked
-    /// about rather than somewhere else entirely.
-    #[must_use]
-    pub fn help(title: impl Into<String>, body: &str) -> Self {
-        let mut dialog = Self::statement(title, Vec::new(), body);
-        dialog.id = DialogId::Help;
-        dialog
-    }
-
     /// A dialog that states a result rather than describing a file.
     ///
     /// The two-file compare verdict is built with this. It is the same box,

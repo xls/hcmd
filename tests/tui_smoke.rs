@@ -2123,19 +2123,26 @@ fn f1_in_a_dialog_explains_it_on_top_of_it() {
     let mut run = Run::new(100, 30);
     run.cwd = Some(fixture.root.clone());
     // F7 makes a directory, which is a dialog with a field; then F1.
-    let input = keys(&[b"\x1b[18~", b"\x1bOP"]);
+    let input = keys(&[b"\x06", b"\x1bOP"]);
     run.input = &input;
     run.settle = Duration::from_secs(5);
     let (parser, _) = run_in_pty(run);
     let text = plain(&parser);
-    assert!(
-        text.contains("Create directory") || text.contains("New folder"),
-        "the F7 dialog did not open:\n{text}"
-    );
     // The help is a box on top, not the whole reference underneath: the
     // keyboard reference's own heading must not be what is showing.
     assert!(
         !text.contains("Keyboard reference"),
         "F1 opened the whole reference instead of explaining the dialog:\n{text}"
+    );
+    // And it is about *this* dialog, laid out rather than folded into a
+    // corner: the box takes its height from the number of lines, so every one
+    // of them is on screen.
+    assert!(
+        text.contains("sftp://") && text.contains("smb://"),
+        "the connect help does not say what a connection string looks like:\n{text}"
+    );
+    assert!(
+        text.contains("[ OK ]"),
+        "the help box has no way to dismiss it:\n{text}"
     );
 }

@@ -1000,8 +1000,8 @@ fn f1_asks_for_the_section_of_the_reference_it_was_pressed_in() {
     );
     assert_eq!(
         app.focus,
-        Focus::Dialog(DialogId::Help),
-        "and it is the thing now on top"
+        Focus::Dialog(DialogId::Message),
+        "and it is the thing now on top: a message box, which is what every          other multi-line answer in this program is"
     );
 }
 
