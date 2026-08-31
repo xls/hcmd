@@ -114,15 +114,20 @@ impl DialogKey {
         self.press.code == KeyCode::Enter || self.action == Some(Action::Open)
     }
 
-    /// `Tab`.
+    /// `Tab`, or whatever `dialog_next_control` is bound to in the `[dialog]`
+    /// context. `Tab` stays a hardcoded fallback the way `Esc` does for cancel,
+    /// so the key works even in a keymap that never names the action.
     pub fn is_next_control(&self) -> bool {
-        self.press.code == KeyCode::Tab && !self.press.mods.contains(KeyModifiers::SHIFT)
+        (self.press.code == KeyCode::Tab && !self.press.mods.contains(KeyModifiers::SHIFT))
+            || self.action == Some(Action::DialogNextControl)
     }
 
-    /// `Shift+Tab`. `BackTab` is normalised to this before it arrives.
-    ///
+    /// `Shift+Tab`, or whatever `dialog_prev_control` is bound to. `BackTab` is
+    /// normalised to `Shift+Tab` before it arrives; the hardcoded fallback is
+    /// kept for the same reason [`Self::is_next_control`] keeps its `Tab`.
     pub fn is_prev_control(&self) -> bool {
-        self.press.code == KeyCode::Tab && self.press.mods.contains(KeyModifiers::SHIFT)
+        (self.press.code == KeyCode::Tab && self.press.mods.contains(KeyModifiers::SHIFT))
+            || self.action == Some(Action::DialogPrevControl)
     }
 
     /// The character this key types, or `None` when it is not text.
@@ -1344,6 +1349,29 @@ mod tests {
         assert!(ring.handle(&shift_tab));
         assert!(ring.is(0));
         assert!(!ring.handle(&key(KeyCode::Char('a'))));
+    }
+
+    #[test]
+    fn a_rebound_focus_key_moves_focus_and_tab_still_works() {
+        // The `[dialog]` context can put `dialog_next_control` on another key,
+        // and the ring follows the resolved action - while `Tab` stays a live
+        // fallback the way `Esc` does for cancel.
+        let mut ring = FocusRing::new(3);
+        let next = DialogKey {
+            press: KeyPress::new(KeyCode::Char('n'), KeyModifiers::CONTROL),
+            action: Some(Action::DialogNextControl),
+        };
+        assert!(ring.handle(&next));
+        assert!(ring.is(1));
+        let prev = DialogKey {
+            press: KeyPress::new(KeyCode::Char('p'), KeyModifiers::CONTROL),
+            action: Some(Action::DialogPrevControl),
+        };
+        assert!(ring.handle(&prev));
+        assert!(ring.is(0));
+        // Tab is untouched by the rebinding.
+        assert!(ring.handle(&key(KeyCode::Tab)));
+        assert!(ring.is(1));
     }
 
     #[test]

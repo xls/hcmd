@@ -273,7 +273,13 @@ contents were not recognised, which is most files and is not a failure.
   a theme before writing anything, writes it into `themes/`, and applies it. A
   machine with no network simply sees the themes it already has, and every
   network failure is a line in the status bar and nothing more.
-- Every binding is rebindable per context in `keymap.toml`.
+- Every command binding is rebindable per context in `keymap.toml`, including
+  cancel, accept, and moving between a dialog's controls. The arrow, page and
+  Home/End keys inside a dialog's own list move that widget's cursor and are
+  the same in every dialog by design.
+- A `keymap.toml` written by an older version is noticed at startup: it predates
+  every binding added since and silently shadows them, so one line says so and
+  points at the fix rather than leaving keys that appear to do nothing.
 - The `F1` reference is *generated from your keymap*, so it shows your bindings,
   and marks any that this terminal cannot deliver alongside the fallback that
   works.

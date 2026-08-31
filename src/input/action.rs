@@ -276,6 +276,8 @@ actions! {
 
     // ------------------------------------------------------------- panel ----
     Open              = "open",              V01,  "Open the entry under the cursor";
+    DialogNextControl = "dialog_next_control", V09, "Move to the next control in a dialog";
+    DialogPrevControl = "dialog_prev_control", V09, "Move to the previous control in a dialog";
     OpenWith          = "open_with",         V07, "Open with the associated application, never execute";
     Parent            = "parent",            V01,  "Go to the parent directory";
     EnterAsDir        = "enter_as_dir",      V01,  "Enter the entry under the cursor as a directory";

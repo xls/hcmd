@@ -436,3 +436,16 @@ copy_interpretation = ["ctrl+shift+c", "alt+c"]
 # it rectangularly. That same fallback rule again -- and it is useful on its
 # own, because it turns a selection already made into a column block.
 select_block      = ["alt+b"]
+
+# A modal dialog has focus. esc and enter cancel and accept in every dialog and
+# take their meaning from `clear` and `open`, so rebinding those rebinds these.
+# Moving between a dialog's controls was the one thing with no binding to
+# change: tab and shift+tab were wired in, not read from here. Now they are.
+# tab and shift+tab stay live as a fallback whatever these say, the way esc
+# always cancels, so a dialog is never left with no way to move focus. The
+# arrow, page and home/end keys inside a list are not rebindable: they move a
+# widget's own cursor rather than a shared one, and are the same in every
+# dialog on purpose.
+[dialog]
+dialog_next_control = ["tab"]
+dialog_prev_control = ["shift+tab"]
