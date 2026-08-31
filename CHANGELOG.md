@@ -2,6 +2,11 @@
 
 Notable changes per release, one line each. Newest first.
 
+## v0.9.7
+
+- A keymap.toml from an older version is now noticed at startup, so bindings added since do not silently do nothing.
+- Moving between a dialog's controls (Tab and Shift+Tab) is now rebindable through a [dialog] keymap context.
+
 ## v0.9.6
 
 - Compare Directories can now compare by content with Ctrl+Shift+F2, catching a file that differs without differing in size or date. Shift+F2 stays the quick size-and-date compare.
