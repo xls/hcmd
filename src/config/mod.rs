@@ -745,6 +745,7 @@ static CONFIG_SCHEMA: std::sync::LazyLock<Schema> = std::sync::LazyLock::new(|| 
             "view_max_size",
             "pool_size",
             "strict_host_keys",
+            "s3_credentials_from_env",
             "listing_ttl",
             "pipeline",
         ],

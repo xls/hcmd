@@ -98,8 +98,21 @@ pub(super) fn dialog_key(app: &mut App, press: KeyPress, ctx: KeyContext) -> Res
             // on the dialog is off the stack.
             // Answered, so the pending `oneshot` of the design
             // must survive the pop: see `App::pop_answered_dialog`.
-            let closed = app.pop_answered_dialog().map(|d| (d.id(), d.job()));
-            if let Some((id, job)) = closed {
+            // The dialog itself is kept, not merely its id: the host form can
+            // carry a password, and a secret typed into a form has exactly one
+            // moment to be read - after the form is answered and before it is
+            // dropped. It never reaches `hosts.toml`.
+            let closed = app.pop_answered_dialog();
+            if let Some(dialog) = closed {
+                let (id, job) = (dialog.id(), dialog.job());
+                let secret = dialog
+                    .as_any()
+                    .and_then(|any| any.downcast_ref::<crate::remote::connect::HostFormDialog>())
+                    .and_then(crate::remote::connect::HostFormDialog::typed_password);
+                drop(dialog);
+                if let Some(secret) = secret {
+                    app.pending_host_secret = Some(secret);
+                }
                 dialog_answered(app, id, job, result);
             }
         }
@@ -621,6 +634,22 @@ pub fn dialog_answered(app: &mut App, id: DialogId, job: Option<JobId>, result: 
 /// the stack, and is marked for writing. Exactly the shape `save_search_named`
 /// has for the Find dialog's Load/Save tab.
 fn host_form_answered(app: &mut App, list: Vec<crate::remote::hosts::SavedHost>) {
+    // A password typed into the form goes into the **keyring**, under the same
+    // account the connect path reads it back from, and the host's auth method
+    // becomes `keyring` so that it is looked for. `hosts.toml` never carries
+    // it: that file is the non-secret half and stays that way even now the
+    // form can ask.
+    //
+    // Queued rather than written here, because a keyring write is I/O and
+    // `dispatch` performs none.
+    if let Some(secret) = app.pending_host_secret.take()
+        && let Some(host) = list.last()
+    {
+        app.request_keyring_write(crate::app::links::KeyringWrite {
+            account: host.target().keyring_account(),
+            secret,
+        });
+    }
     app.hosts.replace(list.clone());
     if let Some(dialog) = app
         .top_dialog_mut()

@@ -352,6 +352,17 @@ keepalive        = "30s"
 view_max_size    = "32MiB"
 pool_size        = 4
 strict_host_keys = true       # a changed host key is always fatal
+
+# S3 credentials from the environment: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
+# AWS_SESSION_TOKEN and AWS_REGION (or AWS_DEFAULT_REGION). The names every AWS
+# tool uses, so a shell already set up for `aws` or `rclone` needs nothing typed
+# in the connect line.
+#
+# What you type always wins; the environment only fills in what was left blank.
+# A setting rather than a rule because ambient credentials are a surprising
+# thing to apply silently: a key left over in a shell would otherwise connect
+# you to an account you did not name, and the panel looks the same either way.
+s3_credentials_from_env = true
 listing_ttl      = "2s"       # how long a cached directory listing is served
 pipeline         = 4          # chunks of a transfer in flight at once
 

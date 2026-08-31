@@ -1077,9 +1077,10 @@ pub async fn run_connect(
         Protocol::S3 => {
             let target = target.clone();
             let password = answer.password;
+            let from_env = config.s3_credentials_from_env;
             tokio::task::spawn_blocking(move || {
                 let secret = password.as_ref().map(crate::remote::secret::Secret::expose);
-                let fs = crate::remote::s3::S3Fs::connect(&target, &target.user, secret)?;
+                let fs = crate::remote::s3::S3Fs::connect(&target, &target.user, secret, from_env)?;
                 let start = fs.start_dir().to_string();
                 Ok((Arc::new(fs) as Arc<dyn RemoteTransport>, start))
             })

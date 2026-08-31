@@ -1152,6 +1152,8 @@ pub enum FormControl {
     Auth,
     /// The key file, for `auth = key`.
     KeyFile,
+    /// A password to put in the keyring, for `auth = keyring`.
+    Password,
     /// The initial remote directory.
     RemoteDir,
     /// the initial local directory for the other panel.
@@ -1174,6 +1176,7 @@ pub const FORM_MNEMONICS: &[(FormControl, char)] = &[
     (FormControl::User, 'u'),
     (FormControl::Auth, 'a'),
     (FormControl::KeyFile, 'k'),
+    (FormControl::Password, 'w'),
     (FormControl::RemoteDir, 'd'),
     (FormControl::LocalDir, 'i'),
     (FormControl::Save, 'o'),
@@ -1189,6 +1192,7 @@ const FORM_CONTROLS: &[FormControl] = &[
     FormControl::Protocol,
     FormControl::Auth,
     FormControl::KeyFile,
+    FormControl::Password,
     FormControl::RemoteDir,
     FormControl::LocalDir,
     FormControl::Save,
@@ -1202,6 +1206,9 @@ pub const PROTOCOLS: &[Protocol] = &[
     Protocol::Ftps,
     Protocol::FtpsImplicit,
     Protocol::Smb,
+    Protocol::Dav,
+    Protocol::Davs,
+    Protocol::S3,
 ];
 
 /// How wide the label column is. `Initial local directory:` is the longest.
@@ -1220,6 +1227,7 @@ const FORM_ROWS: &[(FormControl, &str, char)] = &[
     (FormControl::Port, "Port:", 'r'),
     (FormControl::User, "Username:", 'u'),
     (FormControl::KeyFile, "Key file:", 'k'),
+    (FormControl::Password, "Password:", 'w'),
     (FormControl::RemoteDir, "Remote directory:", 'd'),
     (FormControl::LocalDir, "Initial local directory:", 'i'),
 ];
@@ -1235,10 +1243,10 @@ const STEPPER_ROW: u16 = 4;
 /// takes back through [`ConnectDialog::set_hosts`]: one list travels, so the
 /// two cannot disagree about what is in the book.
 ///
-/// `Debug` is derived and safe: every field here is one of the design's
-/// non-secret ones, and there is no password field to leak
-/// (the design S2).
-#[derive(Debug)]
+/// `Debug` is **written by hand**, because one field here can now hold a
+/// secret. Everything else on the form is one of the design's non-secret
+/// values; the password is redacted rather than the whole type being
+/// unprintable, so a trace of a connect attempt is still readable.
 pub struct HostFormDialog {
     hosts: Vec<SavedHost>,
     editing: Option<usize>,
@@ -1247,6 +1255,13 @@ pub struct HostFormDialog {
     port: Field,
     user: Field,
     key_file: Field,
+    /// The password, when one is being put into the keyring.
+    ///
+    /// A `Field` like the others, and **kept out of `Debug`** by the manual
+    /// implementation below: this is the one field on this form that can hold
+    /// a secret, and the type's derived `Debug` was the thing that made the
+    /// rest of it safe to print.
+    password: Field,
     remote_dir: Field,
     local_dir: Field,
     protocol: usize,
@@ -1255,7 +1270,42 @@ pub struct HostFormDialog {
     ring: FocusRing,
 }
 
+impl std::fmt::Debug for HostFormDialog {
+    /// Everything but the password, which is redacted rather than the whole
+    /// type being unprintable: a trace of a connect attempt is worth reading,
+    /// and the one field that could carry a secret is the one field left out.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HostFormDialog")
+            .field("hosts", &self.hosts.len())
+            .field("editing", &self.editing)
+            .field("label", &self.label)
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("user", &self.user)
+            .field("key_file", &self.key_file)
+            .field("password", &"<redacted>")
+            .field("remote_dir", &self.remote_dir)
+            .field("local_dir", &self.local_dir)
+            .field("protocol", &self.protocol)
+            .field("auth", &self.auth)
+            .field("error", &self.error)
+            .finish()
+    }
+}
+
 impl HostFormDialog {
+    /// The password typed into the form, when one was.
+    ///
+    /// Read once, by the handler that stores it in the keyring, and never
+    /// written anywhere else. `hosts.toml` does not carry it: that file is
+    /// the design's non-secret half and this is the reason it stays that way
+    /// even though the form can now ask.
+    #[must_use]
+    pub fn typed_password(&self) -> Option<String> {
+        let text = self.password.text();
+        (!text.is_empty()).then(|| text.to_string())
+    }
+
     /// A form over `hosts`, editing the entry at `editing` or adding a new one.
     ///
     /// An `editing` index that is not in the list is treated as an add, which
@@ -1286,6 +1336,7 @@ impl HostFormDialog {
             hosts,
             editing,
             label: Field::with_text(host.label),
+            password: Field::new(),
             host: Field::with_text(host.host),
             port: Field::with_text(port),
             user: Field::with_text(host.username),
@@ -1341,6 +1392,7 @@ impl HostFormDialog {
             FormControl::Port => Some(&self.port),
             FormControl::User => Some(&self.user),
             FormControl::KeyFile => Some(&self.key_file),
+            FormControl::Password => Some(&self.password),
             FormControl::RemoteDir => Some(&self.remote_dir),
             FormControl::LocalDir => Some(&self.local_dir),
             FormControl::Protocol | FormControl::Auth | FormControl::Save | FormControl::Cancel => {
@@ -1357,6 +1409,7 @@ impl HostFormDialog {
             FormControl::Port => Some(&mut self.port),
             FormControl::User => Some(&mut self.user),
             FormControl::KeyFile => Some(&mut self.key_file),
+            FormControl::Password => Some(&mut self.password),
             FormControl::RemoteDir => Some(&mut self.remote_dir),
             FormControl::LocalDir => Some(&mut self.local_dir),
             FormControl::Protocol | FormControl::Auth | FormControl::Save | FormControl::Cancel => {
@@ -1472,6 +1525,7 @@ impl Accelerated for HostFormDialog {
             // to "accelerate a multi-way control" and both candidate meanings
             // turn something off.
             | FormControl::Protocol
+            | FormControl::Password
             | FormControl::Auth => Accel::Focus,
             FormControl::Save | FormControl::Cancel => Accel::Press,
         }
@@ -1492,7 +1546,8 @@ impl Accelerated for HostFormDialog {
         match control {
             FormControl::Save => self.accept(),
             FormControl::Cancel => DialogOutcome::Cancel,
-            FormControl::Label
+            FormControl::Password
+            | FormControl::Label
             | FormControl::Protocol
             | FormControl::Host
             | FormControl::Port
@@ -1518,9 +1573,13 @@ impl Dialog for HostFormDialog {
     }
 
     fn size_hint(&self) -> (u16, u16) {
-        // Seven field rows, the stepper row they are split around, the error
-        // row, the button row, two borders.
-        (72, 12)
+        // The field rows, the stepper row they are split around, the error
+        // row, the button row, two borders. Counted from `FORM_ROWS` rather
+        // than written down, because a row added to that table and not here
+        // pushes the buttons off the bottom of the box - which is what
+        // happened when the password row arrived.
+        let fields = u16::try_from(FORM_ROWS.len()).unwrap_or(8);
+        (72, fields.saturating_add(5))
     }
 
     /// All eleven.
@@ -1557,6 +1616,7 @@ impl Dialog for HostFormDialog {
                 | FormControl::User
                 | FormControl::Auth
                 | FormControl::KeyFile
+                | FormControl::Password
                 | FormControl::RemoteDir
                 | FormControl::LocalDir
                 | FormControl::Save => self.accept(),
@@ -1633,7 +1693,16 @@ impl Dialog for HostFormDialog {
             if width > 0
                 && let Some(field) = self.field(*control)
             {
-                field.render(f, Rect::new(x, rect.y, width, 1), style);
+                let cell = Rect::new(x, rect.y, width, 1);
+                if *control == FormControl::Password {
+                    // Drawn as marks, never as itself. The field still holds
+                    // the text - it has to, to be edited and then stored - and
+                    // this is the only place it would otherwise appear.
+                    let marks = "*".repeat(field.text().chars().count().min(usize::from(width)));
+                    draw_text(f, cell, &marks, style.input(), style.ascii);
+                } else {
+                    field.render(f, cell, style);
+                }
             }
         }
         if let Some(rect) = row(area, STEPPER_ROW) {
@@ -1676,6 +1745,7 @@ impl Dialog for HostFormDialog {
                 | FormControl::User
                 | FormControl::Auth
                 | FormControl::KeyFile
+                | FormControl::Password
                 | FormControl::RemoteDir
                 | FormControl::LocalDir => usize::MAX,
             };

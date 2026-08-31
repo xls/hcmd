@@ -73,6 +73,9 @@ pub struct S3Fs {
     secret: Vec<u8>,
     /// Which region to sign for.
     region: String,
+    /// `AWS_SESSION_TOKEN`, for temporary credentials. Signed as a header, so
+    /// it has to be present at signing time rather than added afterwards.
+    session_token: Option<String>,
     /// Where the panel opens: `/bucket` or `/bucket/prefix`.
     root: String,
     /// Cleared by [`RemoteTransport::close`].
@@ -85,19 +88,50 @@ impl S3Fs {
     /// Lists the starting directory, because a connection that cannot do that
     /// is not connected and finding out here means the panel never opens onto
     /// an error.
-    pub fn connect(target: &Target, access_key: &str, secret: Option<&[u8]>) -> Result<Self> {
+    pub fn connect(
+        target: &Target,
+        access_key: &str,
+        secret: Option<&[u8]>,
+        from_env: bool,
+    ) -> Result<Self> {
         let port = target.port;
         let host = if port == Protocol::S3.default_port() {
             target.host.clone()
         } else {
             format!("{}:{port}", target.host)
         };
+        // What was typed wins; the environment fills in what was not. That
+        // order matters: somebody who typed a key meant that key, and an
+        // AWS_ACCESS_KEY_ID left over in the shell silently overriding it
+        // would be a connection to the wrong account with no way to see why.
+        let env = if from_env {
+            Credentials::from_env()
+        } else {
+            Credentials::default()
+        };
+        let access_key = if access_key.is_empty() {
+            env.access_key.clone().unwrap_or_default()
+        } else {
+            access_key.to_string()
+        };
+        let secret = match secret {
+            Some(bytes) if !bytes.is_empty() => bytes.to_vec(),
+            _ => env.secret.clone().unwrap_or_default().into_bytes(),
+        };
+        // A region from the environment beats one guessed from the hostname,
+        // because the guess is only ever a guess and `AWS_REGION` is a
+        // statement.
+        let region = env
+            .region
+            .clone()
+            .unwrap_or_else(|| region_of(&target.host));
         let fs = Self {
             origin: format!("https://{host}"),
-            region: region_of(&target.host),
+            region,
             host,
-            access_key: access_key.to_string(),
-            secret: secret.unwrap_or_default().to_vec(),
+            access_key,
+            secret,
+            session_token: env.session_token.clone(),
             root: normalise(target.dir.as_deref().unwrap_or("/")),
             live: AtomicBool::new(true),
         };
@@ -157,6 +191,15 @@ impl S3Fs {
             sign::sha256_hex(body)
         };
         let timestamp = timestamp();
+        // The session token is **signed**, not merely sent: a temporary
+        // credential's token is part of what the endpoint verifies, and
+        // adding it to the request afterwards produces a 403 that says
+        // nothing about which header was missing.
+        let mut extra = extra.to_vec();
+        if let Some(token) = self.session_token.as_ref() {
+            extra.push(("x-amz-security-token".to_string(), token.clone()));
+        }
+        let extra = extra.as_slice();
         let signed = sign::sign(
             &sign::Request {
                 method,
@@ -459,7 +502,50 @@ impl S3Fs {
             secret: self.secret.clone(),
             region: self.region.clone(),
             root: self.root.clone(),
+            session_token: self.session_token.clone(),
             live: AtomicBool::new(self.live.load(Ordering::Relaxed)),
+        }
+    }
+}
+
+/// What the environment says about AWS credentials.
+///
+/// The names every AWS tool uses, so a shell already set up for `aws` or
+/// `rclone` needs nothing typed here: `Ctrl+F`, `s3://s3.amazonaws.com`, and
+/// the keys come from where they already are.
+///
+/// **Read, never written.** Nothing here puts a credential into the
+/// environment, into `hosts.toml`, or into a log.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Credentials {
+    /// `AWS_ACCESS_KEY_ID`.
+    pub access_key: Option<String>,
+    /// `AWS_SECRET_ACCESS_KEY`.
+    pub secret: Option<String>,
+    /// `AWS_SESSION_TOKEN`, set by SSO and by assumed roles.
+    pub session_token: Option<String>,
+    /// `AWS_REGION`, or `AWS_DEFAULT_REGION` where that is the one set.
+    pub region: Option<String>,
+}
+
+impl Credentials {
+    /// Read them.
+    #[must_use]
+    pub fn from_env() -> Self {
+        Self::from(&|name: &str| std::env::var(name).ok())
+    }
+
+    /// The same, from any source, so a test needs no environment of its own.
+    #[must_use]
+    pub fn from(get: &dyn Fn(&str) -> Option<String>) -> Self {
+        let nonempty = |name: &str| get(name).filter(|v| !v.trim().is_empty());
+        Self {
+            access_key: nonempty("AWS_ACCESS_KEY_ID"),
+            secret: nonempty("AWS_SECRET_ACCESS_KEY"),
+            session_token: nonempty("AWS_SESSION_TOKEN"),
+            // `AWS_REGION` is the newer name and wins where both are set,
+            // which is what every AWS SDK does.
+            region: nonempty("AWS_REGION").or_else(|| nonempty("AWS_DEFAULT_REGION")),
         }
     }
 }

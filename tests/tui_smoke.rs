@@ -2208,3 +2208,30 @@ fn a_checksum_file_this_writes_verifies_with_sha256sum() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+#[test]
+fn the_host_form_offers_every_protocol_and_masks_the_password() {
+    let fixture = JsonDoc::new("hostform");
+    let mut run = Run::new(110, 34);
+    run.cwd = Some(fixture.root.clone());
+    // Ctrl+F opens connect, Alt+A is "Add host", then type into the password
+    // field by tabbing to it. `w` is its mnemonic.
+    let input = keys(&[b"\x06", b"\x1ba", b"\x1bw", b"hunter2"]);
+    run.input = &input;
+    run.settle = Duration::from_secs(5);
+    let (parser, _) = run_in_pty(run);
+    let text = plain(&parser);
+
+    assert!(
+        text.contains("Password:"),
+        "the host form has no password field:\n{text}"
+    );
+    assert!(
+        !text.contains("hunter2"),
+        "the password was drawn as itself:\n{text}"
+    );
+    assert!(
+        text.contains("*******"),
+        "the password is drawn as marks:\n{text}"
+    );
+}

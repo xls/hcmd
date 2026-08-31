@@ -42,6 +42,31 @@ pub struct ChmodRequest {
     pub mode: u32,
 }
 
+/// A password to put in the system keyring.
+///
+/// Typed into the host form, which is the one place in this program that asks
+/// for a secret it is going to keep. It goes to the keyring and nowhere else:
+/// `hosts.toml` is the non-secret half of the design and stays that way.
+#[derive(Clone)]
+pub struct KeyringWrite {
+    /// The account it is stored under, which is what the connect path reads
+    /// back.
+    pub account: String,
+    /// The secret itself.
+    pub secret: String,
+}
+
+impl std::fmt::Debug for KeyringWrite {
+    /// The account, never the secret. This type exists to carry one and a
+    /// derived `Debug` would print it into any trace that touched the queue.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KeyringWrite")
+            .field("account", &self.account)
+            .field("secret", &"<redacted>")
+            .finish()
+    }
+}
+
 /// What one of these finished doing, for the status line.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinkOutcome {
@@ -55,6 +80,16 @@ impl App {
     /// Queue a link.
     pub fn request_link(&mut self, request: LinkRequest) {
         self.pending_link = Some(request);
+    }
+
+    /// Queue a keyring write.
+    pub fn request_keyring_write(&mut self, request: KeyringWrite) {
+        self.pending_keyring = Some(request);
+    }
+
+    /// The queued keyring write, for the event loop and for tests.
+    pub fn take_pending_keyring(&mut self) -> Option<KeyringWrite> {
+        self.pending_keyring.take()
     }
 
     /// Queue a permission change.
@@ -79,6 +114,33 @@ impl App {
             let tx = tx.clone();
             tokio::task::spawn_blocking(move || {
                 let _ = tx.blocking_send(make_link(vfs.as_ref(), &request));
+            });
+        }
+        if let Some(request) = self.take_pending_keyring() {
+            let tx = tx.clone();
+            tokio::task::spawn_blocking(move || {
+                let store = crate::remote::keyring::store();
+                let outcome = if store.available() {
+                    match store.set(
+                        &request.account,
+                        &crate::remote::secret::Secret::from_str(&request.secret),
+                    ) {
+                        Ok(()) => format!("password for {} saved to the keyring", request.account),
+                        Err(err) => format!("{}: {err}", request.account),
+                    }
+                } else {
+                    // Said, not silently dropped and not written to disk
+                    // instead: "say so in the dialog and fall back to
+                    // prompting every time" is the rule, and a password that
+                    // vanished without a word would look like it was kept.
+                    "no keyring on this machine, so the password was not saved; \
+                     it will be asked for each time"
+                        .to_string()
+                };
+                let _ = tx.blocking_send(LinkOutcome {
+                    message: outcome,
+                    select: None,
+                });
             });
         }
         if let Some(request) = self.take_pending_chmod() {

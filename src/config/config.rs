@@ -1186,6 +1186,18 @@ pub struct RemoteConfig {
     pub pool_size: usize,
     /// A changed host key is always fatal.
     pub strict_host_keys: bool,
+    /// Whether an S3 connection may take credentials from the environment.
+    ///
+    /// `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` and
+    /// `AWS_REGION`: the names every AWS tool uses, so a shell already set up
+    /// for `aws` or `rclone` needs nothing typed. What was typed always wins;
+    /// the environment only fills in what was left blank.
+    ///
+    /// A setting rather than a rule because ambient credentials are a
+    /// surprising thing to apply silently: a key left over in a shell would
+    /// otherwise connect somebody to an account they did not name, and the
+    /// panel would look exactly the same either way.
+    pub s3_credentials_from_env: bool,
     /// How long a cached directory listing is served for (
     /// "Directory listings are cached with a short TTL").
     ///
@@ -1212,6 +1224,7 @@ impl Default for RemoteConfig {
             view_max_size: ByteSize::mib(32),
             pool_size: 4,
             strict_host_keys: true,
+            s3_credentials_from_env: true,
             listing_ttl: Timeout(Duration::from_secs(2)),
             pipeline: 4,
         }
