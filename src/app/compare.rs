@@ -74,8 +74,26 @@ impl App {
     /// Queues a [`JobKind::Compare`] when `ops.compare_contents` left pairs
     /// undecided; nothing is read here.
     pub fn compare_lists(&mut self) {
-        let slack = self.config.ops.compare_mtime_slack.duration();
         let contents = self.config.ops.compare_contents;
+        self.compare_lists_inner(contents);
+    }
+
+    /// `compare_dirs_content`: the same comparison, forced to read the bytes.
+    ///
+    /// The thorough compare `Ctrl+Shift+F2` runs. Size and date find most of
+    /// what differs for nothing; this one goes on to read a pair the size and
+    /// date call equal, so a file edited without changing its length or touched
+    /// back to its old timestamp is still caught. It ignores
+    /// `ops.compare_contents` because pressing this key **is** the request to
+    /// compare contents, whatever the config default is.
+    pub fn compare_lists_content(&mut self) {
+        self.compare_lists_inner(true);
+    }
+
+    /// The shared body: mark what differs, and where `contents` asks for it,
+    /// queue the byte-for-byte job for the pairs the cheap steps left equal.
+    fn compare_lists_inner(&mut self, contents: bool) {
+        let slack = self.config.ops.compare_mtime_slack.duration();
         // Both panels are separate fields, so the two listings are borrowed at
         // once and neither is cloned: a comparison of two directories of a
         // million rows copies nothing.

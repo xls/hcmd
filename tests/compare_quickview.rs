@@ -163,6 +163,44 @@ fn compare_marks_both_panels_and_leaves_everything_else_alone() {
     );
 }
 
+/// `Ctrl+Shift+F2` reads the bytes of a pair that size and date call equal,
+/// even with `ops.compare_contents` off: pressing the key is the request to
+/// compare contents, whatever the config default is.
+#[test]
+fn a_content_compare_queues_the_byte_job_the_plain_compare_would_skip() {
+    let mut app = app_with(Config::default()); // compare_contents is off by default
+    seed(
+        &mut app,
+        Side::Left,
+        Path::new("/a"),
+        vec![
+            Entry::parent_entry(),
+            file("twin", 10, 100),
+            file("bigger", 10, 100),
+        ],
+    );
+    seed(
+        &mut app,
+        Side::Right,
+        Path::new("/b"),
+        vec![
+            Entry::parent_entry(),
+            file("twin", 10, 100),
+            file("bigger", 20, 100),
+        ],
+    );
+
+    // The plain compare reads nothing: the config leaves contents off, so the
+    // size-and-date-equal pair is called the same and never opened.
+    app.compare_lists();
+    assert!(app.take_pending_jobs().is_empty());
+
+    // The content compare queues the byte-for-byte job for exactly that pair.
+    app.compare_lists_content();
+    let jobs = app.take_pending_jobs();
+    assert_eq!(jobs.len(), 1, "one byte-for-byte job for the equal pair");
+}
+
 /// A second `Shift+F2` after files have been made identical clears what the
 /// first one marked: the design marks the differences "and nothing else",
 /// which means the marks are replaced rather than added to.

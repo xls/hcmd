@@ -6,9 +6,13 @@ is stated rather than glossed over.
 ## Panels
 
 - Two panels side by side, each with up to 9 tabs.
-- Columns: name, extension, size, date, attributes. Order and widths are
-  configurable, and columns are dropped in a configured priority as the panel
-  narrows. Name is never dropped.
+- Columns: name, extension, size, date, attributes, and a one-character git
+  state. Order and widths are configurable, and columns are dropped in a
+  configured priority as the panel narrows. Name is never dropped.
+- Git state in the listing: inside a repository each file carries a flag -
+  modified, staged, newly added or untracked - and the column appears only
+  where there is a repository to describe. On by default, and off turns the
+  whole check off so an ordinary directory read never touches git.
 - Sort by any column, ascending or descending, with a secondary sort. Positional
   binding: `Ctrl+<n>` sorts by the n-th column as *you* have ordered them.
 - Quick search by typing. Matching is incremental and the status line says when
@@ -18,10 +22,18 @@ is stated rather than glossed over.
 - Directory sizes on demand (`Space`), reported exactly.
 - Hidden files toggle, brief and full views, and a hotlist of bookmarked
   directories (`Ctrl+D`).
+- Quick view (`Ctrl+Q`): the opposite panel becomes a live view of the file
+  under the cursor, following it as the cursor moves.
+- Branch view (`Ctrl+B`): a flat, recursive listing of the whole tree under the
+  current directory, as one panel of files to search, mark and act on.
 
 ## Files
 
 - Copy, move, rename, delete, and make directory, on the classic function keys.
+- View (`F3`) and edit (`F4`) in the external viewer and editor. Editing a file
+  past a configurable size (10 MB by default) asks first, so a stray `F4` on a
+  disk image does not hand it to an editor that would try to load the whole
+  thing.
 - Multi-rename with a pattern language, a preview, and its own undo.
 - Conflict handling per file or for the whole batch: skip, overwrite, overwrite
   if newer, overwrite if a different size, rename, or refuse.
@@ -32,8 +44,11 @@ is stated rather than glossed over.
   where the filesystem refuses.
 - Every long operation runs as a cancellable background job with progress, and
   cancellation is honoured inside the copy loop rather than only between files.
-- Compare the two listings and mark what differs on either side, by name, size,
-  date and optionally by contents.
+- Compare the two listings and mark what differs on either side, by name, size
+  and date (`Shift+F2`), or by reading the bytes so a file changed without
+  changing its size or date is still caught (`Ctrl+Shift+F2`). Marking is all
+  it does: copy the marks whichever way you like with `F5` or `F6`, which is the
+  synchronise, driven by hand.
 - Compare the two files under the cursors byte for byte, for a verdict: the
   same file, or the offset at which they stop agreeing.
 - Copy the full path of the selection to the system clipboard, for pasting into
@@ -252,16 +267,12 @@ contents were not recognised, which is most files and is not a failure.
 - `Alt+T` previews each theme as the cursor moves over it, applies it on
   `Enter` and writes it into `config.toml` so it survives a restart. `Esc` puts
   back the one you started with.
-- The picker lists your own `themes/*.toml` beside the built-in ones, and
-  offers any the project's repository has that this machine does not, marked
-  with a trailing `+`. Choosing one downloads it, checks it parses as a theme
-  before writing anything, and applies it. A machine with no network simply
-  sees the themes it already has.
-- The `Alt+T` picker lists what is on this machine at once, then adds - marked
-  with a trailing `+` - the themes the project's repository has and this one
-  does not. `Enter` on such a name fetches it, checks it really is a theme,
-  writes it into `themes/`, and applies it. Every network failure is a line in
-  the status bar and nothing more.
+- The picker lists your own `themes/*.toml` beside the built-in ones, then adds
+  - marked with a trailing `+` - the themes the project's repository has and
+  this machine does not. `Enter` on such a name fetches it, checks it parses as
+  a theme before writing anything, writes it into `themes/`, and applies it. A
+  machine with no network simply sees the themes it already has, and every
+  network failure is a line in the status bar and nothing more.
 - Every binding is rebindable per context in `keymap.toml`.
 - The `F1` reference is *generated from your keymap*, so it shows your bindings,
   and marks any that this terminal cannot deliver alongside the fallback that

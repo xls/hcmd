@@ -179,6 +179,7 @@ actions! {
     DeletePermanent   = "delete_permanent",  V02, "Delete permanently, bypassing the trash";
     ContextMenu       = "context_menu",      V07, "Context menu for the entry under the cursor";
     CompareDirs       = "compare_dirs",      V07, "Compare the two file lists";
+    CompareDirsContent = "compare_dirs_content", V09, "Compare the two file lists by content";
     CompareFiles      = "compare_files",     V09, "Compare the two files byte for byte";
     DiffFiles         = "diff_files",        V09, "Show the two files as a diff";
     ToggleDiff        = "toggle_diff",       V09, "Swap mode 3 between the document and the diff";
@@ -576,6 +577,7 @@ mod tests {
             Action::DriveRight,
             Action::QuickView,
             Action::CompareDirs,
+            Action::CompareDirsContent,
             Action::ContextMenu,
             Action::Menu,
             Action::MenuFiles,
