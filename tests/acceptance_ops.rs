@@ -652,8 +652,10 @@ impl Session {
         None
     }
 
-    /// The left panel's entries that are **marked** (marked
-    /// entries render in `panel.marked_fg`, whole row, cursor included).
+    /// The left panel's entries that are **marked** (marked entries render in
+    /// `panel.marked_fg`, whole row; under the cursor the bar turns that
+    /// colour and the text takes the panel background, so the mark colour is
+    /// read from either the foreground or the background of the cell).
     ///
     /// A mark is a style and not a glyph, so this is the only honest way to ask
     /// which entries a mask caught. The scan starts below the column header,
@@ -684,7 +686,7 @@ impl Session {
                 ) else {
                     continue;
                 };
-                if cell.fgcolor() == want {
+                if cell.fgcolor() == want || cell.bgcolor() == want {
                     marked.push_str(cell.contents());
                 }
             }

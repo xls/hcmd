@@ -732,6 +732,24 @@ static THEME_SCHEMA: std::sync::LazyLock<super::Schema> = std::sync::LazyLock::n
 
 #[cfg(test)]
 mod tests {
+    /// The WCAG contrast ratio between two colours: 1.0 for identical, up to
+    /// 21.0 for black against white. 4.5 is the AA floor for normal text.
+    fn contrast(a: Rgb, b: Rgb) -> f64 {
+        fn luminance(c: Rgb) -> f64 {
+            fn channel(v: u8) -> f64 {
+                let s = f64::from(v) / 255.0;
+                if s <= 0.03928 {
+                    s / 12.92
+                } else {
+                    ((s + 0.055) / 1.055).powf(2.4)
+                }
+            }
+            0.2126 * channel(c.r) + 0.7152 * channel(c.g) + 0.0722 * channel(c.b)
+        }
+        let (la, lb) = (luminance(a), luminance(b));
+        (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
+    }
+
     /// Every shipped theme parses, covers every slot, and stays legible at 16
     /// colours. Generated from one palette (see `themes/`), so a slot
     /// missed in one would be missed in all twenty - which is exactly the kind
@@ -780,6 +798,19 @@ mod tests {
             assert!(warnings.is_empty(), "{name} warns: {warnings:#?}");
             let t = &theme;
             assert_eq!(t.name, *name, "the name field must match the file");
+
+            // A mark is shown by colour alone, so `marked_fg` must not merely
+            // differ from the background - it must read on it, and read the
+            // other way round too, because a marked row under the cursor turns
+            // the bar that colour with the background as its text. The light
+            // themes used to pick a soft amber that washed out on a near-white
+            // panel, which is invisible at exactly the moment - the cursor on a
+            // marked file - that it matters most.
+            let marked = contrast(t.panel.marked_fg, t.panel.bg);
+            assert!(
+                marked >= 4.5,
+                "{name}: marked_fg on bg is {marked:.2}:1, below the 4.5 legibility floor"
+            );
 
             for depth in [
                 ColorDepth::TrueColor,

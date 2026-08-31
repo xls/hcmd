@@ -14,7 +14,7 @@ dir_fg          = "#002b36"
 exec_fg         = "#859900"
 link_fg         = "#2aa198"
 archive_fg      = "#d33682"
-marked_fg       = "#b58900"
+marked_fg       = "#a35c00"
 cursor_bg       = "#268bd2"
 cursor_fg       = "#fdf6e3"
 # Drawn when the command line has focus: still clearly visible, one step back.

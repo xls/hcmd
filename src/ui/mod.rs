@@ -2079,37 +2079,30 @@ mod tests {
 
     #[test]
     fn a_marked_entry_still_shows_its_mark_under_the_cursor() {
-        // "Marked entries render in `panel.marked_fg`". There is
-        // no mark glyph, so the colour is the only indicator there is - a
-        // cursor row that drops it makes a marked entry indistinguishable from
-        // an unmarked one.
+        // There is no mark glyph, so the mark colour is the only indicator - a
+        // cursor row that dropped it made a marked entry indistinguishable from
+        // an unmarked one. Under the cursor the bar itself becomes
+        // `panel.marked_fg` with the panel background as its text, so the mark
+        // colour is on the row either way and stays legible where painting it
+        // as text on the cursor background did not.
         let mut a = app();
-        let marked_fg = Color::from_u32(u32::from_be_bytes([
-            0,
-            a.theme.panel.marked_fg.r,
-            a.theme.panel.marked_fg.g,
-            a.theme.panel.marked_fg.b,
-        ]));
+        let slot = |c: crate::config::Rgb| Color::from_u32(u32::from_be_bytes([0, c.r, c.g, c.b]));
+        let marked_fg = slot(a.theme.panel.marked_fg);
+        let panel_bg = slot(a.theme.panel.bg);
         {
             let tab = a.left.active_tab_mut();
             tab.move_to(1, 10);
             assert!(tab.toggle_mark(), "the row under the cursor is markable");
         }
         let buf = render(&a, 100, 20);
-        let cursor_bg = Color::from_u32(u32::from_be_bytes([
-            0,
-            a.theme.panel.cursor_bg.r,
-            a.theme.panel.cursor_bg.g,
-            a.theme.panel.cursor_bg.b,
-        ]));
         let marked_cursor_cells = buf
             .content()
             .iter()
-            .filter(|c| c.bg == cursor_bg && c.fg == marked_fg)
+            .filter(|c| c.bg == marked_fg && c.fg == panel_bg)
             .count();
         assert!(
             marked_cursor_cells > 0,
-            "the marked entry under the cursor lost panel.marked_fg"
+            "the marked entry under the cursor lost its mark-coloured bar"
         );
     }
 

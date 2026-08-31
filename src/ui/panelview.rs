@@ -506,17 +506,23 @@ fn draw_entries(
         let style = if is_cursor {
             // A full-width bar. The file-type colour is dropped on the cursor
             // row so the bar stays legible at 16 colours - but a *mark* is not
-            // a file-type colour. the design says marked entries render in
-            // `panel.marked_fg` with no cursor-row exception, and there is no
-            // second indicator to fall back on: without this the entry under
-            // the cursor looks unmarked whether it is or not, and the only way
-            // to find out is to move off it.
-            let fg = if marked {
-                theme.panel.marked_fg
+            // a file-type colour: the entry under the cursor must read as
+            // marked or not, without moving off it.
+            //
+            // A marked row under the cursor turns the bar itself the mark
+            // colour, with the panel background as the text. `marked_fg` is
+            // chosen to read against `bg` already - that is how a marked row
+            // reads when it is not the cursor - so the reverse is legible in
+            // every theme, where `marked_fg` painted as text on the cursor
+            // background was two accent colours on top of each other and, in
+            // almost every theme, barely a difference at all.
+            if marked {
+                Style::new()
+                    .bg(color(theme.panel.marked_fg))
+                    .fg(color(theme.panel.bg))
             } else {
-                cursor_fg
-            };
-            Style::new().bg(color(cursor_bg)).fg(color(fg))
+                Style::new().bg(color(cursor_bg)).fg(color(cursor_fg))
+            }
         } else {
             Style::new().bg(color(theme.panel.bg)).fg(color(fg))
         };
