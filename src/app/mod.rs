@@ -824,6 +824,10 @@ pub struct App {
     /// A password typed into the host form, between the form being answered
     /// and the host list being applied. Taken by `host_form_answered`.
     pub pending_host_secret: Option<String>,
+    /// True when the host form that was just answered added a host, so the
+    /// connect dialog underneath selects the new host rather than staying on
+    /// the Add button. Editing leaves the cursor where it was.
+    pub pending_new_host: bool,
     /// The file `F4` is about to edit, held while the large-file warning is
     /// on screen. Taken when the warning is answered yes.
     pub editor_size_pending: Option<VfsPath>,
@@ -962,6 +966,7 @@ impl App {
             pending_git_status: None,
             pending_keyring: None,
             pending_host_secret: None,
+            pending_new_host: false,
             editor_size_pending: None,
             editor_size_confirmed: false,
         }

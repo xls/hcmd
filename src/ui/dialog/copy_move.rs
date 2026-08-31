@@ -1005,7 +1005,7 @@ impl Dialog for CopyMoveDialog {
                         rect,
                         &text,
                         'c',
-                        style.button(focused == Control::Conflict),
+                        style.focus_label(focused == Control::Conflict),
                         style.ascii,
                     );
                 }

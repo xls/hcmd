@@ -105,14 +105,20 @@ pub(super) fn dialog_key(app: &mut App, press: KeyPress, ctx: KeyContext) -> Res
             let closed = app.pop_answered_dialog();
             if let Some(dialog) = closed {
                 let (id, job) = (dialog.id(), dialog.job());
-                let secret = dialog
-                    .as_any()
-                    .and_then(|any| any.downcast_ref::<crate::remote::connect::HostFormDialog>())
-                    .and_then(crate::remote::connect::HostFormDialog::typed_password);
+                let (secret, added) = {
+                    let form = dialog.as_any().and_then(|any| {
+                        any.downcast_ref::<crate::remote::connect::HostFormDialog>()
+                    });
+                    (
+                        form.and_then(crate::remote::connect::HostFormDialog::typed_password),
+                        form.is_some_and(|f| f.editing().is_none()),
+                    )
+                };
                 drop(dialog);
                 if let Some(secret) = secret {
                     app.pending_host_secret = Some(secret);
                 }
+                app.pending_new_host = added;
                 dialog_answered(app, id, job, result);
             }
         }
@@ -662,11 +668,16 @@ fn host_form_answered(app: &mut App, list: Vec<crate::remote::hosts::SavedHost>)
         });
     }
     app.hosts.replace(list.clone());
+    let select_new = std::mem::take(&mut app.pending_new_host);
+    let last = list.len().saturating_sub(1);
     if let Some(dialog) = app
         .top_dialog_mut()
         .and_then(|d| d.as_any_mut())
         .and_then(|any| any.downcast_mut::<crate::remote::connect::ConnectDialog>())
     {
         dialog.set_hosts(list);
+        if select_new {
+            dialog.select(last);
+        }
     }
 }

@@ -760,7 +760,7 @@ impl Dialog for ResizeDialog {
                 rect,
                 &text,
                 'k',
-                style.button(focused == Control::KeepRatio),
+                style.focus_label(focused == Control::KeepRatio),
                 style.ascii,
             );
         }
@@ -897,7 +897,7 @@ impl Dialog for ResizeDialog {
                 box_rect,
                 &text,
                 letter,
-                style.button(focused == box_control),
+                style.focus_label(focused == box_control),
                 style.ascii,
             );
             if on {

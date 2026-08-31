@@ -412,6 +412,14 @@ impl ConnectDialog {
         self.error = None;
     }
 
+    /// Put the selection on a host and focus the list. Adding a host lands the
+    /// cursor on the host that was just added rather than leaving it on the
+    /// Add button that opened the form.
+    pub fn select(&mut self, index: usize) {
+        self.move_cursor(index);
+        self.focus_control(Control::Hosts);
+    }
+
     /// Whether the host book has been edited and needs writing.
     pub const fn dirty(&self) -> bool {
         self.dirty
@@ -913,7 +921,7 @@ impl Dialog for ConnectDialog {
                 rect,
                 QUICK_LABEL,
                 'q',
-                style.button(focused == Control::Quick),
+                style.focus_label(focused == Control::Quick),
                 style.ascii,
             );
             draw_quick_hint(f, rect, style);
@@ -1022,7 +1030,7 @@ impl ConnectDialog {
             label_rect,
             HOSTS_LABEL,
             's',
-            style.button(focused),
+            style.focus_label(focused),
             style.ascii,
         );
         if let Some(fragment) = search
@@ -1905,7 +1913,7 @@ impl Dialog for HostFormDialog {
                 Rect::new(rect.x, rect.y, label_width, 1),
                 label,
                 *letter,
-                style.button(focused == *control),
+                style.focus_label(focused == *control),
                 style.ascii,
             );
             let x = rect.x.saturating_add(label_width);
@@ -2311,6 +2319,28 @@ mod tests {
             clean.handle_key(&key(KeyCode::Esc)),
             DialogOutcome::Cancel
         ));
+    }
+
+    #[test]
+    fn adding_a_host_selects_it_and_focuses_the_list() {
+        // The complaint this fixes: after Add, the cursor sat on the Add button
+        // rather than on the host that was just added.
+        let mut d = dialog();
+        let mut with_new = book();
+        with_new.push(SavedHost {
+            label: "vault".to_string(),
+            host: "vault.local".to_string(),
+            ..SavedHost::default()
+        });
+        let last = with_new.len().saturating_sub(1);
+        d.set_hosts(with_new);
+        d.select(last);
+        assert_eq!(
+            d.selected().map(|h| h.label.as_str()),
+            Some("vault"),
+            "the new host is selected"
+        );
+        assert_eq!(d.focused(), Control::Hosts, "focus is on the list, not Add");
     }
 
     #[test]

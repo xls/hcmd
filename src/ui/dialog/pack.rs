@@ -431,7 +431,7 @@ impl Dialog for PackDialog {
                 rect,
                 &text,
                 'm',
-                style.button(focused == Control::Move),
+                style.focus_label(focused == Control::Move),
                 style.ascii,
             );
         }

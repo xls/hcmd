@@ -237,7 +237,14 @@ impl App {
                     return;
                 }
                 self.connector.abandon();
-                self.message = Some(message);
+                // A failed connection is a dialog, not a status line: it is the
+                // answer to something the user just asked for and a line at the
+                // bottom is missed, so it waits to be dismissed the way the
+                // changed-host-key message above does.
+                self.push_dialog(Box::new(crate::dialog::MessageDialog::line(
+                    "Connection failed",
+                    message,
+                )));
             }
         }
     }
@@ -781,6 +788,28 @@ mod tests {
             "one button, no affirmative"
         );
         assert!(!app.left.active_tab().is_remote(), "nothing was connected");
+    }
+
+    #[test]
+    fn a_failed_connection_opens_a_dismissable_dialog() {
+        // A failure was a status line at the bottom, which is missed; it is the
+        // answer to something the user just asked for, so it waits to be
+        // dismissed.
+        let mut app = app_with(&["a"]);
+        app.connect_answered(Box::new(crate::dialog::ConnectAnswer {
+            target: nas(),
+            plan: AuthPlan::for_password_login(None),
+            password: None,
+            local_dir: None,
+            hosts: None,
+        }));
+        let request = app.take_pending_connect().expect("queued");
+        app.apply_remote_event(RemoteEvent::Failed {
+            attempt: request.attempt,
+            message: "connection refused".to_string(),
+        });
+        let dialog = app.top_dialog().expect("a dialog opened");
+        assert_eq!(dialog.id(), DialogId::Message);
     }
 
     /// An answer to an attempt the user has abandoned is dropped, and dropping
