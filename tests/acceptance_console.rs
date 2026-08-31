@@ -1722,7 +1722,9 @@ fn criterion_10_quitting_restores_the_terminal_and_leaves_no_orphan_shell() {
     });
 
     // `ui.confirm_exit` is on by default, so `F10` asks first.
-    s.press(keys::F10, "the quit prompt", |t| t.contains("Quit hcmd?"));
+    s.press(keys::F10, "the quit prompt", |t| {
+        t.contains("Quit Holos Commander?")
+    });
     s.send(b"y");
     let ok = s.wait_exit(Duration::from_secs(15));
     assert_eq!(ok, Some(true), "F10 quits cleanly:\n{}", s.text());

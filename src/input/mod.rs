@@ -436,7 +436,7 @@ fn quit_requested(app: &mut App) {
             let confirm = ConfirmDialog::new(
                 DialogId::ConfirmQuit,
                 "Quit",
-                vec![format!("Quit {}?", crate::BIN_NAME)],
+                vec![format!("Quit {}?", crate::APP_NAME)],
             )
             .with_buttons("Quit", "Cancel")
             .defaulting_to_yes();

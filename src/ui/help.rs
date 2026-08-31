@@ -519,17 +519,19 @@ pub fn configuration_page(app: &App) -> String {
 pub fn about_page() -> String {
     let mut out = String::from("About\n\n");
     out.push_str(&format!(
-        "  {} {}\n  {} build\n\n",
-        crate::BIN_NAME,
+        "  {} {}\n  {}, {} build\n\n",
+        crate::APP_NAME,
         crate::VERSION,
+        crate::BIN_NAME,
         if cfg!(debug_assertions) {
             "debug"
         } else {
             "release"
         }
     ));
-    out.push_str("A Total Commander alternative for the terminal. The default keys are\n");
-    out.push_str("mapped identical to Total Commander, so your fingers already know them.\n\n");
+    out.push_str("Inspired by Total Commander and every two-panel manager before it. We\n");
+    out.push_str("kept the muscle memory: the default keys are mapped to Total\n");
+    out.push_str("Commander's. You're welcome.\n\n");
     out.push_str("Built against:\n\n");
     for (name, version, what) in CRATE_VERSIONS {
         out.push_str(&format!("  {name:<26}{version:<10}{what}\n"));
@@ -1731,6 +1733,7 @@ mod tests {
         let page = about_page();
         assert!(page.contains(crate::VERSION), "{page}");
         assert!(page.contains(crate::BIN_NAME), "{page}");
+        assert!(page.contains(crate::APP_NAME), "the product name: {page}");
         for name in ["ratatui", "russh", "mime_guess / infer"] {
             assert!(page.contains(name), "{name} missing:\n{page}");
         }

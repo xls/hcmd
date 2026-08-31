@@ -2032,7 +2032,9 @@ fn quitting_with_an_archive_open_restores_the_terminal_and_clears_the_cache() {
     // Quit while the index is still running. `ui.confirm_exit` is on by
     // default, so `F10` asks first.
     s.send(keys::F10);
-    s.wait_now("the quit prompt", |s| s.text().contains("Quit hcmd?"));
+    s.wait_now("the quit prompt", |s| {
+        s.text().contains("Quit Holos Commander?")
+    });
     s.send(b"y");
 
     let ok = s.wait_exit(Duration::from_secs(30));

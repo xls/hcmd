@@ -1392,7 +1392,9 @@ fn criterion_9_ctrl_c_and_a_panic_both_leave_the_terminal_usable() {
     // `ui.confirm_exit` is on by default, so `F10` asks first.
     // Not just "Quit" - the key bar carries that already. The prompt's own
     // question is what says it opened.
-    s.press(keys::F10, "the quit prompt", |t| t.contains("Quit hcmd?"));
+    s.press(keys::F10, "the quit prompt", |t| {
+        t.contains("Quit Holos Commander?")
+    });
     s.send(b"y");
     let ok = s.wait_exit(Duration::from_secs(10));
     assert_eq!(ok, Some(true), "F10 should quit cleanly:\n{}", s.text());

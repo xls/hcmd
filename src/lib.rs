@@ -46,3 +46,6 @@ pub use error::{Error, Result};
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The binary's name (package `holoscommander`, binary `hcmd`).
 pub const BIN_NAME: &str = "hcmd";
+/// The full product name, for prose shown to the user - a quit prompt, the
+/// About page - where the command name `hcmd` would read as jargon.
+pub const APP_NAME: &str = "Holos Commander";
