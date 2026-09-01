@@ -89,6 +89,15 @@ pub struct VfsRouter {
     /// [`VfsRouter::read_dir`] open their backend inside a spawned task, and
     /// that task is where the answer becomes known.
     capabilities: Arc<CapabilityCache>,
+
+    /// What each listing said its columns should be, by path.
+    ///
+    /// The answer comes back on a probe, a frame or two after the listing is
+    /// already on screen, so without this a path you have just walked out of
+    /// and back into draws the configured columns first and the ones it asked
+    /// for a moment later. Remembering it makes stepping back instant, which
+    /// is the case a person actually notices.
+    plans: Arc<std::sync::Mutex<HashMap<VfsPath, Option<crate::panel::ColumnPlan>>>>,
 }
 
 /// How many answers are remembered before the cache is emptied and refilled.
@@ -200,6 +209,7 @@ impl VfsRouter {
             remote_config: remote,
             remote: Arc::new(RemoteRegistry::new()),
             session: std::sync::OnceLock::new(),
+            plans: Arc::new(std::sync::Mutex::new(HashMap::new())),
             listings: std::sync::Mutex::new(HashMap::new()),
             next_listing: std::sync::atomic::AtomicU64::new(0),
             capabilities: Arc::new(CapabilityCache::default()),
@@ -321,6 +331,29 @@ impl VfsRouter {
     /// The one place a capability answer is kept.
     pub fn capability_cache(&self) -> &Arc<CapabilityCache> {
         &self.capabilities
+    }
+
+    /// The lock over the remembered column plans, poisoning recovered rather
+    /// than escalated for the same reason the capability cache does it.
+    fn plans(
+        &self,
+    ) -> std::sync::MutexGuard<'_, HashMap<VfsPath, Option<crate::panel::ColumnPlan>>> {
+        self.plans
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// What this path's listing asked for last time, without resolving a
+    /// backend or touching a disk.
+    ///
+    /// `None` means nothing has answered for this path yet, which is not the
+    /// same as a listing that answered "use the configured columns" - that is
+    /// `Some(None)`, and it is why this is nested rather than flattened.
+    pub fn remembered_column_plan(
+        &self,
+        path: &VfsPath,
+    ) -> Option<Option<crate::panel::ColumnPlan>> {
+        self.plans().get(path).cloned()
     }
 
     /// What the backend servicing `path` can do, **without ever blocking**.
@@ -663,17 +696,44 @@ impl Vfs for VfsRouter {
 
     /// Straight through to whichever backend owns the path: composing the
     /// columns is the listing's business and the router has no view of its own.
-    /// Not cached - it is one cheap answer about a path the caller is already
-    /// standing on, and a stale one would be a layout that does not match the
-    /// rows.
+    /// The answer is remembered so that walking back into a listing draws its
+    /// columns at once rather than the configured ones first.
     fn column_plan(&self, path: &VfsPath) -> Option<crate::panel::ColumnPlan> {
-        self.backend_for(path).ok()?.column_plan(path)
+        let plan = self
+            .backend_for(path)
+            .ok()
+            .and_then(|backend| backend.column_plan(path));
+        let mut map = self.plans();
+        if map.len() >= MAX_REMEMBERED_CAPABILITIES {
+            map.clear();
+        }
+        map.insert(path.clone(), plan.clone());
+        plan
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_listing_walked_back_into_draws_its_own_columns_at_once() {
+        // Nothing has answered for this path yet, which is not the same as a
+        // listing that answered "the configured columns are fine".
+        let r = router();
+        let path = VfsPath::local("/tmp");
+        assert_eq!(r.remembered_column_plan(&path), None, "nothing asked yet");
+
+        // Resolving it once remembers the answer, so stepping back in has it
+        // before the probe runs again and the columns never change under the
+        // eye.
+        let answered = r.column_plan(&path);
+        assert_eq!(
+            r.remembered_column_plan(&path),
+            Some(answered),
+            "and it is there the moment the path comes back"
+        );
+    }
 
     /// A router over compiled-in defaults. Builds nothing on the filesystem:
     /// the archive session is created on first use and no test here reaches

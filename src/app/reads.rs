@@ -194,6 +194,12 @@ impl App {
     /// [`crate::panel::Tab::pending_select`]. A name that never arrives is
     /// abandoned when the read completes and the cursor stays at 0.
     pub fn navigate_selecting(&mut self, side: Side, path: VfsPath, select: Option<String>) {
+        // What this listing asked for the last time it was drawn, if it has
+        // been drawn before. The probe answers again a frame or two after the
+        // rows land; taking the remembered answer now is what makes walking
+        // back into a listing draw its own columns straight away instead of
+        // the configured ones first and its own a moment later.
+        let remembered = self.router.remembered_column_plan(&path).flatten();
         let generation = self.next_generation();
         let panel = self.panel_mut(side);
         panel.quick.clear();
@@ -219,7 +225,6 @@ impl App {
         // meant the column blinked out and back on each rescan - and the watch
         // rescans often.
         tab.git_branch = None;
-        tab.column_plan = None;
         // A different directory has nothing to reconcile against, so any rescan
         // that was mid-flight is abandoned rather than merged into the new one.
         tab.merging = None;
@@ -228,6 +233,7 @@ impl App {
         tab.loading = true;
         tab.generation = generation;
         tab.pending_select = select;
+        tab.column_plan = remembered;
         // "Entering a directory from within a virtual listing
         // also leaves it, since the panel then has a real path." Every route
         // into a new directory passes through here, so leaving is a property
