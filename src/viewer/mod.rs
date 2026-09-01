@@ -798,6 +798,10 @@ impl Viewer {
             cancel: Arc::clone(&cancel),
         };
 
+        // Android binary XML, told by its own header: the magic, and a
+        // recorded length that has to be the length the file is.
+        let is_axml = axml::recorded_len(probe.bytes())
+            .is_some_and(|recorded| Some(u64::from(recorded)) == source.len());
         // "A file detected as binary opens in hex automatically
         // unless overridden." The override is `viewer.default_mode = "hex"`
         // pointing the other way, and the `1`/`2` keys once it is open.
@@ -828,7 +832,7 @@ impl Viewer {
                 .len()
                 .is_some_and(|l| l <= cfg.highlight.max_size.bytes());
 
-        Ok(Self {
+        let mut viewer = Self {
             id,
             title: title.into(),
             path,
@@ -929,7 +933,20 @@ impl Viewer {
             chunk,
             approximate: false,
             decode_errors: false,
-        })
+        };
+
+        // A file whose whole point is what it decodes to opens showing that,
+        // the way a reader would expect of a document. `set_mode` rather than
+        // a mode chosen above, because building the rendering is what can
+        // refuse - and if it does, this is a binary and the dump is where it
+        // belongs rather than the text mode a refusal otherwise falls back to.
+        if is_axml {
+            let _ = viewer.set_mode(ViewerMode::Render);
+            if viewer.mode != ViewerMode::Render {
+                let _ = viewer.set_mode(ViewerMode::Hex);
+            }
+        }
+        Ok(viewer)
     }
 
     /// Open a viewer over a path on a [`Vfs`].

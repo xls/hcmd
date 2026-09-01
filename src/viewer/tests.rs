@@ -2882,9 +2882,11 @@ fn a_compiled_android_manifest_renders_as_xml_without_hiding_its_bytes() {
     };
 
     let mut v = open_bytes(&bytes, &cfg());
-    assert_eq!(v.mode(), ViewerMode::Hex, "a binary opens as a dump");
-
-    v.set_mode(ViewerMode::Render).expect("mode 3");
+    assert_eq!(
+        v.mode(),
+        ViewerMode::Render,
+        "what it decodes to is the point, so that is what opens"
+    );
     let doc = v.rendered().expect("mode 3 built a document");
     assert_eq!(doc.kind, crate::viewer::render::RenderKind::Axml);
     let text: Vec<&str> = doc.lines.iter().map(|l| l.text.as_str()).collect();
