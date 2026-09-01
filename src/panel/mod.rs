@@ -1845,11 +1845,13 @@ static FALLBACK_TAB: std::sync::LazyLock<Tab> =
 /// last, so sorting by `G` groups the files that need attention.
 fn git_sort_key(entry: &Entry) -> u8 {
     match entry.git_state {
-        Some(crate::git::FileState::Modified) => 0,
-        Some(crate::git::FileState::Staged) => 1,
-        Some(crate::git::FileState::Added) => 2,
-        Some(crate::git::FileState::Untracked) => 3,
-        None => 4,
+        Some(crate::git::FileState::Removed) => 0,
+        Some(crate::git::FileState::Modified) => 1,
+        Some(crate::git::FileState::Renamed) => 2,
+        Some(crate::git::FileState::Staged) => 3,
+        Some(crate::git::FileState::Added) => 4,
+        Some(crate::git::FileState::Untracked) => 5,
+        None => 6,
     }
 }
 

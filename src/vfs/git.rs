@@ -147,6 +147,35 @@ impl GitFs {
             .collect())
     }
 
+    /// The files a commit changed, each carrying what it did to them.
+    ///
+    /// A commit's own listing is its diff, not its tree: standing in a revision
+    /// to be told that every file in the repository is there says nothing the
+    /// working directory did not already say, and it buries the handful of rows
+    /// the commit is actually about. The rows are paths rather than names,
+    /// because a diff is flat - two `mod.rs` in one commit are two different
+    /// files and only their paths tell them apart - and each row's `location`
+    /// points at the blob inside this revision, so `Enter` and `F3` reach the
+    /// file as this commit left it. Descending into a directory still lists the
+    /// tree, which is what a directory row means.
+    fn list_changed(&self, sha: &str) -> Result<Vec<Entry>> {
+        let rows = crate::git::changed(&self.dir, sha)?;
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                let mut entry = Entry::file(row.path.clone());
+                entry.kind = EntryKind::File;
+                entry.size = row.size;
+                entry.git_state = Some(row.state);
+                entry.location = Some(
+                    VfsPath::local(&self.dir)
+                        .with_segment(BackendKind::Git, format!("/{sha}/{}", row.path)),
+                );
+                entry
+            })
+            .collect())
+    }
+
     /// One level of a commit's tree, directories first.
     ///
     /// The full tree, not the changed files: a commit browses like the working
@@ -198,6 +227,9 @@ impl Vfs for GitFs {
                 Location::Commits => this.list_commits(),
                 // A directory in the tree lists; a file lists empty, the way a
                 // file elsewhere does. `tree_at` answers empty for a file.
+                // The commit's own row is its diff; a directory inside it is
+                // still a directory.
+                Location::In { sha, path } if path.is_empty() => this.list_changed(&sha),
                 Location::In { sha, path } => this.list_tree(&sha, &path),
             };
             match rows {

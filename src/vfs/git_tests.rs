@@ -17,9 +17,16 @@ impl Repo {
         repo.git(&["config", "user.email", "t@example.invalid"])?;
         repo.git(&["config", "user.name", "Test"])?;
         repo.write("notes.txt", "first\n");
+        // Two files the second commit never touches, one of them a level down:
+        // without them the tree and the diff would be the same set and a
+        // listing that returned either would look correct.
+        repo.write("untouched.txt", "still here\n");
+        repo.write("deep/gone.txt", "doomed\n");
         repo.commit("initial")?;
         repo.write("notes.txt", "second\n");
         repo.write("added.txt", "new\n");
+        std::fs::remove_file(repo.root.join("deep/gone.txt")).ok()?;
+        repo.git(&["add", "-A"])?;
         repo.commit("a change")?;
         Some(repo)
     }
@@ -35,7 +42,11 @@ impl Repo {
     }
 
     fn write(&self, name: &str, body: &str) {
-        std::fs::write(self.root.join(name), body).expect("write");
+        let path = self.root.join(name);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).expect("the directory");
+        }
+        std::fs::write(path, body).expect("write");
     }
 
     fn commit(&self, message: &str) -> Option<()> {
@@ -129,11 +140,27 @@ async fn a_commit_lists_the_files_it_changed() {
     let sha = commits[0].name.split_whitespace().next().expect("a sha");
     let commit_path = VfsPath::local(&repo.root).with_segment(BackendKind::Git, format!("/{sha}"));
     let changed = rows(&fs, &commit_path).await;
-    let names: Vec<&str> = changed.iter().map(|e| e.name.as_str()).collect();
+    let seen: Vec<(&str, Option<char>)> = changed
+        .iter()
+        .map(|e| {
+            (
+                e.name.as_str(),
+                e.git_state.map(crate::git::FileState::flag),
+            )
+        })
+        .collect();
+    // The commit's diff, and nothing else: `untouched.txt` is in the tree at
+    // this revision but is not what the commit is about. Each row says what
+    // happened to it, including the file the commit deleted - which is in no
+    // tree at all and so could only come from the diff.
     assert_eq!(
-        names,
-        vec!["added.txt", "notes.txt"],
-        "only what it changed"
+        seen,
+        vec![
+            ("added.txt", Some('A')),
+            ("deep/gone.txt", Some('-')),
+            ("notes.txt", Some('~')),
+        ],
+        "only what it changed, each saying what changed"
     );
     assert!(
         changed.iter().all(|e| !e.is_dir()),

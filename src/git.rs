@@ -133,6 +133,9 @@ pub struct Changed {
     pub path: String,
     /// Size of the file's content at this commit, as the tree records it.
     pub size: u64,
+    /// What this commit did to it. The diff already answers this; keeping it
+    /// is what lets the listing say more than "this file was touched".
+    pub state: FileState,
 }
 
 /// The most commits a history listing holds.
@@ -230,22 +233,56 @@ pub fn changed(dir: &Path, sha: &str) -> crate::Result<Vec<Changed>> {
 
     let mut out = Vec::new();
     for change in changes {
-        let (path, blob) = match &change {
-            gix::object::tree::diff::ChangeDetached::Addition { location, id, .. }
-            | gix::object::tree::diff::ChangeDetached::Modification { location, id, .. } => {
-                (location.to_string(), Some(*id))
-            }
-            gix::object::tree::diff::ChangeDetached::Deletion { location, .. } => {
-                (location.to_string(), None)
-            }
-            gix::object::tree::diff::ChangeDetached::Rewrite { location, id, .. } => {
-                (location.to_string(), Some(*id))
-            }
+        let (path, blob, state, mode) = match &change {
+            gix::object::tree::diff::ChangeDetached::Addition {
+                location,
+                id,
+                entry_mode,
+                ..
+            } => (
+                location.to_string(),
+                Some(*id),
+                FileState::Added,
+                *entry_mode,
+            ),
+            gix::object::tree::diff::ChangeDetached::Modification {
+                location,
+                id,
+                entry_mode,
+                ..
+            } => (
+                location.to_string(),
+                Some(*id),
+                FileState::Modified,
+                *entry_mode,
+            ),
+            gix::object::tree::diff::ChangeDetached::Deletion {
+                location,
+                entry_mode,
+                ..
+            } => (location.to_string(), None, FileState::Removed, *entry_mode),
+            gix::object::tree::diff::ChangeDetached::Rewrite {
+                location,
+                id,
+                entry_mode,
+                ..
+            } => (
+                location.to_string(),
+                Some(*id),
+                FileState::Renamed,
+                *entry_mode,
+            ),
         };
+        // A directory that gained or lost its last file shows up here as a
+        // change of its own. It is not a file the commit edited, and a listing
+        // that offered it would offer a row with nothing to open.
+        if mode.is_tree() {
+            continue;
+        }
         let size = blob
             .and_then(|id| repo.find_object(id).ok())
             .map_or(0, |obj| obj.data.len() as u64);
-        out.push(Changed { path, size });
+        out.push(Changed { path, size, state });
     }
     out.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(out)
@@ -370,6 +407,12 @@ pub enum FileState {
     Added,
     /// Not tracked at all.
     Untracked,
+    /// Gone at this commit: the change deleted it. A working directory never
+    /// shows this - a file that is not there has no row - but a commit does,
+    /// because "what this commit did" includes what it removed.
+    Removed,
+    /// Moved or copied from somewhere else at this commit.
+    Renamed,
 }
 
 impl FileState {
@@ -382,6 +425,8 @@ impl FileState {
             Self::Staged => '+',
             Self::Added => 'A',
             Self::Untracked => '?',
+            Self::Removed => '-',
+            Self::Renamed => 'R',
         }
     }
 }
