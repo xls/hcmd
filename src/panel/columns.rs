@@ -158,6 +158,18 @@ fn requested_width(cfg: &PanelConfig, id: ColumnId, inner_width: usize) -> usize
 ///
 /// the design calls `name` "always present"; a configuration that omits it
 /// gets it back at the front rather than a panel with no filenames in it.
+/// The columns a listing asks for, in place of the user's configured set.
+///
+/// A backend that knows its rows better than the configuration can returns one
+/// of these and gets exactly those columns: a commit's changed files have no
+/// extension worth a column of its own and no permissions at all, and the room
+/// is better spent on the path. Everything downstream is untouched - widths,
+/// the hide-by-priority order, the name minimum and the redraw all work as they
+/// already do, so a listing composes its columns without knowing anything about
+/// rendering.
+pub type ColumnPlan = Vec<ColumnId>;
+
+/// The configured order, de-duplicated, with `name` guaranteed present.
 pub fn effective_order(configured: &[ColumnId]) -> Vec<ColumnId> {
     let mut order: Vec<ColumnId> = Vec::with_capacity(configured.len().saturating_add(1));
     if !configured.contains(&ColumnId::Name) {

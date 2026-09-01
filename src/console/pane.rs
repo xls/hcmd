@@ -73,6 +73,17 @@ pub struct Pane {
     /// a test with no clock and no terminal.
     pub switch_at: Option<std::time::Instant>,
 
+    /// Did the screen come to the console on its own, rather than being asked
+    /// for?
+    ///
+    /// The `auto` switch is "the command is still holding the terminal", and
+    /// the honest end of that sentence is "and now it is not". A screen that
+    /// arrived by itself goes back by itself once the shell is at a prompt
+    /// again, so a `git clone` shows its progress and then hands the panels
+    /// back. A console reached with `ctrl+o` was asked for and is never taken
+    /// away.
+    pub auto_shown: bool,
+
     /// Whether the shell was running a command at the last console event.
     ///
     /// Only an *edge* means anything here. A `cd` is echoed by the tty before
@@ -135,6 +146,7 @@ impl Default for Pane {
             activity: false,
             cd_running: false,
             switch_at: None,
+            auto_shown: false,
             was_running: false,
         }
     }

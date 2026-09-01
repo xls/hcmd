@@ -241,6 +241,7 @@ impl App {
     /// `auto` the cost of being wrong that way is one `Ctrl+O`, and the cost of
     /// the other way is a program waiting for input nobody can see.
     pub fn service_console_switch(&mut self, now: std::time::Instant) {
+        self.service_console_return();
         let Some(deadline) = self.console.switch_at else {
             return;
         };
@@ -272,6 +273,37 @@ impl App {
             .and_then(Console::input_is_empty);
         if idle != Some(true) {
             self.set_focus(Focus::Console);
+            self.console.auto_shown = true;
+        }
+    }
+
+    /// Give the panels back once the command that took them has finished.
+    ///
+    /// Only for a screen that switched on its own: it came because the command
+    /// was still holding the terminal, so it goes when that stops being true.
+    /// A console opened with `ctrl+o` was asked for and stays until it is
+    /// dismissed the same way. The idle test is the one everything else uses -
+    /// at a prompt, with an empty input line - so there is one definition of
+    /// "the shell is done" rather than two that can disagree; `None` there is
+    /// "cannot tell", and a shell that cannot say has not said it is finished.
+    fn service_console_return(&mut self) {
+        if !self.console.auto_shown {
+            return;
+        }
+        if !self.console_is_shown() {
+            // Something else took the screen in the meantime; the automatic
+            // switch is spent either way.
+            self.console.auto_shown = false;
+            return;
+        }
+        let idle = self
+            .console
+            .shell
+            .as_ref()
+            .and_then(Console::input_is_empty);
+        if idle == Some(true) {
+            self.console.auto_shown = false;
+            self.set_focus(Focus::Panel(self.active_side));
         }
     }
 
@@ -300,6 +332,7 @@ impl App {
         }
         // Nothing is going to run, so nothing is still holding the terminal.
         self.console.switch_at = None;
+        self.console.auto_shown = false;
     }
 
     /// Shell → panel.
@@ -534,6 +567,53 @@ mod tests {
             app.focus,
             Focus::Console,
             "the command still needs the terminal, so the screen is given to it"
+        );
+    }
+
+    #[test]
+    fn a_screen_that_switched_by_itself_gives_the_panels_back() {
+        // `git clone` outlives the delay, so the screen goes to it. When it is
+        // done there is nothing holding the terminal any more, and waiting for
+        // a `ctrl+o` to say so is asking the user to dismiss a thing they never
+        // asked to see.
+        let Some((mut app, _rx)) = app_with_shell() else {
+            return;
+        };
+        feed(&mut app, AT_A_PROMPT);
+        app.command_was_run();
+        feed(
+            &mut app,
+            b"git clone http://example.invalid/r\r\n\x1b]133;C\x1b\\",
+        );
+        let deadline = app.console_switch_deadline().expect("armed");
+        app.service_console_switch(deadline);
+        assert_eq!(app.focus, Focus::Console, "the command took the screen");
+
+        // The prompt is back: the command has finished.
+        feed(&mut app, AT_A_PROMPT);
+        app.service_console_switch(deadline);
+        assert_eq!(
+            app.focus,
+            Focus::Panel(Side::Left),
+            "and gives the screen back on its own"
+        );
+    }
+
+    #[test]
+    fn a_console_that_was_asked_for_is_never_taken_away() {
+        // `ctrl+o` is a decision. An idle prompt is the normal state of a
+        // console somebody opened to look at, and closing it under them would
+        // make the key useless.
+        let Some((mut app, _rx)) = app_with_shell() else {
+            return;
+        };
+        feed(&mut app, AT_A_PROMPT);
+        app.set_focus(Focus::Console);
+        app.service_console_switch(std::time::Instant::now());
+        assert_eq!(
+            app.focus,
+            Focus::Console,
+            "it stays until it is dismissed the same way"
         );
     }
 

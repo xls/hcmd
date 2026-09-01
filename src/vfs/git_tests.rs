@@ -212,3 +212,42 @@ async fn history_is_read_only() {
     assert!(fs.remove(&file).is_err());
     assert!(fs.create_dir(&file).is_err());
 }
+
+#[test]
+fn a_commit_composes_its_own_columns() {
+    use crate::panel::ColumnId;
+    let repo = repo_or_skip!("columns");
+    let base = VfsPath::local(&repo.root).with_segment(BackendKind::Git, "/");
+    let fs = GitFs::open(base.clone()).expect("open");
+
+    // The commit list: the name carries the sha and the subject, and there is
+    // no extension, no size and no permissions on a commit.
+    let commits = fs.column_plan(&base).expect("the listing composes itself");
+    assert_eq!(commits, vec![ColumnId::Name, ColumnId::Date]);
+
+    // Inside one: the row is a path, so its extension is already in the name,
+    // but the blob's size and what the commit did to it are both worth a cell.
+    let inside = VfsPath::local(&repo.root).with_segment(BackendKind::Git, "/abc123");
+    let files = fs.column_plan(&inside).expect("and so does this one");
+    assert_eq!(
+        files,
+        vec![
+            ColumnId::Name,
+            ColumnId::Size,
+            ColumnId::Date,
+            ColumnId::GitState
+        ]
+    );
+    assert!(
+        !files.contains(&ColumnId::Ext) && !files.contains(&ColumnId::Attr),
+        "and neither asks for the columns it has no use for"
+    );
+}
+
+#[test]
+fn an_ordinary_directory_composes_nothing_and_keeps_the_configured_columns() {
+    // The default is to have no opinion: only a listing that knows better than
+    // the configuration says anything at all.
+    let fs = crate::vfs::local::LocalFs::new();
+    assert_eq!(fs.column_plan(&VfsPath::local("/tmp")), None);
+}

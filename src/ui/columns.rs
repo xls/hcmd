@@ -36,21 +36,22 @@ pub use crate::panel::{Allocated, allocate as allocate_full};
 /// The list is in configured `order`, so `Ctrl+<n>` addressing a hidden column
 /// is unaffected.
 ///
-/// `show_git` is false when nothing in the listing carries a git state - an
-/// ordinary directory outside any repository - and the one-cell git column is
-/// then dropped rather than reserved blank, the way omarchy shows the flag only
-/// where it means something. `Ctrl+<n>` addressing is by configured `order`, so
-/// dropping a blank column here does not shift it.
-pub fn allocate(cfg: &PanelConfig, inner_width: usize, show_git: bool) -> Vec<Allocated> {
-    if show_git || !cfg.columns.order.contains(&ColumnId::GitState) {
+/// `plan` is what a listing asked for instead of the configured set, and is
+/// `None` for an ordinary directory, which wants what the user configured. It
+/// replaces the order and nothing else: the widths, the hide-by-priority order
+/// and the name minimum are all still the configuration's business, so a
+/// backend names its columns without taking on the layout.
+pub fn allocate(
+    cfg: &PanelConfig,
+    inner_width: usize,
+    plan: Option<&[ColumnId]>,
+) -> Vec<Allocated> {
+    let Some(plan) = plan else {
         return allocate_full(cfg, inner_width).columns().to_vec();
-    }
-    let mut without_git = cfg.clone();
-    without_git
-        .columns
-        .order
-        .retain(|id| *id != ColumnId::GitState);
-    allocate_full(&without_git, inner_width).columns().to_vec()
+    };
+    let mut planned = cfg.clone();
+    planned.columns.order = plan.to_vec();
+    allocate_full(&planned, inner_width).columns().to_vec()
 }
 
 /// How a column's text sits in its cell (`size` is the
@@ -147,7 +148,7 @@ mod tests {
 
     #[test]
     fn a_wide_panel_shows_every_configured_column() {
-        let got = allocate(&cfg(), 120, true);
+        let got = allocate(&cfg(), 120, None);
         let ids: Vec<ColumnId> = got.iter().map(|a| a.id).collect();
         assert_eq!(
             ids,
@@ -163,18 +164,36 @@ mod tests {
     }
 
     #[test]
-    fn the_git_column_is_reserved_only_when_something_carries_a_state() {
-        // Outside a repository nothing has a git state, and the blank column
-        // would only steal a cell from the name.
-        let outside = allocate(&cfg(), 120, false);
+    fn a_listing_that_names_its_columns_gets_those_and_no_others() {
+        // The seam: a backend says what its rows want and the configured set
+        // steps aside. Nothing else about the layout is the backend's to know.
+        let plan = [ColumnId::Name, ColumnId::Date];
+        let got = allocate(&cfg(), 120, Some(&plan));
+        let ids: Vec<ColumnId> = got.iter().map(|a| a.id).collect();
+        assert_eq!(ids, [ColumnId::Name, ColumnId::Date]);
         assert!(
-            !outside.iter().any(|a| a.id == ColumnId::GitState),
-            "no git column outside a repository: {outside:?}"
+            !ids.contains(&ColumnId::Ext) && !ids.contains(&ColumnId::Attr),
+            "what it did not ask for is not drawn: {ids:?}"
         );
-        let inside = allocate(&cfg(), 120, true);
+    }
+
+    #[test]
+    fn a_plan_still_narrows_by_the_configured_rules() {
+        // It names columns, not widths: hiding as the panel narrows and the
+        // name minimum stay the configuration's business, so a backend cannot
+        // produce a layout that does not fit.
+        let plan = [
+            ColumnId::Name,
+            ColumnId::Size,
+            ColumnId::Date,
+            ColumnId::GitState,
+        ];
+        let narrow = allocate(&cfg(), 24, Some(&plan));
+        let total: usize = narrow.iter().map(|a| a.width).sum();
+        assert!(total <= 24, "it fits: {narrow:?}");
         assert!(
-            inside.iter().any(|a| a.id == ColumnId::GitState),
-            "the git column returns once a state is present: {inside:?}"
+            narrow.iter().any(|a| a.id == ColumnId::Name),
+            "and the name is never dropped: {narrow:?}"
         );
     }
 
@@ -184,7 +203,7 @@ mod tests {
         // column, totalling 31 cells, for a panel one cell wide.
         let cfg = cfg();
         for w in 0..=200usize {
-            let got = allocate(&cfg, w, true);
+            let got = allocate(&cfg, w, None);
             let sep = got.len().saturating_sub(1);
             let total: usize = got.iter().map(|a| a.width).sum::<usize>() + sep;
             assert!(total <= w, "width {w}: allocated {total} for {got:?}");
@@ -198,9 +217,9 @@ mod tests {
     #[test]
     fn the_auto_crop_follows_whether_ext_is_rendered() {
         let cfg = cfg();
-        let wide = allocate(&cfg, 120, true);
+        let wide = allocate(&cfg, 120, None);
         assert_eq!(name_crop(&cfg, &wide), Crop::End, "ext is rendered");
-        let narrow = allocate(&cfg, 36, true);
+        let narrow = allocate(&cfg, 36, None);
         assert!(!narrow.iter().any(|a| a.id == ColumnId::Ext));
         assert_eq!(name_crop(&cfg, &narrow), Crop::Middle, "ext is hidden");
     }

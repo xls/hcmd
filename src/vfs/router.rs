@@ -660,6 +660,15 @@ impl Vfs for VfsRouter {
         }
         self.resolve_capabilities(path)
     }
+
+    /// Straight through to whichever backend owns the path: composing the
+    /// columns is the listing's business and the router has no view of its own.
+    /// Not cached - it is one cheap answer about a path the caller is already
+    /// standing on, and a stale one would be a layout that does not match the
+    /// rows.
+    fn column_plan(&self, path: &VfsPath) -> Option<crate::panel::ColumnPlan> {
+        self.backend_for(path).ok()?.column_plan(path)
+    }
 }
 
 #[cfg(test)]

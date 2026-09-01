@@ -232,13 +232,16 @@ pub fn draw(f: &mut Frame, app: &App, side: Side, area: Rect) {
     let show_tabs = panel.tab_bar_visible(app.config.panel.show_tab_bar);
     let r = rows(area, show_tabs);
 
-    // The setting decides, and nothing else. Drawn on a directory with no
-    // repository in sight as well: a column that appears and disappears as you
-    // walk around is read as a fault, and the layout shifting under the eye
-    // costs more than one blank cell. Whether there *is* a repository here is
-    // said once, on the status line, where a change of place is expected.
-    let show_git = app.config.panel.git_status;
-    let allocated = columns::allocate(&app.config.panel, usize::from(r.entries.width), show_git);
+    // A listing that composed its own columns gets them; everything else gets
+    // what the user configured, git column included, drawn whether or not there
+    // is a repository in sight - a column that appears and disappears as you
+    // walk around is read as a fault. Whether there *is* a repository is said
+    // once, on the status line, where a change of place is expected.
+    let allocated = columns::allocate(
+        &app.config.panel,
+        usize::from(r.entries.width),
+        tab.column_plan.as_deref(),
+    );
     let crop = columns::name_crop(&app.config.panel, &allocated);
 
     draw_tab_bar(f, app, panel, r.tab_bar, g);

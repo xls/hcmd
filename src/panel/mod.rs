@@ -21,7 +21,7 @@ use crate::ops::SizeCache;
 use crate::vfs::list::ListingId;
 use crate::vfs::{Capabilities, Entry, VfsPath};
 
-pub use columns::{Allocated, Allocation, allocate};
+pub use columns::{Allocated, Allocation, ColumnPlan, allocate};
 pub use format::{Cell, Counts};
 pub use text::{Align, Crop};
 
@@ -477,6 +477,13 @@ pub struct Tab {
     pub cursor: usize,
     /// Index of the first rendered row.
     pub scroll: usize,
+    /// The columns this listing asked for, `None` for the configured set.
+    ///
+    /// Answered by the same probe that answers capabilities, and cleared on a
+    /// change of directory rather than on every read - a rescan of the same
+    /// place keeps it, or the columns would jump about on every watch event.
+    pub column_plan: Option<ColumnPlan>,
+
     /// The branch this directory's repository is on, `None` outside one.
     ///
     /// Answered by the git-status probe, which lands after the listing does,
@@ -620,6 +627,7 @@ impl Tab {
             cursor: 0,
             scroll: 0,
             marks: HashSet::new(),
+            column_plan: None,
             git_branch: None,
             sort: SortState::default(),
             quick_filter: None,

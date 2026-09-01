@@ -67,7 +67,7 @@ pub struct CapsRequest {
 }
 
 /// A finished [`CapsRequest`], on its way back to the event loop.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct CapsEvent {
     /// Which panel asked.
     pub side: Side,
@@ -77,6 +77,8 @@ pub struct CapsEvent {
     pub generation: u64,
     /// What the backend that really services the path can do.
     pub caps: Capabilities,
+    /// The columns that listing asked for, if it asked for any.
+    pub plan: Option<crate::panel::ColumnPlan>,
 }
 
 /// A directory whose git flags should be computed off the event loop.
@@ -156,7 +158,13 @@ pub async fn probe_capabilities(
         generation,
         path,
     } = request;
-    let Ok(caps) = tokio::task::spawn_blocking(move || vfs.capabilities_for(&path)).await else {
+    // Both answers come off one probe: they are asked at the same moment, for
+    // the same listing, and a second round trip would only give them two ways
+    // to disagree about which listing they describe.
+    let Ok((caps, plan)) =
+        tokio::task::spawn_blocking(move || (vfs.capabilities_for(&path), vfs.column_plan(&path)))
+            .await
+    else {
         return;
     };
     let _ = tx
@@ -165,6 +173,7 @@ pub async fn probe_capabilities(
             tab,
             generation,
             caps,
+            plan,
         })
         .await;
 }
@@ -210,6 +219,7 @@ impl App {
         // meant the column blinked out and back on each rescan - and the watch
         // rescans often.
         tab.git_branch = None;
+        tab.column_plan = None;
         // A different directory has nothing to reconcile against, so any rescan
         // that was mid-flight is abandoned rather than merged into the new one.
         tab.merging = None;
@@ -799,6 +809,9 @@ impl App {
         // second copy that the two could disagree about - which is the whole
         // of what was wrong here.
         let path = tab.path.clone();
+        if let Some(tab) = self.panel_mut(event.side).tab_mut(event.tab) {
+            tab.column_plan = event.plan;
+        }
         self.router.capability_cache().remember(&path, event.caps);
         self.refresh_caps(event.side, event.tab);
     }
@@ -1031,6 +1044,7 @@ mod tests {
         );
 
         app.apply_caps_event(CapsEvent {
+            plan: None,
             side: Side::Left,
             tab: 0,
             generation,
@@ -1087,6 +1101,7 @@ mod tests {
         let now = app.left.active_tab().caps;
 
         app.apply_caps_event(CapsEvent {
+            plan: None,
             side: Side::Left,
             tab: 0,
             generation: stale,

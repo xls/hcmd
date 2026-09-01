@@ -1020,17 +1020,17 @@ fn criterion_2_a_command_typed_at_the_command_line_runs_in_the_console() {
         s.line_count("hcmd-still-running") == 2
     });
 
-    // "Switching in is automatic; switching out never is." The panels do not
-    // come back on their own when `cat` dies.
-    s.press(keys::CTRL_C, "the shell's prompt after cat", |t| {
-        t.contains(PROMPT)
+    // Switching in is automatic, and so is switching back out. The screen was
+    // taken because the command was still holding the terminal; when that stops
+    // being true the reason is gone, and a screen nobody asked for should not
+    // have to be dismissed. This reverses the earlier rule, which left a
+    // finished `git clone` sitting at a prompt until `Ctrl+O` was pressed.
+    //
+    // A console reached with `Ctrl+O` is a decision and is never taken away -
+    // `a_console_that_was_asked_for_is_never_taken_away` covers that half.
+    s.press(keys::CTRL_C, "the panels back once cat has gone", |t| {
+        t.contains("[subdir]")
     });
-    assert!(
-        !s.text().contains("[subdir]"),
-        "the panels stay away until `Ctrl+O` asks for them:\n{}",
-        s.text()
-    );
-    s.press(keys::CTRL_O, "the panels back", |t| t.contains("[subdir]"));
 }
 
 // ---------------------------------------------------------------------------

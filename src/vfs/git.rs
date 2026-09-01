@@ -208,6 +208,26 @@ impl Vfs for GitFs {
         BackendKind::Git
     }
 
+    fn column_plan(&self, path: &VfsPath) -> Option<crate::panel::ColumnPlan> {
+        use crate::panel::ColumnId;
+        let tail = Self::tail_of(path).unwrap_or_default();
+        Some(match Self::locate(&tail) {
+            // Commits: the name carries the sha and the subject and wants every
+            // cell it can get. There is no extension, no size worth the words
+            // `<DIR>`, and no permissions on a commit.
+            Location::Commits => vec![ColumnId::Name, ColumnId::Date],
+            // A commit's files: the row is a path, so the extension is already
+            // in it and a column of its own would repeat it. The size is the
+            // blob's and worth having; the state is the point of the listing.
+            Location::In { .. } => vec![
+                ColumnId::Name,
+                ColumnId::Size,
+                ColumnId::Date,
+                ColumnId::GitState,
+            ],
+        })
+    }
+
     fn read_dir(&self, path: &VfsPath) -> mpsc::Receiver<Result<Entry>> {
         let (tx, rx) = mpsc::channel(READ_DIR_CHANNEL_DEPTH);
         let this = self.clone();

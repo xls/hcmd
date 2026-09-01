@@ -898,6 +898,23 @@ pub trait Vfs: Send + Sync {
     /// its content and nothing else.
     fn read_dir(&self, path: &VfsPath) -> tokio::sync::mpsc::Receiver<Result<Entry>>;
 
+    /// The columns this listing wants, or `None` to use the configured set.
+    ///
+    /// A backend knows what its rows are; the configuration knows what the
+    /// user likes to see in a directory. Where those disagree - a commit's
+    /// changed files have no extension worth its own column and no permissions
+    /// at all - this is how the listing says so, and the room goes to the name
+    /// instead. It names columns and nothing else: widths, hiding as the panel
+    /// narrows, and every redraw stay where they were, so answering this costs
+    /// a backend no knowledge of how a panel is drawn.
+    ///
+    /// Answered once per listing, on the same off-loop probe as
+    /// [`Vfs::capabilities`], so a slow answer arrives late rather than
+    /// blocking the frame.
+    fn column_plan(&self, _path: &VfsPath) -> Option<crate::panel::ColumnPlan> {
+        None
+    }
+
     /// The `..` row for a listing of `path`, or `None` at a backend's own root.
     ///
     /// Navigation, not content: it is the row that gets the user out, so it is
