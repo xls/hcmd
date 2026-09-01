@@ -553,35 +553,42 @@ fn patch_reference(
         .iter()
         .filter(|opt| !known.contains(&opt.key))
         .collect();
-    if missing.is_empty() {
+    // Stale means the stamp names an older version, whether or not any option
+    // is missing. A file that already lists every option can still carry a
+    // stamp `--check-config` flags, and the two commands must not disagree
+    // about whether the file is current: re-stamping here is what makes
+    // "update, then check" come out clean.
+    let stale = stamped_version(user_text).is_some_and(|old| version_is_older(&old, current));
+    if missing.is_empty() && !stale {
         return None;
     }
 
-    let mut body = String::new();
-    body.push_str(&format!(
-        "\n# --- Options added since this file was written (hcmd {current}). ---\n\
-         # Commented examples only; nothing here changes a setting. Move a line\n\
-         # under its own [section] and uncomment it to use it.\n"
-    ));
-    let mut last_section = String::new();
-    let mut added = Vec::new();
-    for opt in &missing {
-        if opt.section != last_section {
-            body.push_str(&format!("\n# [{}]\n", opt.section));
-            last_section.clone_from(&opt.section);
-        }
-        for line in &opt.block {
-            body.push_str(line);
-            body.push('\n');
-        }
-        added.push(opt.key.clone());
-    }
-
     let mut content = bump_stamp(user_text, current);
-    if !content.ends_with('\n') {
-        content.push('\n');
+    let mut added = Vec::new();
+    if !missing.is_empty() {
+        let mut body = String::new();
+        body.push_str(&format!(
+            "\n# --- Options added since this file was written (hcmd {current}). ---\n\
+             # Commented examples only; nothing here changes a setting. Move a line\n\
+             # under its own [section] and uncomment it to use it.\n"
+        ));
+        let mut last_section = String::new();
+        for opt in &missing {
+            if opt.section != last_section {
+                body.push_str(&format!("\n# [{}]\n", opt.section));
+                last_section.clone_from(&opt.section);
+            }
+            for line in &opt.block {
+                body.push_str(line);
+                body.push('\n');
+            }
+            added.push(opt.key.clone());
+        }
+        if !content.ends_with('\n') {
+            content.push('\n');
+        }
+        content.push_str(&body);
     }
-    content.push_str(&body);
     Some((content, added))
 }
 
@@ -613,6 +620,9 @@ pub fn update_config() -> i32 {
         };
         match patch_reference(&user_text, example, current) {
             Some((content, added)) => match fs::write(&path, content) {
+                Ok(()) if added.is_empty() => {
+                    println!("  {name}: brought up to date for hcmd {current}");
+                }
                 Ok(()) => println!(
                     "  {name}: added {} example(s): {}",
                     added.len(),
@@ -1109,6 +1119,35 @@ mod tests {
             patch_reference(&out, example, "0.9.8").is_none(),
             "running it again adds nothing"
         );
+    }
+
+    #[test]
+    fn a_file_with_every_option_but_an_old_stamp_is_re_stamped_so_check_agrees() {
+        // The bug: --update-config said "already up to date" while
+        // --check-config still flagged the old stamp. A file that lists every
+        // option but names an older version is re-stamped, with nothing added,
+        // so the two commands agree afterwards.
+        let current = env!("CARGO_PKG_VERSION");
+        let user = "# written by version 0.9.4.\n[panel]\ngit_status = true\n";
+        let example = format!(
+            "# shipped, written by version {current}.\n[panel]\n# git column\ngit_status = true\n"
+        );
+        let (out, added) =
+            patch_reference(user, &example, current).expect("a stale stamp is an update");
+        assert!(
+            added.is_empty(),
+            "nothing was missing, only the stamp moved"
+        );
+        assert!(
+            out.contains(&format!("written by version {current}")),
+            "the stamp is now current: {out}"
+        );
+        assert!(
+            stale_keymap_warning(&out).is_none(),
+            "and check-config no longer flags it: {out}"
+        );
+        // Now genuinely current: a second pass is a no-op.
+        assert!(patch_reference(&out, &example, current).is_none());
     }
 
     #[test]
