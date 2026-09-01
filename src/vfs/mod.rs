@@ -104,6 +104,21 @@ impl BackendKind {
         }
     }
 
+    /// Does a segment of this kind hang off a **directory** rather than a file?
+    ///
+    /// It decides where leaving the segment lands. An archive and a disk image
+    /// are files: stepping out of `/a/b.tar.gz#/` lands on `/a`, because the
+    /// container itself is not somewhere to stand. A repository's history hangs
+    /// off the directory it is the history *of*, and that directory is very
+    /// much somewhere to stand - it is where you were when you asked for the
+    /// history - so leaving `~/src#git/` lands on `~/src` and not above it.
+    pub const fn container_is_a_directory(&self) -> bool {
+        match self {
+            Self::Git => true,
+            Self::Local | Self::List | Self::Archive | Self::Image | Self::Remote(_) => false,
+        }
+    }
+
     /// What a backend of this kind can do, without needing an instance.
     ///
     /// [`ListFs`] uses this to delegate: a synthetic listing is exactly as
@@ -341,7 +356,13 @@ impl VfsPath {
         }
         let mut next = self.clone();
         // `None` here is the outermost root, which is where the walk stops.
-        next.rest.pop()?;
+        let (popped, _) = next.rest.pop()?;
+        // Out of a segment that hangs off a directory, and that directory is
+        // the answer; out of one that hangs off a file, and the file's own
+        // directory is.
+        if popped.container_is_a_directory() {
+            return Some(next);
+        }
         next.parent()
     }
 
@@ -1150,6 +1171,26 @@ pub(crate) fn not_implemented_until<T>(milestone: Milestone, what: &str) -> Resu
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn leaving_a_segment_lands_on_its_container_or_above_it_by_kind() {
+        // Out of a commit list is back into the directory whose history it is:
+        // that is where `Alt+V` was pressed and it is a directory to stand in.
+        let git = VfsPath::local("/home/t/src").with_segment(BackendKind::Git, "/");
+        assert_eq!(
+            git.parent(),
+            Some(VfsPath::local("/home/t/src")),
+            "the history hangs off a directory"
+        );
+        // Out of an archive is into the directory holding it: the container is
+        // a file, and a file is not somewhere to stand.
+        let tar = VfsPath::local("/home/t/a.tar.gz").with_segment(BackendKind::Archive, "/");
+        assert_eq!(
+            tar.parent(),
+            Some(VfsPath::local("/home/t")),
+            "the archive hangs off a file"
+        );
+    }
     use super::*;
 
     #[test]
