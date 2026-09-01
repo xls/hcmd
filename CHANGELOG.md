@@ -2,6 +2,14 @@
 
 Notable changes per release, one line each. Newest first.
 
+## v0.9.11
+
+- The panels now watch their own directory and refresh on their own when it changes underneath - a sync, an archive being packed, a file written by another program - instead of needing Ctrl+R.
+- A refresh updates the listing in place rather than rebuilding it, so the git column and the status line no longer blank and repaint each time; rows keep their cursor, marks and flags, gone rows drop, and new ones appear.
+- Cancelling a copy no longer pops a "1 failed - Retry?" dialog for the file it was interrupted on: a cancelled job is not a failed one.
+- The copy dialog draws both progress bars at all times, so its height no longer twitches as it moves between differently sized files, and the box is a little wider.
+- hcmd --update-config brings a file that already lists every option but carries an older stamp up to date, so --update-config and --check-config no longer disagree.
+
 ## v0.9.10
 
 - A background copy or move now refreshes the destination panel the moment it finishes, instead of leaving a stale listing until the next Ctrl+R.
