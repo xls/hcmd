@@ -586,6 +586,12 @@ fn opens_as(name: &str, body: &[u8], open_as_document: bool) -> ViewerMode {
     viewer.mode()
 }
 
+/// A compiled Android manifest, when the maintainer's sample is there.
+fn axml_bytes() -> Option<Vec<u8>> {
+    let home = std::env::var("HOME").ok()?;
+    std::fs::read(std::path::Path::new(&home).join("TestData/AndroidManifest.xml")).ok()
+}
+
 /// Bytes nothing recognises and that are not text either.
 fn plain_binary() -> Vec<u8> {
     let mut out = vec![0x00_u8, 0x01, 0x02, 0x03];
@@ -603,6 +609,22 @@ fn a_file_opens_in_the_mode_its_own_content_asks_for() {
 
     // open_as_document on: a recognised format wins over everything.
     assert_eq!(opens_as("a.json", json, true), ViewerMode::Render, "json");
+    // Including one recognised by its bytes rather than its name: a compiled
+    // manifest is called `.xml` exactly as a written one is. It is a document
+    // under the same rule as the rest and not by a case of its own, so the
+    // setting below turns it off with everything else.
+    if let Some(axml) = axml_bytes() {
+        assert_eq!(
+            opens_as("AndroidManifest.xml", &axml, true),
+            ViewerMode::Render,
+            "compiled android xml"
+        );
+        assert_eq!(
+            opens_as("AndroidManifest.xml", &axml, false),
+            ViewerMode::Hex,
+            "and with documents off it is the binary it is"
+        );
+    }
     assert_eq!(opens_as("a.png", &png, true), ViewerMode::Render, "png");
     assert_eq!(opens_as("a.bin", &binary, true), ViewerMode::Hex, "binary");
     assert_eq!(opens_as("a.txt", text, true), ViewerMode::Text, "text");

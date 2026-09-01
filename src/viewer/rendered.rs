@@ -143,10 +143,23 @@ impl Viewer {
         };
         let bytes = self.read_all(want).map_err(|_| RenderRefusal::NoRenderer)?;
 
+        // Recognised by its header rather than its name, so the read above
+        // took only the head - `of_name` says nothing about a `.xml`, which is
+        // what a compiled manifest and a written one are both called. The
+        // header is in that head, and answering from it costs one more read
+        // for the files that are one and nothing for the files that are not.
+        let whole = super::axml::recorded_len(&bytes)
+            .is_some_and(|recorded| Some(u64::from(recorded)) == self.source.len())
+            && fits;
+        let bytes = if whole {
+            self.read_all(limit)
+                .map_err(|_| RenderRefusal::NoRenderer)?
+        } else {
+            bytes
+        };
+
         // Before anything that reads the bytes as text: a compiled Android
-        // manifest is not text and would decode to nothing legible. It is
-        // recognised by its own header, so a `.xml` that is really one is
-        // caught and a `.xml` that is written by hand is not.
+        // manifest is not text and would decode to nothing legible.
         if let Some(document) = super::axml::decode(&bytes).map(|text| Rendered {
             kind: RenderKind::Axml,
             label: RenderKind::Axml.label().to_string(),

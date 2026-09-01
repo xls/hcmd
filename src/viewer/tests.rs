@@ -2881,11 +2881,16 @@ fn a_compiled_android_manifest_renders_as_xml_without_hiding_its_bytes() {
         return;
     };
 
-    let mut v = open_bytes(&bytes, &cfg());
+    // Through the same step the event loop takes, which is where the rule
+    // that a recognised format opens as what it is actually lives.
+    let cfg = cfg();
+    let mut v = open_bytes(&bytes, &cfg);
+    v.choose_initial_mode(cfg.default_mode, cfg.open_as_document)
+        .expect("choose");
     assert_eq!(
         v.mode(),
         ViewerMode::Render,
-        "what it decodes to is the point, so that is what opens"
+        "a recognised format opens as what it is"
     );
     let doc = v.rendered().expect("mode 3 built a document");
     assert_eq!(doc.kind, crate::viewer::render::RenderKind::Axml);
