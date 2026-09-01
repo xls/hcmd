@@ -346,6 +346,7 @@ impl Session {
         cmd.env("LANG", "en_US.UTF-8");
         cmd.env("LC_ALL", "en_US.UTF-8");
         cmd.env("HCMD_KEYBOARD_PROTOCOL", "enhanced");
+        cmd.env("HCMD_NO_FS_WATCH", "1");
         cmd.env("XDG_CONFIG_HOME", &home);
         cmd.env("XDG_STATE_HOME", &home);
         cmd.env("XDG_DATA_HOME", &home);

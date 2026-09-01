@@ -361,6 +361,7 @@ impl Session {
         // a bare pty answers no capability query, and `Ctrl+G`
         // only exists as a distinguishable sequence under the Kitty protocol.
         cmd.env("HCMD_KEYBOARD_PROTOCOL", "enhanced");
+        cmd.env("HCMD_NO_FS_WATCH", "1");
         cmd.env("XDG_CONFIG_HOME", &home);
         cmd.env("XDG_STATE_HOME", &home);
         cmd.cwd(&cwd);

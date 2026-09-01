@@ -192,6 +192,7 @@ fn run_in_pty(run: Run<'_>) -> (vt100::Parser, bool) {
     // tests exercise the legacy encodings deliberately rather than by accident.
     //
     cmd.env("HCMD_KEYBOARD_PROTOCOL", "legacy");
+    cmd.env("HCMD_NO_FS_WATCH", "1");
     // Keep the test off the developer's real configuration, and off its saved
     // tab state - a restored tab would change what the panel is showing.
     let dir = std::env::temp_dir().join(format!(

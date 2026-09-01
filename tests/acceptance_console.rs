@@ -269,6 +269,11 @@ impl Session {
         // a bare pty answers no capability query, and criterion 6
         // needs `Ctrl+Enter`, which only the Kitty protocol can express.
         cmd.env("HCMD_KEYBOARD_PROTOCOL", "enhanced");
+        // No filesystem watch under the harness: these tests run a real shell
+        // in the panel's own directory, so a command that touches a file would
+        // trigger a rescan and move the cursor out from under an assertion.
+        // What the watch does is covered by unit tests.
+        cmd.env("HCMD_NO_FS_WATCH", "1");
         cmd.env("XDG_CONFIG_HOME", &home);
         cmd.env("XDG_STATE_HOME", &home);
         // "Shell from `$SHELL`". Pinned, so the criteria are
