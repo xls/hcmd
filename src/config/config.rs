@@ -26,6 +26,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
+use config_derive::ConfigDoc;
 use serde::{Deserialize, Serialize};
 
 use crate::panel::ColumnId;
@@ -33,42 +34,55 @@ use crate::panel::ColumnId;
 use super::units::{ByteSize, Timeout};
 
 /// The whole of `config.toml`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct Config {
     /// Chrome and layout.
+    #[config(section)]
     pub ui: UiConfig,
     /// Everything about how a panel renders and behaves.
+    #[config(section)]
     pub panel: PanelConfig,
     /// The `Ctrl+O` console (v0.3).
+    #[config(section)]
     pub console: ConsoleConfig,
     /// `Enter` policy and file associations.
+    #[config(section)]
     pub open: OpenConfig,
     /// The external editor `F4` shells out to (v0.3).
+    #[config(section)]
     pub editor: EditorConfig,
     /// The internal viewer (v0.4).
+    #[config(section)]
     pub viewer: ViewerConfig,
     /// File operations (v0.2).
+    #[config(section)]
     pub ops: OpsConfig,
     /// Archives (v0.5).
+    #[config(section)]
     pub archive: ArchiveConfig,
     /// Search (v0.6).
+    #[config(section)]
     pub search: SearchConfig,
     /// The device picker (v0.7).
+    #[config(section)]
     pub devices: DevicesConfig,
     /// Remote connections (v0.65).
+    #[config(section)]
     pub remote: RemoteConfig,
     /// Terminal capability overrides.
+    #[config(section)]
     pub terminal: TerminalConfig,
-    /// File-type colouring rules. Kept out of the theme so a user
-    /// keeps their rules across themes.
+    /// File-type colouring. Rules are matched in order, first match wins, and a
+    /// rule names a theme slot rather than a colour, so the rules survive a
+    /// theme change. `match` takes `ext` (a list, without the dot), `mode`
+    /// ("exec", "dir" or "symlink"), or both.
     ///
-    /// Defaults to the worked example, the archive extensions. A file
-    /// that writes any `[[filetypes]]` block **replaces** the list rather than
-    /// adding to it, the same way `keymap.toml` replaces an action's bindings -
-    /// which is why the shipped `config.toml` carries the default rule as a
-    /// comment, so it is in front of anyone about to add their own.
+    /// Writing any `[[filetypes]]` block replaces this list rather than adding
+    /// to it, the same way `keymap.toml` replaces an action's bindings, so copy
+    /// the rule below if you want to keep it.
     #[serde(default = "default_filetypes")]
+    #[config(array)]
     pub filetypes: Vec<FiletypeRule>,
 
     /// Warnings collected while loading: unknown keys, values that did not
@@ -122,7 +136,7 @@ fn default_filetypes() -> Vec<FiletypeRule> {
 // ---------------------------------------------------------------- ui --------
 
 /// `[ui]`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct UiConfig {
     /// Theme name; loaded from `themes/<name>.toml`.
@@ -257,7 +271,7 @@ pub enum NameTruncate {
 }
 
 /// `[panel]`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct PanelConfig {
     /// Show dotfiles (`Ctrl+H`).
@@ -269,28 +283,20 @@ pub struct PanelConfig {
     /// Directories sort before files, on top of every sort order.
     ///
     pub directories_first: bool,
-    /// `1.2M` instead of `362,333`.
-    ///
-    /// **the design wins over `examples/config.toml` here**: the default is
-    /// `false`, because the reference screenshot shows exact byte counts.
+    /// `1.2M` instead of `362,333`. Off by default: the exact byte count is
+    /// what the reference screenshot shows.
     pub human_sizes: bool,
-    /// Group the digits of an exact byte count.
-    ///
-    /// **the design wins over `examples/config.toml` here**: the example file
-    /// omits the key; the design makes it `true`.
+    /// Group the digits of an exact byte count. On by default.
     pub thousands_separator: bool,
     /// Render directories as `[bin]`, so they are distinguishable without
     /// colour.
     pub dir_brackets: bool,
-    /// How the `attr` column renders.
-    ///
-    /// **Added from the design**; `examples/config.toml` omits it.
+    /// How the `attr` column renders: "unix" (`drwxr-xr-x`, the default) or
+    /// "dos" (`-a--`).
     pub attr_style: AttrStyle,
-    /// `chrono` format string for the `date` column.
-    ///
-    /// **the design wins over `examples/config.toml` here**: the default is
-    /// `"%Y-%m-%d %H:%M"`, which is what renders `2026-08-12 02:40` and what
-    /// the column's `min_chars = 16` is sized for.
+    /// `chrono` format string for the `date` column. The default renders
+    /// `2026-08-12 02:40`, which is what the column's `min_chars = 16` is sized
+    /// for.
     pub date_format: String,
     /// What a quick search matches.
     pub quick_search: QuickSearchMode,
@@ -309,6 +315,7 @@ pub struct PanelConfig {
     /// When to draw the tab bar.
     pub show_tab_bar: TabBar,
     /// Column layout.
+    #[config(section)]
     pub columns: ColumnsConfig,
 
     /// the design names this `panel.name_truncate`, while
@@ -359,7 +366,7 @@ impl PanelConfig {
 }
 
 /// `[panel.columns]`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct ColumnsConfig {
     /// Left to right. This order also defines the sort keys: `Ctrl+1` sorts by
@@ -451,7 +458,7 @@ pub enum SwitchOnRun {
 }
 
 /// `[console]`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct ConsoleConfig {
     /// Start a shell at all.
@@ -468,9 +475,11 @@ pub struct ConsoleConfig {
     /// Empty means `$SHELL`.
     pub shell: String,
     /// Whether `Enter` on the command line puts the shell on screen.
-    /// See [`SwitchOnRun`].
+    /// auto - the panels stay; switch only if the command is still holding the
+    /// terminal after switch_delay (a build, a pager, an editor);
+    /// always - switch on every Enter; never - only Ctrl+O switches in.
     pub switch_on_run: SwitchOnRun,
-    /// How long [`SwitchOnRun::Auto`] waits before deciding.
+    /// How long `auto` waits before deciding.
     ///
     /// The command is given this long to finish. Whatever is still holding the
     /// terminal when it expires - a build, a pager, an editor, something asking
@@ -594,14 +603,20 @@ pub enum ModeMatch {
 }
 
 /// `[open]`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct OpenConfig {
     /// What `Enter` does on a file with the executable bit set.
+    /// ask - prompt: Execute / Open with... / View / Cancel;
+    /// always - run it; never - open it with its association.
     pub execute: ExecutePolicy,
-    /// Where it runs.
+    /// Where it runs. console - the Ctrl+O console, output visible, stdin
+    /// works, TUIs work; detached - fork and detach, suits GUI programs.
     pub execute_in: ExecuteIn,
-    /// User associations, which win over the desktop's. First match is used.
+    /// Your associations win over the desktop's. First match is used; if
+    /// nothing matches, the desktop default is used, then the internal viewer.
+    /// Shift+Enter always uses these and never executes.
+    #[config(array)]
     pub handlers: Vec<OpenHandler>,
 }
 
@@ -618,7 +633,7 @@ impl Default for OpenConfig {
 // ------------------------------------------------------------ editor --------
 
 /// `[editor]`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct EditorConfig {
     /// Empty means `$VISUAL`, then `$EDITOR`, then `nano`.
@@ -686,7 +701,7 @@ pub enum HighlightEngine {
 }
 
 /// `[viewer.encoding]`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct ViewerEncodingConfig {
     /// `auto`, or an `encoding_rs` label.
@@ -722,7 +737,7 @@ impl Default for ViewerEncodingConfig {
 }
 
 /// `[viewer.render]`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct ViewerRenderConfig {
     /// Above this, mode 3 refuses and says so.
@@ -752,16 +767,20 @@ impl Default for ViewerRenderConfig {
 }
 
 /// `[viewer.highlight]`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct ViewerHighlightConfig {
-    /// Which engine.
+    /// Highlighting is syntect. "tree-sitter" still loads, as a deprecated
+    /// alias with a warning, so an older config file keeps working.
     pub engine: HighlightEngine,
     /// Above this, highlighting is off and the file still opens.
     pub max_size: ByteSize,
     /// Reserved: per-language language servers. Not used; the design rejects
     /// the approach, and the table is accepted only so an old file still loads.
+    /// It is skipped from the generated file and shown only as the commented
+    /// example below, since the default holds no entries to render.
     #[serde(default)]
+    #[config(skip)]
     pub lsp: HashMap<String, String>,
 }
 
@@ -940,19 +959,21 @@ impl Endian {
 }
 
 /// `[viewer.hex]`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize, ConfigDoc,
+)]
 #[serde(default, deny_unknown_fields)]
 pub struct HexConfig {
     /// Bits per column: 8, 16, 32 or 64.
     pub group: HexGroup,
     /// Hex, unsigned or signed.
     pub format: HexFormat,
-    /// Byte order, for columns wider than a byte.
+    /// Byte order, for columns wider than a byte. Only matters above 8 bits.
     pub endian: Endian,
 }
 
 /// `[viewer]`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct ViewerConfig {
     /// Wrap long lines.
@@ -994,15 +1015,24 @@ pub struct ViewerConfig {
     pub diff_against_git: bool,
     /// Bytes per row in hex mode.
     pub hex_width: u16,
-    /// How the bytes are grouped and read in hex mode.
+    /// How the bytes are grouped and read in hex mode. A dump of single bytes
+    /// is the right view for a string table and the wrong one for an array of
+    /// 32-bit integers, so both are settings: g cycles the grouping, d the
+    /// display format, e the byte order.
+    #[config(section)]
     pub hex: HexConfig,
     /// Granularity of the background line index.
     pub index_chunk: ByteSize,
     /// Encoding handling.
+    #[config(section)]
     pub encoding: ViewerEncodingConfig,
     /// Syntax highlighting.
+    #[config(section)]
     pub highlight: ViewerHighlightConfig,
-    /// Mode 3, the rendered view.
+    /// Mode 3, the rendered view: 3 in the viewer shows a JSON file as a
+    /// foldable tree, an HTML page as the text it renders to, and a Markdown
+    /// file with its headings and lists made rather than spelled.
+    #[config(section)]
     pub render: ViewerRenderConfig,
     /// The largest selection `Ctrl+C` will copy.
     ///
@@ -1044,7 +1074,7 @@ impl Default for ViewerConfig {
 // --------------------------------------------------------------- ops --------
 
 /// `[ops]`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct OpsConfig {
     /// Follow symlinks when copying.
@@ -1105,16 +1135,18 @@ impl Default for OpsConfig {
 // ----------------------------------------------------------- archive --------
 
 /// `[archive]`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct ArchiveConfig {
-    /// `Enter` on an archive browses it.
+    /// `Enter` on an archive browses it. Answers for read-only disk images too.
     pub enter_on_click: bool,
-    /// Empty means `$TMPDIR`.
+    /// Where an archive or image that is not a local file is materialised
+    /// before it is read. Empty means `$TMPDIR`.
     pub temp_dir: String,
-    /// Warn above this when rewriting a compressed tar.
+    /// Adding a file to a compressed tar rewrites the whole archive. Warn above
+    /// this size.
     pub rewrite_warn_size: ByteSize,
-    /// Refuse above this.
+    /// Refuse to rewrite a compressed tar above this size.
     pub rewrite_max_size: ByteSize,
 }
 
@@ -1157,12 +1189,16 @@ pub enum SearchEngine {
 pub const EXTERNAL_ENGINE_REFUSAL: &str = "search.engine = \"external\" would run rg as a subprocess,; the internal engine is the supported path";
 
 /// `[search]`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct SearchConfig {
-    /// Which engine.
+    /// Search runs in-process on ripgrep's own libraries. "external" would
+    /// spawn a subprocess, which this program rules out; setting it does not
+    /// shell out, and the internal engine is the supported path.
     pub engine: SearchEngine,
-    /// A file manager should show what is there.
+    /// A file manager should find what is on disk, not what git would show.
+    /// With this false a gitignored file, a file under .git and a dotfile are
+    /// all found.
     pub respect_gitignore: bool,
 }
 
@@ -1204,20 +1240,23 @@ impl Default for SearchConfig {
 // ----------------------------------------------------------- devices --------
 
 /// `[devices]`.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct DevicesConfig {
-    /// Include proc, sysfs, cgroup and snap loopbacks.
+    /// Turn off this program's own filter on the mounted-volumes list. It does
+    /// not mean "show everything the kernel has mounted": the enumeration is
+    /// sysinfo's, which drops proc, sysfs, cgroup and the snap loopbacks
+    /// unconditionally.
     pub show_all: bool,
 }
 
 // ------------------------------------------------------------ remote --------
 
 /// `[remote]`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct RemoteConfig {
-    /// `sftp` or `ftp`.
+    /// sftp, ftp, ftps, ftps-implicit or smb.
     pub default_protocol: String,
     /// Connect timeout.
     pub connect_timeout: Timeout,
@@ -1308,22 +1347,20 @@ pub enum ColorDepthSetting {
 }
 
 /// `[terminal]`.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct TerminalConfig {
-    /// Force the keyboard protocol on or off.
+    /// Force the keyboard protocol on or off; "auto" detects.
     pub keyboard_protocol: KeyboardProtocol,
-    /// Force the colour depth, or `Auto` to detect it.
-    ///
-    /// Detection reads `COLORTERM` and `TERM`, which are frequently wrong over
-    /// ssh and inside multiplexers - in both directions. Same reasoning as
-    /// `ui.ascii_borders`: detect, but let the file win.
+    /// Force the colour depth; "auto" reads `COLORTERM` and `TERM`. Worth
+    /// setting over ssh and inside multiplexers, where those are frequently
+    /// wrong in both directions. Same reasoning as `ui.ascii_borders`: detect,
+    /// but let the file win.
     pub colors: ColorDepthSetting,
     /// Raw escape sequences bound to logical keys, for terminals that need it.
-    ///
-    ///
-    /// Parsed and carried in v0.1; wiring it into the decoder is a later
-    /// milestone. `"shift+f5" = "[15;2~"`.
+    /// Skipped from the generated file and shown only as the commented example
+    /// below, since the default holds no entries to render.
+    #[config(skip)]
     pub sequences: HashMap<String, String>,
 }
 

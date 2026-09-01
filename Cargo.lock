@@ -725,6 +725,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "config-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "const-oid"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2802,6 +2811,7 @@ dependencies = [
  "bzip2",
  "chardetng",
  "chrono",
+ "config-derive",
  "crc32fast",
  "crossterm",
  "encoding_rs",

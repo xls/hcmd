@@ -8,6 +8,14 @@ license      = "MIT"
 # examples/ holds TOML reference configs, not Rust example targets.
 autoexamples = false
 
+# The design makes the config structs the single source of truth for
+# `config.toml`, which needs a proc-macro to read their doc comments back as
+# data, and a proc-macro must be its own crate. So the binary stays here and
+# `config-derive` is a sibling member; `cargo build`/`cargo test` at the root
+# still build both.
+[workspace]
+members = ["config-derive"]
+
 [[bin]]
 name = "hcmd"
 path = "src/main.rs"
@@ -18,6 +26,10 @@ crossterm            = "0.29.0"
 tokio                = { version = "1.53.1", features = ["rt-multi-thread", "macros", "fs", "sync", "time", "signal"] }
 serde                = { version = "1.0.229", features = ["derive"] }
 toml                 = "1.1.4"
+# The derive that lets `config.toml` be generated from the config structs
+# rather than hand-maintained beside them. Its own crate because a proc-macro
+# must be, and a workspace member so a root build compiles it.
+config-derive        = { path = "config-derive" }
 sysinfo              = { version = "0.39.6", default-features = false, features = ["disk"] }
 unicode-width        = "0.2.2"
 unicode-segmentation = "1.13.3"

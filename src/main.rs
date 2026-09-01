@@ -64,7 +64,7 @@ fn usage() -> String {
          options:\n  \
          --keytest        show how this terminal encodes each key\n  \
          --check-config   validate the configuration files and exit\n  \
-         --update-config  add examples of new options to config.toml/keymap.toml\n  \
+         --update-config  regenerate config.toml from its schema, keeping your values\n  \
          -V, --version    print the version\n  \
          -h, --help       print this message\n\
          \n\

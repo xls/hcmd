@@ -1,0 +1,28 @@
+[package]
+name         = "config-derive"
+version      = "0.1.0"
+edition      = "2024"
+rust-version = "1.95"
+license      = "MIT"
+description  = "The derive behind config.toml being generated from its own structs"
+publish      = false
+
+[lib]
+proc-macro = true
+
+# A proc-macro reads the struct's fields, their serde attributes and their doc
+# comments at compile time, which is the one place those doc comments can be
+# captured as data. `syn`/`quote`/`proc-macro2` are the standard trio for that
+# and are already in this workspace's lock as transitive dependencies, so this
+# adds a crate to build rather than a new download.
+[dependencies]
+syn          = { version = "2", features = ["full"] }
+quote        = "1"
+proc-macro2  = "1"
+
+# This crate is a build-time tool with no runtime surface of its own, so the
+# binary's runtime ban list does not apply here; what it EMITS is what must
+# obey those rules, and that output is written with `.get()` and `?` and never
+# indexes or unwraps.
+[lints.rust]
+missing_docs = "allow"

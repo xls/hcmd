@@ -19,6 +19,7 @@ pub mod catalogue;
               file that reads it is named after it"
 )]
 pub mod config;
+pub mod emit;
 pub mod keymap;
 pub mod paths;
 pub mod persist;
@@ -458,72 +459,11 @@ fn version_is_older(have: &str, want: &str) -> bool {
     false
 }
 
-/// The key a declaration line names, from `key = ...` (a leading `#` already
-/// stripped by the caller). `None` for anything that is not a declaration.
-fn declaration_key(trimmed: &str) -> Option<String> {
-    let key: String = trimmed
-        .chars()
-        .take_while(|c| c.is_alphanumeric() || *c == '_')
-        .collect();
-    if !key.is_empty() && trimmed[key.len()..].trim_start().starts_with('=') {
-        Some(key)
-    } else {
-        None
-    }
-}
-
-/// Every key a settings file mentions, commented or not, so a patch can tell
-/// which options the file already knows about.
-fn declared_keys(text: &str) -> std::collections::HashSet<String> {
-    text.lines()
-        .filter_map(|line| {
-            let trimmed = line.trim_start().trim_start_matches('#').trim_start();
-            declaration_key(trimmed)
-        })
-        .collect()
-}
-
-/// One documented option from a shipped reference: which `[section]` it lives
-/// under, its key, and the lines that document it (its comments, then the
-/// example line, commented).
-struct RefOption {
-    section: String,
-    key: String,
-    block: Vec<String>,
-}
-
-/// Parse a shipped reference into its documented options, in file order.
-fn reference_options(text: &str) -> Vec<RefOption> {
-    let mut out = Vec::new();
-    let mut section = String::new();
-    let mut comments: Vec<String> = Vec::new();
-    for line in text.lines() {
-        let trimmed = line.trim_start();
-        if trimmed.starts_with('[') {
-            section = trimmed.trim_matches(|c| c == '[' || c == ']').to_string();
-            comments.clear();
-        } else if trimmed.is_empty() {
-            comments.clear();
-        } else if trimmed.starts_with('#') {
-            comments.push(line.to_string());
-        } else if let Some(key) = declaration_key(trimmed) {
-            let mut block = comments.clone();
-            block.push(format!("# {}", line.trim_end()));
-            out.push(RefOption {
-                section: section.clone(),
-                key,
-                block,
-            });
-            comments.clear();
-        } else {
-            comments.clear();
-        }
-    }
-    out
-}
-
 /// Bump the `written by version X` stamp in a generated file's header to the
-/// current version, so it stops reading as stale after a patch.
+/// current version, so it stops reading as stale after an update.
+///
+/// `keymap.toml` still uses this: it has no config struct to generate from, so
+/// an update leaves the user's file alone and only moves its stamp forward.
 fn bump_stamp(text: &str, current: &str) -> String {
     match stamped_version(text) {
         Some(old) => text.replacen(
@@ -535,69 +475,91 @@ fn bump_stamp(text: &str, current: &str) -> String {
     }
 }
 
-/// Append commented examples of the options a settings file does not yet
-/// mention, and bump its version stamp. Returns the new contents and the keys
-/// added, or `None` when the file already knows every option.
+/// The `(section, key)` pairs a `config.toml` sets **live** (uncommented), so a
+/// regeneration can keep exactly those and comment the rest at their default.
 ///
-/// Additive and reversible: nothing existing is touched, and everything added
-/// is a comment, so no setting changes until a line is moved under its section
-/// and uncommented.
-fn patch_reference(
-    user_text: &str,
-    example_text: &str,
-    current: &str,
-) -> Option<(String, Vec<String>)> {
-    let known = declared_keys(user_text);
-    let options = reference_options(example_text);
-    let missing: Vec<&RefOption> = options
-        .iter()
-        .filter(|opt| !known.contains(&opt.key))
-        .collect();
-    // Stale means the stamp names an older version, whether or not any option
-    // is missing. A file that already lists every option can still carry a
-    // stamp `--check-config` flags, and the two commands must not disagree
-    // about whether the file is current: re-stamping here is what makes
-    // "update, then check" come out clean.
-    let stale = stamped_version(user_text).is_some_and(|old| version_is_older(&old, current));
-    if missing.is_empty() && !stale {
-        return None;
-    }
-
-    let mut content = bump_stamp(user_text, current);
-    let mut added = Vec::new();
-    if !missing.is_empty() {
-        let mut body = String::new();
-        body.push_str(&format!(
-            "\n# --- Options added since this file was written (hcmd {current}). ---\n\
-             # Commented examples only; nothing here changes a setting. Move a line\n\
-             # under its own [section] and uncomment it to use it.\n"
-        ));
-        let mut last_section = String::new();
-        for opt in &missing {
-            if opt.section != last_section {
-                body.push_str(&format!("\n# [{}]\n", opt.section));
-                last_section.clone_from(&opt.section);
-            }
-            for line in &opt.block {
-                body.push_str(line);
-                body.push('\n');
-            }
-            added.push(opt.key.clone());
+/// An array-of-tables such as `[[filetypes]]` records `(name, "")`: the array
+/// is set as a whole rather than key by key, which is the empty-key form the
+/// generator asks about in [`emit::generate_preserving`].
+fn live_keys(text: &str) -> std::collections::HashSet<(String, String)> {
+    let mut set = std::collections::HashSet::new();
+    let mut section = String::new();
+    for line in text.lines() {
+        let t = line.trim_start();
+        if t.is_empty() || t.starts_with('#') {
+            continue;
         }
-        if !content.ends_with('\n') {
-            content.push('\n');
+        if let Some(rest) = t.strip_prefix("[[") {
+            if let Some(name) = rest.split("]]").next() {
+                let name = name.trim().to_string();
+                set.insert((name.clone(), String::new()));
+                section = name;
+            }
+            continue;
         }
-        content.push_str(&body);
+        if let Some(rest) = t.strip_prefix('[') {
+            if let Some(name) = rest.split(']').next() {
+                section = name.trim().to_string();
+            }
+            continue;
+        }
+        let key: String = t
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_')
+            .collect();
+        if !key.is_empty()
+            && t.get(key.len()..)
+                .map(str::trim_start)
+                .is_some_and(|rest| rest.starts_with('='))
+        {
+            set.insert((section.clone(), key));
+        }
     }
-    Some((content, added))
+    set
 }
 
-/// `--update-config`: append commented examples of new options to the user's
-/// `config.toml` and `keymap.toml` without changing anything they already have.
+/// Move an existing file aside to a dated backup before it is regenerated, so
+/// the old file is "renamed to a backup with a date". Returns the backup path,
+/// or `None` when there was nothing to move.
 ///
-/// Returns the process exit code, and prints a line per file saying what it
-/// added or that it was already current. Safe to run repeatedly: a file that
-/// already mentions every option is left untouched.
+/// A rename, modelled on the atomic rename in [`persist`]: the old file is the
+/// user's and is being replaced whole rather than edited, so moving it aside is
+/// the honest thing, and a rename is what leaves no half-written file behind.
+/// Today's date names it; a second run on the same day takes a numeric suffix
+/// rather than overwriting the first backup.
+fn backup_aside(path: &Path) -> std::io::Result<Option<PathBuf>> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    let date = chrono::Local::now().format("%Y-%m-%d");
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("config.toml");
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    let mut candidate = dir.join(format!("{name}.{date}.bak"));
+    let mut n: u32 = 2;
+    while candidate.exists() {
+        candidate = dir.join(format!("{name}.{date}-{n}.bak"));
+        n = n.saturating_add(1);
+    }
+    fs::rename(path, &candidate)?;
+    Ok(Some(candidate))
+}
+
+/// `--update-config`: regenerate `config.toml` from the config schema, keeping
+/// the values the user set, and move the old file aside with today's date.
+///
+/// The old model appended commented examples of new options, which scattered
+/// duplicate `# [section]` blocks and eventually corrupted the file. This
+/// replaces it: the file is generated from the structs, so an update is a fresh
+/// render that carries the user's set values forward and cannot double a
+/// section. Parsing reuses the loader's tolerance (a value that does not parse
+/// is dropped with a warning and its default written), and the old file is
+/// backed up before the new one lands.
+///
+/// `keymap.toml` has no struct to generate from, so it is left as the user's,
+/// its version stamp bumped when an older one would otherwise read as stale.
 pub fn update_config() -> i32 {
     let dir = match config_dir() {
         Ok(dir) => dir,
@@ -608,32 +570,74 @@ pub fn update_config() -> i32 {
     };
     println!("configuration directory: {}", dir.display());
     let current = env!("CARGO_PKG_VERSION");
-    let files = [
-        ("config.toml", EXAMPLE_CONFIG),
-        ("keymap.toml", EXAMPLE_KEYMAP),
-    ];
-    for (name, example) in files {
-        let path = dir.join(name);
-        let Ok(user_text) = fs::read_to_string(&path) else {
-            println!("  {name}: not present, nothing to update");
-            continue;
-        };
-        match patch_reference(&user_text, example, current) {
-            Some((content, added)) => match fs::write(&path, content) {
-                Ok(()) if added.is_empty() => {
-                    println!("  {name}: brought up to date for hcmd {current}");
+
+    let config_path = dir.join("config.toml");
+    match fs::read_to_string(&config_path) {
+        Ok(user_text) => {
+            let cfg = match toml::from_str::<Config>(&user_text) {
+                Ok(cfg) => cfg,
+                Err(err) => {
+                    println!("  config.toml: {err}; unparsable values fall back to defaults");
+                    Config::default()
                 }
-                Ok(()) => println!(
-                    "  {name}: added {} example(s): {}",
-                    added.len(),
-                    added.join(", ")
-                ),
-                Err(err) => println!("  {name}: could not write: {err}"),
-            },
-            None => println!("  {name}: already up to date"),
+            };
+            let live = live_keys(&user_text);
+            let is_live =
+                |section: &str, key: &str| live.contains(&(section.to_string(), key.to_string()));
+            let regenerated = emit::generate_preserving(&cfg, &is_live, current);
+            if regenerated == user_text {
+                println!("  config.toml: already up to date");
+            } else {
+                match backup_aside(&config_path) {
+                    Ok(backup) => match fs::write(&config_path, &regenerated) {
+                        Ok(()) => match backup {
+                            Some(b) => println!(
+                                "  config.toml: regenerated (old file kept at {})",
+                                b.display()
+                            ),
+                            None => println!("  config.toml: written"),
+                        },
+                        Err(err) => println!("  config.toml: could not write: {err}"),
+                    },
+                    Err(err) => println!("  config.toml: could not back up the old file: {err}"),
+                }
+            }
         }
+        Err(_) => println!("  config.toml: not present, nothing to update"),
+    }
+
+    let keymap_path = dir.join("keymap.toml");
+    match fs::read_to_string(&keymap_path) {
+        Ok(user_text) => {
+            let stale =
+                stamped_version(&user_text).is_some_and(|old| version_is_older(&old, current));
+            if stale {
+                match fs::write(&keymap_path, bump_stamp(&user_text, current)) {
+                    Ok(()) => {
+                        println!(
+                            "  keymap.toml: version stamp brought up to date for hcmd {current}"
+                        );
+                    }
+                    Err(err) => println!("  keymap.toml: could not write: {err}"),
+                }
+            } else {
+                println!("  keymap.toml: already up to date");
+            }
+        }
+        Err(_) => println!("  keymap.toml: not present, nothing to update"),
     }
     0
+}
+
+/// Whether the user's `config.toml` text is what the current schema would
+/// regenerate from it: current when a regenerate-preserving-its-values changes
+/// nothing. This is the same computation [`update_config`] acts on, so the two
+/// commands never disagree about whether a file is current.
+fn config_is_current(user_text: &str, current: &str) -> bool {
+    let cfg = toml::from_str::<Config>(user_text).unwrap_or_default();
+    let live = live_keys(user_text);
+    let is_live = |section: &str, key: &str| live.contains(&(section.to_string(), key.to_string()));
+    emit::generate_preserving(&cfg, &is_live, current) == user_text
 }
 
 /// Deprecated values that still load, reported so they can be fixed.
@@ -1038,12 +1042,30 @@ pub fn check_config() -> i32 {
             .join(", ")
     );
 
-    if loaded.warnings.is_empty() {
+    // Whether `config.toml` matches what the schema would generate now. Same
+    // computation `--update-config` acts on, so the two commands agree: a file
+    // this flags is a file that command would rewrite.
+    let mut problems = loaded.warnings.clone();
+    if let Ok(d) = &dir {
+        let path = d.join("config.toml");
+        if let Ok(text) = fs::read_to_string(&path)
+            && !config_is_current(&text, env!("CARGO_PKG_VERSION"))
+        {
+            problems.push(format!(
+                "{}: not current for hcmd {}; run `hcmd --update-config` to regenerate it \
+                 (your set values are kept, the old file is backed up)",
+                path.display(),
+                env!("CARGO_PKG_VERSION"),
+            ));
+        }
+    }
+
+    if problems.is_empty() {
         println!("\nno problems found");
         0
     } else {
-        println!("\n{} problem(s):", loaded.warnings.len());
-        for w in &loaded.warnings {
+        println!("\n{} problem(s):", problems.len());
+        for w in &problems {
             println!("  {w}");
         }
         1
@@ -1090,64 +1112,180 @@ mod tests {
     }
 
     #[test]
-    fn update_config_adds_only_missing_options_and_leaves_the_rest_untouched() {
-        let user = "# Holos Commander settings, written by version 0.9.4.\n#\n[panel]\ngit_status = false\n";
-        let example = "# shipped, written by version 0.9.8.\n[panel]\n# whether the git column shows\ngit_status = true\n# the walk animation\nsize_walk_style = \"dots\"\n";
-        let (out, added) = patch_reference(user, example, "0.9.8").expect("a new option to add");
+    fn a_regenerated_file_keeps_set_values_live_and_comments_the_rest() {
+        // The heart of the new model: a user file that sets a handful of values
+        // is regenerated so those stay live and every other option is written
+        // commented at its default, with no section written twice.
+        let current = env!("CARGO_PKG_VERSION");
+        let user = "[panel]\ngit_status = false\nmax_tabs = 3\n";
+        let cfg: Config = toml::from_str(user).expect("a partial file");
+        let live = live_keys(user);
+        let is_live =
+            |section: &str, key: &str| live.contains(&(section.to_string(), key.to_string()));
+        let out = emit::generate_preserving(&cfg, &is_live, current);
+
         assert!(
-            added.contains(&"size_walk_style".to_string()),
-            "the new key"
+            out.contains("\ngit_status = false\n"),
+            "a set value stays live: {out}"
         );
         assert!(
-            !added.contains(&"git_status".to_string()),
-            "a key the file already mentions is not re-added"
+            out.contains("\nmax_tabs = 3\n"),
+            "and so does the other one"
         );
         assert!(
-            out.contains("git_status = false"),
-            "the user's own setting is untouched"
+            out.contains("# show_hidden = true"),
+            "an unset option is written commented at its default: {out}"
+        );
+        // No duplicate section headers anywhere.
+        for header in ["[panel]", "[ui]", "[viewer]", "[panel.columns]"] {
+            let n = out.matches(&format!("\n{header}\n")).count();
+            assert_eq!(n, 1, "{header} appears {n} times, not once");
+        }
+        // And it round-trips.
+        let back: Config = toml::from_str(&out).expect("the regenerated file parses");
+        assert!(!back.panel.git_status);
+        assert_eq!(back.panel.max_tabs, 3);
+    }
+
+    #[test]
+    fn a_regeneration_is_idempotent_and_check_agrees() {
+        // Regenerating a file the schema already produced changes nothing, and
+        // `config_is_current` (what --check-config uses) agrees with that, so
+        // "update, then check" comes out clean.
+        let current = env!("CARGO_PKG_VERSION");
+        let user = "[panel]\ngit_status = false\n";
+        let cfg: Config = toml::from_str(user).expect("a partial file");
+        let live = live_keys(user);
+        let is_live =
+            |section: &str, key: &str| live.contains(&(section.to_string(), key.to_string()));
+        let once = emit::generate_preserving(&cfg, &is_live, current);
+        assert!(
+            config_is_current(&once, current),
+            "the freshly generated file reads as current"
+        );
+
+        let cfg2: Config = toml::from_str(&once).expect("the generated file parses");
+        let live2 = live_keys(&once);
+        let is_live2 =
+            |section: &str, key: &str| live2.contains(&(section.to_string(), key.to_string()));
+        let twice = emit::generate_preserving(&cfg2, &is_live2, current);
+        assert_eq!(once, twice, "a second regeneration is a no-op");
+    }
+
+    #[test]
+    fn a_nested_value_and_a_filetype_entry_round_trip_through_regeneration() {
+        let current = env!("CARGO_PKG_VERSION");
+        let user = "[panel.columns]\nname_min_width = 24\n\n\
+             [[filetypes]]\nmatch = { ext = [\"log\"] }\nslot = \"panel.exec_fg\"\n";
+        let cfg: Config = toml::from_str(user).expect("nested + array file");
+        let live = live_keys(user);
+        let is_live =
+            |section: &str, key: &str| live.contains(&(section.to_string(), key.to_string()));
+        let out = emit::generate_preserving(&cfg, &is_live, current);
+
+        assert!(
+            out.contains("\nname_min_width = 24\n"),
+            "the nested [panel.columns] value is live: {out}"
         );
         assert!(
-            out.contains("# size_walk_style = \"dots\""),
-            "the new option is appended, commented: {out}"
+            out.contains("[[filetypes]]\nmatch = { ext = [\"log\"] }"),
+            "the user's filetype rule is written live, not the default one: {out}"
         );
-        assert!(
-            out.contains("written by version 0.9.8"),
-            "the stamp is bumped"
-        );
-        // Idempotent: a second pass over the patched file finds nothing new.
-        assert!(
-            patch_reference(&out, example, "0.9.8").is_none(),
-            "running it again adds nothing"
+        let back: Config = toml::from_str(&out).expect("regenerated nested + array parses");
+        assert_eq!(back.panel.columns.name_min_width, 24);
+        assert_eq!(back.filetypes.len(), 1);
+        assert_eq!(
+            back.filetypes.first().map(|r| r.slot.as_str()),
+            Some("panel.exec_fg")
         );
     }
 
     #[test]
-    fn a_file_with_every_option_but_an_old_stamp_is_re_stamped_so_check_agrees() {
-        // The bug: --update-config said "already up to date" while
-        // --check-config still flagged the old stamp. A file that lists every
-        // option but names an older version is re-stamped, with nothing added,
-        // so the two commands agree afterwards.
+    fn an_unparsable_value_falls_back_to_the_default_when_regenerated() {
+        // The loader already drops a value that will not parse and keeps the
+        // default; the regeneration is built on the parsed config, so the bad
+        // value is simply gone and its default is what gets written.
         let current = env!("CARGO_PKG_VERSION");
-        let user = "# written by version 0.9.4.\n[panel]\ngit_status = true\n";
-        let example = format!(
-            "# shipped, written by version {current}.\n[panel]\n# git column\ngit_status = true\n"
+        let user = "[panel]\nmax_tabs = \"three\"\ngit_status = false\n";
+        // The whole file fails to parse (one bad scalar), so the loader hands
+        // back the default, exactly as `update_config` does.
+        assert!(toml::from_str::<Config>(user).is_err());
+        let cfg = Config::default();
+        let live = live_keys(user);
+        let is_live =
+            |section: &str, key: &str| live.contains(&(section.to_string(), key.to_string()));
+        let out = emit::generate_preserving(&cfg, &is_live, current);
+        // `git_status` was live in the file, so it stays live, but at the
+        // default value the parsed config carries.
+        assert!(out.contains("\ngit_status = true\n"), "{out}");
+        let back: Config = toml::from_str(&out).expect("the regenerated file parses");
+        assert_eq!(
+            back.panel.max_tabs, 9,
+            "the bad value is gone, default written"
         );
-        let (out, added) =
-            patch_reference(user, &example, current).expect("a stale stamp is an update");
+    }
+
+    #[test]
+    fn the_old_file_is_moved_aside_to_a_dated_backup() {
+        // The other half of the update: before the regenerated file is written,
+        // the old one is renamed to a dated backup, so nothing the user had is
+        // lost. A second backup on the same day does not clobber the first.
+        let dir = std::env::temp_dir().join(format!("hcmd-backup-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("temp dir");
+        let path = dir.join("config.toml");
+        fs::write(&path, "old contents").expect("write");
+
+        let first = backup_aside(&path)
+            .expect("backup succeeds")
+            .expect("something was moved");
+        assert!(!path.exists(), "the original was moved, not copied");
+        assert!(first.exists(), "the backup is there");
         assert!(
-            added.is_empty(),
-            "nothing was missing, only the stamp moved"
+            first
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with("config.toml.") && n.ends_with(".bak")),
+            "the backup is dated: {first:?}"
         );
+        assert_eq!(
+            fs::read_to_string(&first).expect("read backup"),
+            "old contents"
+        );
+
+        // A second same-day backup lands beside the first rather than over it.
+        fs::write(&path, "newer contents").expect("write again");
+        let second = backup_aside(&path)
+            .expect("second backup succeeds")
+            .expect("moved again");
+        assert_ne!(first, second, "the first backup is not overwritten");
+        assert_eq!(
+            fs::read_to_string(&first).expect("read backup"),
+            "old contents"
+        );
+
+        // Nothing to move is not an error.
+        let absent = dir.join("keymap.toml");
+        assert!(backup_aside(&absent).expect("no error").is_none());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_multi_line_doc_comment_becomes_multiple_hash_lines() {
+        // A field whose doc spans several lines writes several `#` lines above
+        // its option. `s3_credentials_from_env` has a multi-paragraph doc.
+        let out = emit::generate(&Config::default());
+        let hashes = out
+            .lines()
+            .skip_while(|l| !l.contains("AWS_ACCESS_KEY_ID"))
+            .take_while(|l| !l.trim_start().starts_with("s3_credentials_from_env"))
+            .filter(|l| l.trim_start().starts_with('#'))
+            .count();
         assert!(
-            out.contains(&format!("written by version {current}")),
-            "the stamp is now current: {out}"
+            hashes >= 3,
+            "expected several comment lines above the option, got {hashes}"
         );
-        assert!(
-            stale_keymap_warning(&out).is_none(),
-            "and check-config no longer flags it: {out}"
-        );
-        // Now genuinely current: a second pass is a no-op.
-        assert!(patch_reference(&out, &example, current).is_none());
     }
 
     #[test]

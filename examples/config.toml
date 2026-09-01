@@ -1,184 +1,157 @@
-# Holos Commander - general configuration
+# Holos Commander configuration.
 # Location: ~/.config/holoscommander/config.toml
-# This file is a tour of what is configurable, not a dump of the defaults --
-# some values here are set to show the option off rather than to match the
-# built-in default. Each setting's own comment names its default.
+#
+# This file is generated from the program's own configuration schema: every
+# option, its default and the comment above it come from one place in the
+# source, so the file cannot drift from what the program reads and cannot
+# grow a duplicate section. `hcmd --update-config` regenerates it in place,
+# keeping the values you set and moving the old file aside with today's date.
 # Delete anything you do not want to override; every key is optional.
 
+# Chrome and layout.
 [ui]
-# Twenty-one themes ship compiled in, so a name here works with no files at
-# all. A themes/<name>.toml in this directory overrides one of the same name.
-#   blue (default, Norton Commander)  dracula        tokyo-night   nord
-#   gruvbox        gruvbox-light      catppuccin     catppuccin-latte
-#   solarized-dark solarized-light    everforest     kanagawa
-#   one-dark       monokai            rose-pine      night-owl
-#   ayu-dark       ayu-light          material       hackerman     synthwave
-theme          = "blue"      # themes/<name>.toml, or a shipped name above
-# Box-drawing glyphs only. The underline under a dialog's alt+<letter>
-# accelerator is an SGR attribute, not a glyph, and is drawn
-# either way; it takes its label's colours and has no theme slot of its own.
-ascii_borders  = false       # true for terminals with broken box drawing
-show_menubar   = false       # F9 summons it either way
-show_keybar    = true
-mouse          = false
-split_ratio    = 0.5         # left panel share of the width
-confirm_exit   = true
+# Theme name; loaded from `themes/<name>.toml`.
+theme = "blue"
+# `+-|` instead of box drawing, and `...`/`^`/`v` instead of `…`/`▲`/`▼`.
+ascii_borders = false
+# Keep the menu bar permanently visible. `F9` summons it either way.
+show_menubar = false
+# Draw the key bar.
+show_keybar = true
+# Mouse support is optional and additive.
+mouse = false
+# The left panel's share of the width.
+split_ratio = 0.5
+# Prompt before quitting.
+confirm_exit = true
 
+# Everything about how a panel renders and behaves.
 [panel]
-git_status     = true       # a git-state column in a repository (see below)
-show_hidden        = true
-directories_first  = true
-human_sizes        = true
-date_format        = "%d-%m-%y %H:%M"
-# What matches: leading chars / anywhere in the name / subsequence.
-quick_search       = "prefix"        # prefix | substring | fuzzy
-# How case is handled while type-navigating the panel:
-#   insensitive - "tho" matches Thorin and thorin
-#   sensitive   - "tho" matches thorin only
-#   smart       - insensitive until you type an uppercase letter
-quick_search_case  = "smart"         # insensitive | sensitive | smart
-# Off, quick search jumps the cursor to the first match and leaves the rest of
-# the listing in place. On, it filters the listing to the matches as you type,
-# and the arrow keys walk what is left; Esc or clearing the search brings the
-# whole listing back with the cursor on the file you had reached.
-quick_search_filter = false          # true | false
-# While a folder's size is being calculated (Space / Ctrl+L), the size column
-# shows a small animation in place of <DIR>. All choices use glyphs common to
-# nearly every font (so it works over SSH and without a Nerd Font); an ASCII
-# terminal falls back automatically.
-size_walk_style     = "dots"         # dots | braille | snake | off
-# Bare digits feed quick search; tabs are on alt+1..alt+9. Set to "tabs" to
-# swap that round (digits switch tabs, ctrl+s starts a search).
-digit_keys         = "quick_search"  # quick_search | tabs
-max_tabs           = 9
-show_tab_bar       = "auto"          # auto (hide with one tab) | always | never
+# Show dotfiles (`Ctrl+H`).
+show_hidden = true
+# Show each file's git state in the `git` column, when the directory is
+# in a repository. Off turns the whole computation off, not just the
+# column, so a directory read never touches git.
+git_status = true
+# Directories sort before files, on top of every sort order.
+directories_first = true
+# `1.2M` instead of `362,333`. Off by default: the exact byte count is
+# what the reference screenshot shows.
+human_sizes = false
+# Group the digits of an exact byte count. On by default.
+thousands_separator = true
+# Render directories as `[bin]`, so they are distinguishable without
+# colour.
+dir_brackets = true
+# How the `attr` column renders: "unix" (`drwxr-xr-x`, the default) or
+# "dos" (`-a--`).
+attr_style = "unix"
+# `chrono` format string for the `date` column. The default renders
+# `2026-08-12 02:40`, which is what the column's `min_chars = 16` is sized
+# for.
+date_format = "%Y-%m-%d %H:%M"
+# What a quick search matches.
+quick_search = "prefix"
+# How case is handled.
+quick_search_case = "smart"
+# Whether typing filters the listing to matches instead of only jumping
+# to the first one. Off by default: the classic type-to-jump.
+quick_search_filter = false
+# The animation shown in the size column while a directory is walked.
+size_walk_style = "dots"
+# What bare digits do.
+digit_keys = "quick_search"
+# Nine, which is what makes single-key switching sufficient.
+max_tabs = 9
+# When to draw the tab bar.
+show_tab_bar = "auto"
 
+# Column layout.
 [panel.columns]
-# name is the flexible column and absorbs the leftover width; every other
-# column holds its configured width so rows stay aligned.
-# Left to right. This order also defines the sort keys: ctrl+1 sorts by the
-# 1st column, ctrl+2 by the 2nd, and so on -- and it keeps working for a column
-# that is currently hidden.
+# Left to right. This order also defines the sort keys: `Ctrl+1` sorts by
+# the 1st column, and it keeps working for a hidden column.
 order = ["name", "ext", "size", "date", "attr", "git"]
-
-# git_status: show each file's git state in the "git" column when the directory
-# is inside a repository. ~ modified, + staged, A newly added, ? untracked, and
-# blank for a clean or untracked-free file. Off turns the whole computation off,
-# so a directory read never touches git; it costs a fast discovery on an
-# ordinary folder and an index read inside a repository.
-
-# Percentage of the panel's inner width. "name" is not listed: it is the
-# flexible column and absorbs whatever is left.
+# Percentage of the panel's inner width. `name` is never listed: it is the
+# flexible column and absorbs the leftover.
 width = { ext = 6, size = 12, date = 20, attr = 8 }
-
-# Characters below which a column is not worth drawing at all -- it is hidden
-# rather than shown truncated.
-# `attr` needs ten for the default attr_style = "unix" (`drwxr-xr-x`);
-# use 4 alongside attr_style = "dos".
+# Characters below which a column is hidden rather than truncated.
 min_chars = { ext = 3, size = 7, date = 16, attr = 10 }
+# Hidden first when the panel narrows; first entry goes first.
+hide_priority = ["attr", "ext", "size", "date", "git"]
+# How an over-long filename is cropped.
+name_truncate = "auto"
+# Below this, columns drop from the right instead.
+name_min_width = 16
 
-# Hidden first when the panel gets narrow; first entry goes first. Sorting by a
-# hidden column still works, and the panel footer shows which sort is active.
-hide_priority = ["attr", "ext", "size", "date"]
-
-# How an over-long filename is cropped:
-#   auto   - end-crop when "ext" is a visible column, middle-crop when it is not
-#            (middle keeps the extension, which would otherwise be lost)
-#   middle - always keep the tail
-#   end    - always keep the head
-name_truncate  = "auto"
-name_min_width = 16     # below this, columns drop from the right instead
-
+# The `Ctrl+O` console (v0.3).
 [console]
-# Start a shell at all. Off leaves the built-in command line
-# in place -- this application owns the text and the caret -- which is also what
-# happens when the configured shell cannot be started.
-enabled        = true
-shell          = ""      # empty = $SHELL
-# Whether Enter on the command line puts the shell on screen.
-#   auto   - the panels stay; switch only if the command is still holding the
-#            terminal after switch_delay (a build, a pager, an editor)
-#   always - switch on every Enter
-#   never  - never switch; Ctrl+O is the only way in
-switch_on_run  = "auto"
-switch_delay   = "250ms"
-scrollback     = 10000
-# Command-history entries kept by the built-in command line -- the one
-# used when there is no shell. With a shell the history is the shell's own.
-history_size   = 5000
-# The command line at the foot of the panels IS the shell's own input line,
-# rendered from the pty -- your prompt, your colours, your history and your key
-# bindings. A two-line prompt gets two rows; set 1 for one row.
-cmdline_rows   = 2
-# Keep the shell's directory and the active panel's in step, both ways.
-sync_cwd       = true
-# Install the OSC 7 / OSC 133 prompt hooks in bash and zsh at startup, as one
-# line typed into the shell after it has read your rc files -- so it composes
-# with your PROMPT_COMMAND / precmd_functions and your prompt framework rather
-# than replacing either. It costs one line in the shell's own history (a leading
-# space keeps even that out under HISTCONTROL=ignorespace / histignorespace).
+# Start a shell at all.
 #
-# Three sequences go in. Any shell that can run something before each prompt can
-# emit them itself, and then this can be off:
+# the design makes the console unconditional and this defaults to `true`
+# accordingly. It exists because the *absence* of a shell is a state the
+# application must handle correctly whatever the reason for it - a
+# headless `crate::app::App` has no PTY, a locked-down host may have no
+# usable shell, and `console.shell` may simply be wrong - and the "until
+# the PTY exists" command line is what takes over. Turning this off is
+# the supported way to ask for that, rather than pointing `shell` at
+# something that fails.
+enabled = true
+# Empty means `$SHELL`.
+shell = ""
+# Whether `Enter` on the command line puts the shell on screen.
+# auto - the panels stay; switch only if the command is still holding the
+# terminal after switch_delay (a build, a pager, an editor);
+# always - switch on every Enter; never - only Ctrl+O switches in.
+switch_on_run = "auto"
+# How long `auto` waits before deciding.
 #
-#   ESC ] 7 ; file://<host>/<$PWD, with % as %25>  BEL   -> the panel follows the
-#                                                          shell
-#   ESC ] 133 ; A BEL   at the prompt's first cell  -> where the prompt begins
-#   ESC ] 133 ; B BEL   at the input's first cell   -> where your typing begins,
-#                                                      which is what lets this
-#                                                      application see that the
-#                                                      line is empty before it
-#                                                      writes a `cd`, and read a
-#                                                      command back for its own
-#                                                      history
-#   ESC ] 133 ; C BEL   after a command is read,    -> a command has started, so
-#                       before it runs                 what it prints is news:
-#                                                      the completion indicator
-#                                                      in the key bar (9.1). In
-#                                                      bash this is PS0; in zsh
-#                                                      it is preexec_functions.
-#                                                      It is NOT part of the
-#                                                      prompt, so it needs no
-#                                                      non-printing markers.
+# The command is given this long to finish. Whatever is still holding the
+# terminal when it expires - a build, a pager, an editor, something asking
+# a question - is worth looking at, and the screen switches to it.
+switch_delay = "250ms"
+# Lines of scrollback kept.
+scrollback = 10000
+# Command-history entries kept by the fallback command line.
 #
-# Put the OSC 133 A/B pair inside the prompt string, wrapped in whatever your shell
-# spells "these bytes take no space" -- \[...\] in bash, %{...%} in zsh -- or the
-# shell will misplace its own cursor.
+# Not the shell's: with a live shell the history is the shell's own
+# ("nothing is pushed anywhere here and there is no history file"), and
+# nothing this application holds is consulted. What this caps is the
+# list the pre-console command line keeps for the states that have no
+# shell at all - `console.enabled = false`, a shell that would not
+# start, a shell that has died.
+history_size = 5000
+# How many rows the shell's own prompt and input line may take at the foot
+# of the panel view.
 #
-# fish already emits OSC 7 on every prompt (3.0 and later), so the panel follows
-# a fish shell with no help at all and gets no snippet from us. For the other
-# half -- the `cd` written when you change directory in the panel, and the
-# command history -- fish needs the marks, and fish 4 emits those itself. If
-# yours does not, in ~/.config/fish/config.fish:
+# The command line is the shell's input line, prompt and all, and a
+# two-line prompt needs two rows to be readable rather than nonsense. The
+# bottom rows win when a prompt is taller than this, because that is the
+# half being typed on. `1` restores the single row of v0.1 and v0.2.
+cmdline_rows = 2
+# Keep the shell's directory and the active panel's in step.
+sync_cwd = true
+# Write the `OSC 7` / `OSC 133` prompt hooks into the shell at startup.
 #
-#   functions -q __hcmd_prompt; or functions -c fish_prompt __hcmd_prompt
-#   function fish_prompt
-#       printf '\e]133;A\a'
-#       __hcmd_prompt
-#       printf '\e]133;B\a'
-#   end
-#   function __hcmd_preexec --on-event fish_preexec
-#       printf '\e]133;C\a'
-#   end
-#
-# A shell that emits none of them -- dash, a container's sh -- is not warned
-# about and not nagged at: the two halves of the sync simply do not run.
-inject_hooks   = true
+# Off means the panel stops following the shell unless the shell emits
+# `OSC 7` on its own - fish does; bash and zsh do not - and the hooks can
+# be installed by hand instead. See `crate::console::hooks` for the exact
+# line and for what installing it costs.
+inject_hooks = true
 
+# `Enter` policy and file associations.
 [open]
-# Enter on a file with the executable bit set. Executability comes from the
-# mode bits only, never the extension.
-#   ask    - prompt: Execute / Open with... / View / Cancel
-#   always - run it
-#   never  - treat it as data and open it with its association
-execute    = "ask"
-# console  - run in the Ctrl+O console, output visible, stdin works, TUIs work
-# detached - fork and detach, suits GUI programs, discards output
+# What `Enter` does on a file with the executable bit set.
+# ask - prompt: Execute / Open with... / View / Cancel;
+# always - run it; never - open it with its association.
+execute = "ask"
+# Where it runs. console - the Ctrl+O console, output visible, stdin
+# works, TUIs work; detached - fork and detach, suits GUI programs.
 execute_in = "console"
 
-# Your associations win over the desktop's. First match is used; if nothing
-# matches, the desktop default is used, then the internal viewer.
+# Your associations win over the desktop's. First match is used; if
+# nothing matches, the desktop default is used, then the internal viewer.
 # Shift+Enter always uses these and never executes.
+
 # [[open.handlers]]
 # match   = { ext = ["png", "jpg", "webp"] }
 # command = ["imv", "{file}"]
@@ -187,233 +160,283 @@ execute_in = "console"
 # match   = { mime = "text/*" }
 # command = ["$EDITOR", "{file}"]
 
+# The external editor `F4` shells out to (v0.3).
 [editor]
-warn_above = "10 MiB"       # F4 asks before opening a file larger than this; 0 off
-command = ""             # empty (the default) = $VISUAL, then $EDITOR, then nano
-args    = ["{file}"]     # e.g. nvim: ["+{line}", "{file}"]
+# Empty means `$VISUAL`, then `$EDITOR`, then `nano`.
+#
+# Empty is the default, and that is what the design asks for:
+# "Command from `editor.command`, default `nano`; `$VISUAL` then `$EDITOR`
+# are consulted when the config value is empty." `nano` is named there as
+# the end of that chain, not as a value written into the file - shipping
+# `"nano"` here would make the other two unreachable for everyone who has
+# not edited `config.toml`, which is the opposite of what consulting the
+# environment is for.
+command = ""
+# Argument template; `{file}` and `{line}` are substituted.
+args = ["{file}"]
+# Confirm before `F4` opens a file larger than this.
+#
+# A big file in a line editor is slow to open and easy to open by
+# accident - `F4` on the wrong row of a directory of disk images. The
+# warning is a confirmation rather than a refusal: the file may genuinely
+# need editing, and the reader is the one who knows. `0` turns it off.
+warn_above = "10MiB"
 
+# The internal viewer (v0.4).
 [viewer]
-wrap          = false
-line_numbers  = true
-# the arrow keys move a cursor and the view follows when it
-# reaches an edge. false restores pure scrolling, which is less(1)'s behaviour
-# and a reasonable thing to prefer -- but there is then nothing to select from.
-cursor        = true
-tab_width     = 4        # clamped to 1..16: a stop is a column count, and
-                         # expansion costs one space per column
-# What a file opens as, in this order:
+# Wrap long lines.
+wrap = false
+# Show line numbers.
+line_numbers = true
+# Give the viewer a cursor the arrow keys move.
 #
-#   1. a format the program recognises opens as what it IS, when
-#      open_as_document is on: a JSON file as a foldable tree, an HTML page as
-#      its text, a PNG as "1920 x 1080, RGBA". This is mode 3.
-#   2. a file detected as binary opens in hex.
-#   3. anything else opens as default_mode.
+# `viewer.cursor = false` restores pure scrolling for anyone who wants
+# it.
 #
-# So default_mode is the floor rather than the last word, and open_as_document
-# decides whether a recognised format is allowed to beat it. Every combination
-# has exactly one answer, and 1/2/3 override any of them for the file in front
-# of you.
+# With it off the arrows scroll the page as they always did and there is
+# nothing to select from, which is `less`'s behaviour and a reasonable
+# thing to prefer.
+cursor = true
+# Tab stop.
+tab_width = 4
+# What a file opens as when nothing more specific applies.
 #
-# The mode is decided by each file's own content, every time. It is not carried
-# from the last file you looked at.
+# The floor, not the last word: a binary opens in hex over the top of
+# it, and a recognised format opens as a document over the top of it when
+# `ViewerConfig::open_as_document` is on. It is what is left when
+# neither of those applies, which is every ordinary text file.
+default_mode = "text"
+# Whether a file whose format is recognised opens as what it is.
 #
-# Turn open_as_document off if you mostly open these files to edit them: the
-# tree is the shape a JSON file describes, and the source is the thing you are
-# about to change.
-default_mode     = "text"   # text | hex -- the floor
-open_as_document = true     # let a recognised format open as mode 3
-# The same idea one step further: for a file you have edited since committing
-# it, the document the file is right now is the change you made. F3 on a
-# tracked file that differs from HEAD opens on its diff; 1 still gives the
-# text and 2 the bytes. An untracked or unmodified file is unaffected, having
-# no diff to show. Reads the object store directly, never runs git.
-diff_against_git = true     # F3 on a modified tracked file shows its diff
-hex_width     = 16       # bytes per row, clamped to 1..64. A width that is not
-                         # a whole number of [viewer.hex] words is rounded down
-                         # to one and the status line says so,
-                         # so 16 is whole at every grouping and 12 is not at 64
-index_chunk   = "1MiB"   # granularity of the background line index
-# The largest selection Ctrl+C will copy. An OSC 52 payload is
-# base64 through the terminal's input path and some terminals cap it, so a
-# larger selection is refused with its size rather than truncated -- a clipboard
-# holding the first megabyte of what you asked for is worse than an empty one.
-copy_max      = "1MiB"
-# The quick view (Ctrl+Q): how long the cursor must rest on a file
-# before it is opened in the other panel. Held Down through a directory
-# replaces the pending file rather than queueing it, so only the file the
-# cursor stops on is ever read.
+# On by default: a JSON file opens as a tree, a PNG as its dimensions and
+# colour type. Off, both open at the floor above - which is what someone
+# editing JSON wants, because the thing they are about to change is the
+# source and not the shape it describes.
+open_as_document = true
+# Whether a tracked file that differs from `HEAD` opens as its diff.
+#
+# On by default, and it is the same idea as `open_as_document` one step
+# further: for a file you have edited since committing it, the document
+# the file *is* right now is the change you made. `1` still gives the
+# text and `2` the bytes, and an unmodified or untracked file is
+# unaffected because there is no diff to show.
+diff_against_git = true
+# Bytes per row in hex mode.
+hex_width = 16
+# Granularity of the background line index.
+index_chunk = "1MiB"
+# The largest selection `Ctrl+C` will copy.
+#
+# Large selections are refused rather than truncated: `OSC 52` payloads
+# are base64 through the terminal's input path and some terminals cap
+# them.
+copy_max = "1MiB"
+# How long the cursor must rest on a file before quick view opens it.
+# 150 ms.
+#
+# Held `Down` through a directory must not open a file per keystroke:
+# the pending file is replaced rather than queued, and only the one the
+# cursor rests on for `viewer.quick_view_delay` is opened.
 quick_view_delay = "150ms"
 
-# How the bytes are grouped and read in hex mode. A dump of
-# single bytes is the right view for a string table and the wrong one for an
-# array of 32-bit integers, so both are settings and both have a key: g cycles
-# the grouping, d the display format, e the byte order.
+# How the bytes are grouped and read in hex mode. A dump of single bytes
+# is the right view for a string table and the wrong one for an array of
+# 32-bit integers, so both are settings: g cycles the grouping, d the
+# display format, e the byte order.
 [viewer.hex]
-group  = 8               # bits per column: 8 | 16 | 32 | 64
-format = "hex"           # hex | unsigned | signed
-endian = "little"        # little | big -- only matters above 8 bits
+# Bits per column: 8, 16, 32 or 64.
+group = 8
+# Hex, unsigned or signed.
+format = "hex"
+# Byte order, for columns wider than a byte. Only matters above 8 bits.
+endian = "little"
 
+# Encoding handling.
 [viewer.encoding]
-default  = "auto"        # auto | utf-8 | latin1 | cp1252 | cp437 | utf-16le | ...
-detect   = true          # chardetng sniff when default = "auto"
+# `auto`, or an `encoding_rs` label.
+default = "auto"
+# Sniff with `chardetng` when `default = "auto"`.
+detect = true
+# Used when detection fails.
 fallback = "windows-1252"
-bom      = true          # honour a BOM over both of the above
-# The F8 ring. "auto" stands for whatever this file was detected
-# as, and is spliced back in if a configured list leaves it out -- a ring you
-# cannot get back to the start of is worse than no ring. Any encoding_rs label
-# works, so a KOI8-R or a Big5 corpus is one config line and one keystroke away.
+# Honour a BOM over both of the above.
+bom = true
+# The `F8` ring ("`F8` cycles through a configurable
+# shortlist").
+#
+# Labels, plus `"auto"` for whatever this file was detected as. An empty
+# or wholly unrecognised list falls back to the own ring, so a typo
+# makes `F8` ordinary rather than broken.
 shortlist = ["utf-8", "auto", "windows-1252", "cp437", "utf-16le"]
 
+# Syntax highlighting.
 [viewer.highlight]
-# Highlighting is syntect. "tree-sitter" still loads, as a
-# deprecated alias with a warning, so an older config file keeps working.
-engine   = "syntect"       # syntect | none
-max_size = "8MiB"          # above this, highlighting is off and the file still opens
+# Highlighting is syntect. "tree-sitter" still loads, as a deprecated
+# alias with a warning, so an older config file keeps working.
+engine = "syntect"
+# Above this, highlighting is off and the file still opens.
+max_size = "8MiB"
 
 # [viewer.highlight.lsp]
 # rust = "rust-analyzer"
 
+# Mode 3, the rendered view: 3 in the viewer shows a JSON file as a
+# foldable tree, an HTML page as the text it renders to, and a Markdown
+# file with its headings and lists made rather than spelled.
 [viewer.render]
-# Mode 3, the rendered view: 3 in the viewer shows a JSON file as a foldable
-# tree, an HTML page as the text it renders to, and a Markdown file with its
-# headings and lists made rather than spelled.
+# Above this, mode 3 refuses and says so.
 #
-# It is the one view that cannot stream, which is why it alone has a ceiling.
-# Everything else in the viewer is bounded by the window - a 40 GB file opens
-# as fast as a 4 kB one - and a rendered view breaks that: there is no way to
-# show a JSON document's tree, or to know that an object has twelve keys,
-# without having read as far as the closing brace. So mode 3 reads the whole
-# file, and a file over this refuses by name instead of rendering the first
-# part and calling it the document. 1 and 2 open it as they always would.
+# It exists because mode 3 is the one view that cannot stream. Every
+# other thing the viewer does is bounded by the window - a 40 GB file
+# opens as fast as a 4 kB one - and a rendered view breaks that: there is
+# no way to show a JSON document's tree, or to know that an object has
+# twelve keys, without having read to the closing brace.
+#
+# So the whole file is read, and a file too big to read is refused by
+# name rather than half-rendered. Rendering the first megabyte and
+# calling it the document would be a wrong answer given confidently,
+# which is worse than no answer.
 max_size = "16MiB"
 
+# File operations (v0.2).
 [ops]
-follow_symlinks   = false
-preserve_attrs    = true
-trash_on_delete   = true      # F8 to trash, Shift+F8 always permanent
+# Follow symlinks when copying.
+follow_symlinks = false
+# Preserve mode and times.
+preserve_attrs = true
+# `F8` trashes; `Shift+F8` always unlinks.
+trash_on_delete = true
+# Prompt before overwriting.
 confirm_overwrite = true
-background_queue  = true
-# The progress dialog. The per-file bar is omitted below
-# file_bar_min_size, where it would only ever flash. The displayed rate is a
-# moving average over rate_window so a stall shows as one; the ETA uses the
-# cumulative average instead, which must not jump. Below rate_min_samples the
-# rate shows a dash and the ETA is omitted rather than guessed.
+# Run operations in the background queue.
+background_queue = true
+# Below this, the progress dialog's per-file bar is omitted because it
+# would only ever flash.
 file_bar_min_size = "1MiB"
-rate_window       = "3s"
-rate_min_samples  = 4
-# Shift+F2, comparing the two lists. Two mtimes within
-# compare_mtime_slack count as the same, because FAT stores mtime at
-# two-second resolution and a copy to a USB stick would otherwise report every
-# file as changed. compare_contents reads the bytes as well: a byte-for-byte
-# comparison of two trees is a different operation with a different cost, so it
-# is off by default, and when it is on the comparison becomes a job with a
-# progress dialog like any other long read.
+# The window the displayed transfer rate is averaged over.
+# Short, so a stall shows as one; the ETA uses the
+# cumulative average instead, which must not jump.
+rate_window = "3s"
+# Below this many progress samples the rate renders as `-` and the ETA is
+# omitted rather than guessed.
+rate_min_samples = 4
+# How far two mtimes may differ and still count as the same.
+#
+# Two seconds by default, "because FAT stores mtime at two-second
+# resolution and a copy to a USB stick would otherwise report every file
+# as changed".
 compare_mtime_slack = "2s"
-compare_contents    = false
+# Read the bytes as well. Off by default:
+#
+# A byte-for-byte comparison of two trees is a different operation with
+# a different cost, and doing it behind a key that looks instant would
+# be the surprise the design avoids elsewhere.
+#
+# On, the comparison becomes a job with a progress dialog
+# like any other long read.
+compare_contents = false
 
+# Archives (v0.5).
 [archive]
-# These two answer for read-only disk images as well as for archives, and
-# deliberately: read-only disk images define no configuration of their own
-# and none was invented for them. enter_on_click is the same question either
-# way (does Enter on a container browse it), and temp_dir is where an image
-# that is not a local file is materialised before it is read, under the same
-# 0700 directory an archive uses and swept by the same sweep.
-enter_on_click    = true
-temp_dir          = ""          # empty = $TMPDIR
-# Adding a file to a compressed tar rewrites the whole archive. Warn above the
-# first, refuse above the second. Always refused when the filesystem holding
-# temp_dir cannot fit archive_size * 2 + 10%.
+# `Enter` on an archive browses it. Answers for read-only disk images too.
+enter_on_click = true
+# Where an archive or image that is not a local file is materialised
+# before it is read. Empty means `$TMPDIR`.
+temp_dir = ""
+# Adding a file to a compressed tar rewrites the whole archive. Warn above
+# this size.
 rewrite_warn_size = "256MiB"
-rewrite_max_size  = "500MiB"
+# Refuse to rewrite a compressed tar above this size.
+rewrite_max_size = "500MiB"
 
+# Search (v0.6).
 [search]
-# Search runs in-process on ripgrep's own libraries: ignore for the walk,
-# grep-searcher for the search, grep-regex for matching.
-#
-# "external" would spawn fd and rg and parse rg --json, which this program
-# rules out entirely. Setting it does not shell out: the search says
-#   search.engine = "external" would run rg as a subprocess, which this
-#   program rules out; the internal engine is the supported path
-# and then runs the internal engine. The key stays here because removing one a
-# user may already have written is worse than a clear message.
-#
-# Two keys that used to be here are gone: name_tool = "fd" and
-# content_tool = "rg", which named the binaries "external" would have spawned.
-# Nothing read them, in any engine, so a file that still has one now gets an
-# unknown-key warning instead of a setting that never did anything.
-engine       = "internal"     # internal (ripgrep libraries) | external
-# A file manager should find what is on disk, not what git would show: with
-# this false a gitignored file, a file under .git and a dotfile are all found.
-# Set it true and the search takes git's view of the tree,
-# which means .git itself is skipped as well as the rules in .gitignore -
-# honouring the rules alone would leave forty thousand loose objects in a
-# search of any repository.
+# Search runs in-process on ripgrep's own libraries. "external" would
+# spawn a subprocess, which this program rules out; setting it does not
+# shell out, and the internal engine is the supported path.
+engine = "internal"
+# A file manager should find what is on disk, not what git would show.
+# With this false a gitignored file, a file under .git and a dotfile are
+# all found.
 respect_gitignore = false
 
+# The device picker (v0.7).
 [devices]
-# Alt+F1 and Alt+F2's list of mounted volumes. This turns off
-# *hcmd's own* filter - overlay, fuse.portal, binfmt_misc, tracefs, debugfs,
-# configfs, securityfs, bpf, efivarfs, ramfs - and it does NOT mean "show
-# everything the kernel has mounted". The enumeration is sysinfo's, and sysinfo
-# drops proc, sysfs, devtmpfs, cgroup, squashfs (the snap loopbacks), devpts
-# and the rest unconditionally, with no API that lifts it. tmpfs, NFS and CIFS
-# mounts are absent for the same reason, and deliberately: enumerating them
-# calls statvfs from the panel's render path, and a hard-mounted NFS server
-# that has gone away would freeze the whole UI. Ctrl+G and the hotlist (Ctrl+D)
-# both reach a mount that is not on this list.
+# Turn off this program's own filter on the mounted-volumes list. It does
+# not mean "show everything the kernel has mounted": the enumeration is
+# sysinfo's, which drops proc, sysfs, cgroup and the snap loopbacks
+# unconditionally.
 show_all = false
 
+# Remote connections (v0.65).
 [remote]
-default_protocol = "sftp"   # sftp, ftp, ftps, ftps-implicit or smb
-connect_timeout  = "10s"
-keepalive        = "30s"
-view_max_size    = "32MiB"
-pool_size        = 4
-strict_host_keys = true       # a changed host key is always fatal
-
-# S3 credentials from the environment: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
-# AWS_SESSION_TOKEN and AWS_REGION (or AWS_DEFAULT_REGION). The names every AWS
-# tool uses, so a shell already set up for `aws` or `rclone` needs nothing typed
-# in the connect line.
+# sftp, ftp, ftps, ftps-implicit or smb.
+default_protocol = "sftp"
+# Connect timeout.
+connect_timeout = "10s"
+# Keepalive interval.
+keepalive = "30s"
+# Largest file `F3` will fetch from a remote.
+view_max_size = "32MiB"
+# Pooled connections per host.
+pool_size = 4
+# A changed host key is always fatal.
+strict_host_keys = true
+# Whether an S3 connection may take credentials from the environment.
 #
-# What you type always wins; the environment only fills in what was left blank.
-# A setting rather than a rule because ambient credentials are a surprising
-# thing to apply silently: a key left over in a shell would otherwise connect
-# you to an account you did not name, and the panel looks the same either way.
+# `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` and
+# `AWS_REGION`: the names every AWS tool uses, so a shell already set up
+# for `aws` or `rclone` needs nothing typed. What was typed always wins;
+# the environment only fills in what was left blank.
+#
+# A setting rather than a rule because ambient credentials are a
+# surprising thing to apply silently: a key left over in a shell would
+# otherwise connect somebody to an account they did not name, and the
+# panel would look exactly the same either way.
 s3_credentials_from_env = true
-listing_ttl      = "2s"       # how long a cached directory listing is served
-pipeline         = 4          # chunks of a transfer in flight at once
+# How long a cached directory listing is served for (
+# "Directory listings are cached with a short TTL").
+#
+# Short, because a remote directory changes under a panel exactly as a
+# local one does and `Ctrl+R` is what a user reaches for when it has.
+listing_ttl = "2s"
+# How many chunks of a transfer are in flight at once (the design's
+# pipelined reads).
+#
+# The one number that turns a round trip per chunk into a stream. Four is
+# what a 100 ms link needs to keep a window full without the progress
+# dialog getting ahead of what the server has acknowledged by more than
+# this many chunks (the design I11).
+pipeline = 4
 
+# Terminal capability overrides.
 [terminal]
 # Force the keyboard protocol on or off; "auto" detects.
-keyboard_protocol = "auto"    # auto | enhanced | legacy
-
-# Force the colour depth; "auto" reads COLORTERM and TERM. Worth setting over
-# ssh and inside multiplexers, where those are frequently wrong.
-colors = "auto"               # auto | truecolor | 256 | 16
+keyboard_protocol = "auto"
+# Force the colour depth; "auto" reads `COLORTERM` and `TERM`. Worth
+# setting over ssh and inside multiplexers, where those are frequently
+# wrong in both directions. Same reasoning as `ui.ascii_borders`: detect,
+# but let the file win.
+colors = "auto"
 
 # Bind a raw escape sequence to a logical key for terminals that need it.
 # [terminal.sequences]
 # "shift+f5" = "[15;2~"
 
-# ----------------------------------------------------------------- filetypes -
-# File-type colouring. Rules are matched in order, first match
-# wins, and a rule names a *theme slot* rather than a colour, so the rules
-# survive a theme change.
+# File-type colouring. Rules are matched in order, first match wins, and a
+# rule names a theme slot rather than a colour, so the rules survive a
+# theme change. `match` takes `ext` (a list, without the dot), `mode`
+# ("exec", "dir" or "symlink"), or both.
 #
-# `match` takes `ext` (a list, without the dot), `mode` ("exec", "dir" or
-# "symlink"), or both -- both stated means both must hold. An `ext` rule never
-# matches a directory, so a directory named `backup.zip` is still a directory.
-#
-# Writing any [[filetypes]] block REPLACES this list rather than adding to it,
-# so copy the rule below if you want to keep it.
-
+# Writing any `[[filetypes]]` block replaces this list rather than adding
+# to it, the same way `keymap.toml` replaces an action's bindings, so copy
+# the rule below if you want to keep it.
 [[filetypes]]
 match = { ext = ["zip", "tar", "gz", "tgz", "bz2", "tbz", "xz", "txz", "zst", "7z", "rar", "lz4", "lzma", "cab", "iso", "jar", "war", "deb", "rpm"] }
-slot  = "panel.archive_fg"
+slot = "panel.archive_fg"
 
-# Colour by mode bits rather than by name --a `.sh` without
-# `+x` is data, and a file with no extension and `+x` is a program.
+# Colour by mode bits rather than by name: a `.sh` without +x is data, and a
+# file with no extension and +x is a program.
 # [[filetypes]]
 # match = { mode = "exec" }
 # slot  = "panel.exec_fg"
