@@ -438,6 +438,19 @@ pub fn resolve(cfg: &ViewerEncodingConfig, prefix: &[u8], complete: bool) -> Enc
         };
     }
     if auto && cfg.detect {
+        // UTF-16 with no byte order mark, asked before `chardetng` because
+        // `chardetng` does not answer it: its detector is for legacy
+        // single-byte encodings and a UTF-16 file comes back from it as one of
+        // those. Left to that, every other byte is a NUL, the binary test sees
+        // them and the file opens in hex - which is what a Windows-written
+        // `.xml` did.
+        if let Some(encoding) = sniff_utf16_without_bom(prefix) {
+            return Encodings {
+                encoding,
+                how: Detected::Sniffed,
+                bom_len: 0,
+            };
+        }
         return Encodings {
             encoding: sniff(prefix, complete),
             how: Detected::Sniffed,
@@ -456,6 +469,53 @@ pub fn resolve(cfg: &ViewerEncodingConfig, prefix: &[u8], complete: bool) -> Enc
             bom_len: 0,
         },
     }
+}
+
+/// UTF-16 recognised by its shape rather than by a mark it does not carry.
+///
+/// Text that is ASCII underneath - which markup, source and configuration all
+/// are - becomes, in UTF-16, one ASCII byte and one NUL for every character,
+/// and which of the pair is the NUL says which way round it is. So: the NULs
+/// must be almost all on one side, almost none on the other, and what is left
+/// must read as text. That last condition is what keeps a genuinely binary
+/// file - which has NULs in no pattern at all and arbitrary bytes between them
+/// - from being mistaken for a document.
+///
+/// `None` when the shape is not there, which is every other kind of file.
+fn sniff_utf16_without_bom(prefix: &[u8]) -> Option<TextEncoding> {
+    // Enough pairs to mean something. A handful of bytes can look like
+    // anything, and guessing from them would be worse than not guessing.
+    const MIN_PAIRS: usize = 8;
+    let usable = prefix.len() & !1;
+    let pairs = usable / 2;
+    if pairs < MIN_PAIRS {
+        return None;
+    }
+    let body = prefix.get(..usable)?;
+    let (mut even_nul, mut odd_nul, mut printable) = (0usize, 0usize, 0usize);
+    for (i, byte) in body.iter().enumerate() {
+        if *byte == 0 {
+            if i % 2 == 0 {
+                even_nul = even_nul.saturating_add(1);
+            } else {
+                odd_nul = odd_nul.saturating_add(1);
+            }
+        } else if *byte >= 0x20 || matches!(*byte, b'\n' | b'\r' | b'\t') {
+            printable = printable.saturating_add(1);
+        }
+    }
+    // Nine in ten of one side NUL, at most one in ten of the other, and what
+    // is not NUL is text.
+    let nearly_all = pairs.saturating_mul(9) / 10;
+    let hardly_any = pairs / 10;
+    let readable = printable >= nearly_all;
+    if odd_nul >= nearly_all && even_nul <= hardly_any && readable {
+        return encoding_for("utf-16le");
+    }
+    if even_nul >= nearly_all && odd_nul <= hardly_any && readable {
+        return encoding_for("utf-16be");
+    }
+    None
 }
 
 /// Sniff an encoding from the first chunk with `chardetng`.
@@ -536,6 +596,48 @@ pub fn shortlist(detected: TextEncoding) -> Vec<TextEncoding> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn utf16_without_a_mark_is_text_and_not_hex() {
+        // What a Windows-written `.xml` is: two bytes a character, no byte
+        // order mark to say so. Every other byte is a NUL, and the binary test
+        // saw them and opened the file in hex.
+        let cfg = ViewerEncodingConfig::default();
+        let le = b"<\x00?\x00x\x00m\x00l\x00 \x00v\x00e\x00r\x00s\x00i\x00o\x00n\x00?\x00>\x00\n\x00<\x00r\x00o\x00o\x00t\x00/\x00>\x00";
+        let found = resolve(&cfg, le, true);
+        assert!(
+            !looks_binary(le, found.encoding),
+            "it reads as the text it is"
+        );
+
+        // The other way round, which is the same file written big-endian.
+        let be = b"\x00<\x00?\x00x\x00m\x00l\x00 \x00v\x00e\x00r\x00s\x00i\x00o\x00n\x00?\x00>\x00\n\x00<\x00r\x00o\x00o\x00t";
+        let found = resolve(&cfg, be, true);
+        assert!(!looks_binary(be, found.encoding), "either way round");
+    }
+
+    #[test]
+    fn a_real_binary_is_still_a_binary() {
+        // The guard on the rule above: NULs in no pattern, and arbitrary bytes
+        // between them. Nothing here should be mistaken for a document.
+        let cfg = ViewerEncodingConfig::default();
+        let elf = b"\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x03\x00>\x00\x01\x00\x00\x00\x50\x1a\x00\x00\x00\x00\x00\x00\x40\x00\x00\x00\x00\x00\x00\x00";
+        let found = resolve(&cfg, elf, true);
+        assert!(looks_binary(elf, found.encoding), "an ELF header is binary");
+
+        let png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x01\x00\x00\x00\x01\x00\x08\x06\x00\x00\x00\x5c\x72\xa8\x66";
+        let found = resolve(&cfg, png, true);
+        assert!(looks_binary(png, found.encoding), "so is a PNG");
+
+        // Half NULs, but not alternating and not text between them.
+        let noise =
+            b"\x00\x01\x00\x02\xff\x00\x00\x03\x00\x00\xfe\x00\x04\x00\x00\x05\x00\xfd\x00\x06";
+        let found = resolve(&cfg, noise, true);
+        assert!(
+            looks_binary(noise, found.encoding),
+            "NULs alone are not a pattern"
+        );
+    }
     use super::*;
 
     #[test]
