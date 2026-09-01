@@ -617,6 +617,10 @@ impl App {
                         dir,
                     });
                 let tab = self.panel_mut(side).tab_mut(tab_index)?;
+                // Until the probe answers, nothing is known about a repository
+                // here; a stale `true` would draw the column over a listing
+                // that has left the repository behind.
+                tab.git_repo = false;
                 tab.loading = false;
                 // A rescan reconciles its buffered rows into the visible ones
                 // now, in place; an ordinary read has already built `entries`
@@ -723,6 +727,7 @@ impl App {
         let Some(tab) = self.panel_mut(event.side).tab_mut(event.tab) else {
             return;
         };
+        tab.git_repo = true;
         if tab.generation != event.generation {
             return;
         }

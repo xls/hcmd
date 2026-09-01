@@ -102,8 +102,9 @@ pub enum ColumnId {
     Group,
     /// Numeric mode, `0644`.
     PermsOctal,
-    /// The file's git state, one character: `~` modified, `+` staged, `A`
-    /// added, `?` untracked, blank for clean or outside a repository.
+    /// The file's git state, one character: `M` modified, `S` staged, `A`
+    /// added, `U` untracked, blank for clean or outside a repository. Inside a
+    /// commit it says what that commit did: `D` deleted, `R` renamed.
     GitState,
 }
 
@@ -476,6 +477,16 @@ pub struct Tab {
     pub cursor: usize,
     /// Index of the first rendered row.
     pub scroll: usize,
+    /// Is this listing inside a git repository?
+    ///
+    /// Set by the git-status probe, which answers for a directory in a
+    /// repository and says nothing for one outside. It decides whether the
+    /// column is drawn at all: in a repository it always is, and a blank cell
+    /// then *means* something - clean, nothing staged - rather than meaning
+    /// the column went away. A column that came and went with the first dirty
+    /// file was invisible at the root of every real project, where all the
+    /// work is a directory down.
+    pub git_repo: bool,
     /// Marked entries, by [`Entry::mark_key`].
     ///
     /// v0.1 keyed this on the name, on the reasoning that the set is cleared
@@ -612,6 +623,7 @@ impl Tab {
             cursor: 0,
             scroll: 0,
             marks: HashSet::new(),
+            git_repo: false,
             sort: SortState::default(),
             quick_filter: None,
             loading: false,
@@ -869,11 +881,28 @@ impl Tab {
     /// which the request is spent. Called on every arriving batch, so the
     /// cursor lands as soon as the name appears rather than waiting for a slow
     /// listing to finish.
+    ///
+    /// A row's own home counts as well as its name. Most listings name a row
+    /// after the path it leads to, but not all of them: a commit reads as
+    /// `abc123  the subject it carried` while the path it opens is the sha
+    /// alone, and coming back up out of it asks for the sha. Without this the
+    /// cursor gave up and sat at the top of the history every time.
     pub fn resolve_pending_select(&mut self) -> bool {
         let Some(name) = self.pending_select.as_deref() else {
             return false;
         };
-        let Some(index) = self.entries.iter().position(|e| e.name == name) else {
+        let leads_to = |entry: &Entry| {
+            entry
+                .location
+                .as_ref()
+                .and_then(crate::vfs::VfsPath::file_name)
+                .is_some_and(|home| home == name)
+        };
+        let Some(index) = self
+            .entries
+            .iter()
+            .position(|e| e.name == name || leads_to(e))
+        else {
             return false;
         };
         self.cursor = index;
@@ -1857,6 +1886,21 @@ fn git_sort_key(entry: &Entry) -> u8 {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn coming_back_up_lands_on_the_row_whose_home_it_left() {
+        // A commit's row reads as its sha and its subject, while the path it
+        // opens is the sha alone - so leaving it asks for a name no row has.
+        use crate::vfs::BackendKind;
+        let mut tab = Tab::new(VfsPath::local("/repo").with_segment(BackendKind::Git, "/"));
+        let mut commit = Entry::dir("abc123  the subject it carried".to_string());
+        commit.location = Some(VfsPath::local("/repo").with_segment(BackendKind::Git, "/abc123"));
+        tab.entries = vec![Entry::dir("def456  an older one".to_string()), commit];
+        tab.cursor = 0;
+        tab.pending_select = Some("abc123".to_string());
+        assert!(tab.resolve_pending_select(), "the sha names a row's home");
+        assert_eq!(tab.cursor, 1, "the cursor is on the commit it came out of");
+    }
     use crate::vfs::Entry;
 
     fn listed(names: &[&str]) -> Tab {

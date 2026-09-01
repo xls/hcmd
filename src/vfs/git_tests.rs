@@ -157,8 +157,8 @@ async fn a_commit_lists_the_files_it_changed() {
         seen,
         vec![
             ("added.txt", Some('A')),
-            ("deep/gone.txt", Some('-')),
-            ("notes.txt", Some('~')),
+            ("deep/gone.txt", Some('D')),
+            ("notes.txt", Some('M')),
         ],
         "only what it changed, each saying what changed"
     );

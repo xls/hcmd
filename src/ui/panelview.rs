@@ -232,10 +232,12 @@ pub fn draw(f: &mut Frame, app: &App, side: Side, area: Rect) {
     let show_tabs = panel.tab_bar_visible(app.config.panel.show_tab_bar);
     let r = rows(area, show_tabs);
 
-    // The git column earns its cell only in a repository: a directory whose
-    // read found a git state on at least one entry. Elsewhere it would be a
-    // blank column stealing a cell from the name.
-    let show_git = tab.entries.iter().any(|e| e.git_state.is_some());
+    // The git column belongs to a repository, not to a change: inside one it
+    // is always drawn, and an empty cell says the file is clean. It used to
+    // appear only once some row had a state, which meant it was missing from
+    // the root of every project whose work lives a directory down - and a
+    // column that comes and goes is read as a bug, not as information.
+    let show_git = tab.git_repo;
     let allocated = columns::allocate(&app.config.panel, usize::from(r.entries.width), show_git);
     let crop = columns::name_crop(&app.config.panel, &allocated);
 

@@ -416,16 +416,16 @@ pub enum FileState {
 }
 
 impl FileState {
-    /// The one-character flag. Chosen to read at a glance and to line up in a
-    /// column: no two share a glyph.
+    /// The one-character flag: the first letter of the state's own name, which
+    /// is what a reader guesses before they are told. No two share a glyph.
     #[must_use]
     pub const fn flag(self) -> char {
         match self {
-            Self::Modified => '~',
-            Self::Staged => '+',
+            Self::Modified => 'M',
+            Self::Staged => 'S',
             Self::Added => 'A',
-            Self::Untracked => '?',
-            Self::Removed => '-',
+            Self::Untracked => 'U',
+            Self::Removed => 'D',
             Self::Renamed => 'R',
         }
     }
@@ -457,46 +457,134 @@ pub fn dir_status(dir: &Path) -> Option<std::collections::HashMap<String, FileSt
         if name == ".git" {
             continue;
         }
-        let meta = match entry.metadata() {
-            Ok(m) if m.is_file() => m,
-            // Directories and symlinks are not flagged: a directory's state is
-            // the sum of what is under it, which one glyph cannot honestly say.
-            _ => continue,
-        };
         let rel = rel_dir.join(&name);
-        let rel_bytes = rel.to_string_lossy().replace('\\', "/");
-        let indexed = index.entry_by_path(rel_bytes.as_str().into());
-        let Some(indexed) = indexed else {
-            out.insert(name, FileState::Untracked);
-            continue;
+        let state = match entry.metadata() {
+            Ok(meta) if meta.is_file() => {
+                file_state(&index, head_tree.as_ref(), &rel, &entry.path(), &meta)
+            }
+            // A directory answers for everything beneath it. At the root of any
+            // real project every file that matters is in a subdirectory, so a
+            // column that only spoke for the files lying loose at this level
+            // was blank exactly where it was wanted.
+            Ok(meta) if meta.is_dir() && has_tracked_under(&index, &rel) => {
+                subtree_state(&index, head_tree.as_ref(), &rel, &entry.path())
+            }
+            // A symlink is not followed: what it points at is somewhere else,
+            // and that somewhere else has its own row.
+            _ => None,
         };
-        // Staged: the index differs from HEAD.
-        let head_id = head_tree.as_ref().and_then(|tree| {
-            tree.clone()
-                .peel_to_entry_by_path(&rel)
-                .ok()
-                .flatten()
-                .map(|e| e.oid().to_owned())
-        });
-        let staged = match head_id {
-            Some(id) => id != indexed.id,
-            None => true, // no HEAD entry: newly added
-        };
-        // Modified in the worktree: cheap stat check first, hash only if it
-        // could have changed.
-        let modified = worktree_differs(&entry.path(), &meta, indexed);
-        let state = if modified {
-            FileState::Modified
-        } else if staged && head_id.is_none() {
-            FileState::Added
-        } else if staged {
-            FileState::Staged
-        } else {
-            continue; // clean and unstaged: no flag
-        };
-        out.insert(name, state);
+        if let Some(state) = state {
+            out.insert(name, state);
+        }
     }
     Some(out)
+}
+
+/// The git state of one working file, or `None` when it is clean and unstaged.
+fn file_state(
+    index: &gix::index::File,
+    head_tree: Option<&gix::Tree<'_>>,
+    rel: &Path,
+    path: &Path,
+    meta: &std::fs::Metadata,
+) -> Option<FileState> {
+    let rel_bytes = rel.to_string_lossy().replace('\\', "/");
+    let Some(indexed) = index.entry_by_path(rel_bytes.as_str().into()) else {
+        return Some(FileState::Untracked);
+    };
+    // Staged: the index differs from HEAD.
+    let head_id = head_tree.and_then(|tree| {
+        tree.clone()
+            .peel_to_entry_by_path(rel)
+            .ok()
+            .flatten()
+            .map(|e| e.oid().to_owned())
+    });
+    let staged = match head_id {
+        Some(ref id) => *id != indexed.id,
+        None => true, // no HEAD entry: newly added
+    };
+    // Modified in the worktree: cheap stat check first, hash only if it
+    // could have changed.
+    if worktree_differs(path, meta, indexed) {
+        return Some(FileState::Modified);
+    }
+    if staged && head_id.is_none() {
+        return Some(FileState::Added);
+    }
+    staged.then_some(FileState::Staged)
+}
+
+/// The one state that speaks for everything under `dir`, or `None` when
+/// nothing beneath it differs.
+///
+/// The loudest wins: one modified file below makes the whole directory
+/// modified, because that is the fact a reader is about to act on. The walk
+/// stops the moment it finds one, so a directory with work in it is cheap and
+/// only a wholly clean tree is walked to the end.
+fn subtree_state(
+    index: &gix::index::File,
+    head_tree: Option<&gix::Tree<'_>>,
+    rel: &Path,
+    dir: &Path,
+) -> Option<FileState> {
+    let mut loudest: Option<FileState> = None;
+    let entries = std::fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name == ".git" {
+            continue;
+        }
+        let child_rel = rel.join(&name);
+        let found = match entry.metadata() {
+            Ok(meta) if meta.is_file() => {
+                file_state(index, head_tree, &child_rel, &entry.path(), &meta)
+            }
+            Ok(meta) if meta.is_dir() && has_tracked_under(index, &child_rel) => {
+                subtree_state(index, head_tree, &child_rel, &entry.path())
+            }
+            _ => None,
+        };
+        if found == Some(FileState::Modified) {
+            return found; // nothing below can be louder
+        }
+        if louder(found, loudest) {
+            loudest = found;
+        }
+    }
+    loudest
+}
+
+/// Does the index hold anything at all beneath `rel`?
+///
+/// What keeps `target` and `node_modules` from being walked. Reading
+/// `.gitignore` would need a gix feature this build does not carry, and it is
+/// not the question anyway: a directory git tracks nothing in has nothing to
+/// report, ignored or merely empty. The index is sorted by path, so this is a
+/// binary search rather than a scan.
+fn has_tracked_under(index: &gix::index::File, rel: &Path) -> bool {
+    use gix::bstr::ByteSlice as _;
+    let mut prefix = rel.to_string_lossy().replace('\\', "/");
+    prefix.push('/');
+    let entries = index.entries();
+    let at = entries.partition_point(|e| e.path(index).as_bytes() < prefix.as_bytes());
+    entries
+        .get(at)
+        .is_some_and(|e| e.path(index).as_bytes().starts_with(prefix.as_bytes()))
+}
+
+/// Is `a` the state a directory should show, given `b` is what is has so far?
+fn louder(a: Option<FileState>, b: Option<FileState>) -> bool {
+    fn weight(state: Option<FileState>) -> u8 {
+        match state {
+            Some(FileState::Modified) => 4,
+            Some(FileState::Staged) => 3,
+            Some(FileState::Added) => 2,
+            Some(FileState::Untracked | FileState::Removed | FileState::Renamed) => 1,
+            None => 0,
+        }
+    }
+    weight(a) > weight(b)
 }
 
 /// Whether a working file differs from its staged version.

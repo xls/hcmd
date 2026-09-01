@@ -36,7 +36,11 @@ impl Repo {
     }
 
     fn write(&self, name: &str, body: &str) {
-        std::fs::write(self.root.join(name), body).expect("write");
+        let path = self.root.join(name);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).expect("the directory");
+        }
+        std::fs::write(path, body).expect("write");
     }
 
     fn commit(&self, message: &str) -> Option<()> {
@@ -349,4 +353,54 @@ fn a_directory_not_in_a_repository_has_no_status() {
     std::fs::create_dir_all(&dir).expect("dir");
     assert!(dir_status(&dir).is_none());
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_directory_answers_for_the_changes_beneath_it() {
+    let repo = match Repo::new("subtree") {
+        Some(r) => r,
+        None => {
+            eprintln!("SKIPPING subtree: git is not installed");
+            return;
+        }
+    };
+    repo.write("top.txt", "clean\n");
+    repo.write("src/deep/buried.rs", "before\n");
+    if repo.commit("initial").is_none() {
+        eprintln!("SKIPPING subtree: commit failed");
+        return;
+    }
+    // The only change is two levels down, which is where real work lives.
+    repo.write("src/deep/buried.rs", "after\n");
+
+    let status = dir_status(&repo.root).expect("a repository");
+    assert_eq!(
+        status.get("src"),
+        Some(&FileState::Modified),
+        "the directory says what is under it: {status:?}"
+    );
+    assert_eq!(status.get("top.txt"), None, "a clean file has no flag");
+}
+
+#[test]
+fn dir_status_on_this_repository_is_quick_and_skips_what_git_ignores() {
+    // The real thing, with a `target` directory beside the source: the walk
+    // must not descend into it, and the answer must arrive fast enough to sit
+    // behind every directory change.
+    let here = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let started = std::time::Instant::now();
+    let Some(status) = dir_status(here) else {
+        eprintln!("SKIPPING: not a repository");
+        return;
+    };
+    let took = started.elapsed();
+    assert!(
+        took < std::time::Duration::from_secs(2),
+        "a listing waits on this: took {took:?}"
+    );
+    assert_eq!(
+        status.get("target"),
+        None,
+        "git ignores it, so it is not walked"
+    );
 }
