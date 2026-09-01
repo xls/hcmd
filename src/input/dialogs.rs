@@ -22,7 +22,6 @@ use crate::input::files;
 use crate::input::{Action, DialogId, Focus, KeyCode, KeyPress, run_action};
 use crate::ops::{JobId, JobKind, JobSpec, MaskMode};
 use crate::panel::mask;
-use crate::ui::dialog::JobAction;
 
 /// Route one key into the dialog on top of the stack.
 ///
@@ -470,15 +469,11 @@ pub fn dialog_answered(app: &mut App, id: DialogId, job: Option<JobId>, result: 
             // prompt go with it, so nothing can act on them later.
             app.draft.discard();
         }
-        // The three job dialogs answer with a `JobAction` in a `Text`, because
-        // `DialogResult` has no job variant.
+        // The three job dialogs answer with a typed `JobAction`.
         (
             DialogId::Progress | DialogId::JobQueue | DialogId::JobSummary,
-            DialogResult::Text(text),
-        ) => match JobAction::parse(text) {
-            Some(action) => files::run_job_action(app, action),
-            None => app.message = Some(format!("{text}: not a job action")),
-        },
+            DialogResult::Job(action),
+        ) => files::run_job_action(app, *action),
         // `Start search`. The query is already valid - the
         // dialog refuses rather than handing back one that cannot compile -
         // and everything the search needs from the configuration is stamped on

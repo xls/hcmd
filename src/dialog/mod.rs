@@ -183,6 +183,11 @@ pub enum DialogResult {
     /// A conflict resolved. Goes straight to
     /// [`crate::app::App::answer_job`].
     Conflict(Box<Decision>),
+    /// What one of the three job dialogs asks be done to its job - background,
+    /// cancel, foreground, forget or retry. A typed value rather than a
+    /// [`JobAction`] spelled into `Text` and parsed back, which could fail at
+    /// runtime for a value the program itself produced.
+    Job(crate::ui::dialog::JobAction),
     /// Everything the copy/move dialog collects.
     CopyMove(Box<CopyMoveAnswer>),
     /// Everything the `Alt+F5` pack dialog collects.

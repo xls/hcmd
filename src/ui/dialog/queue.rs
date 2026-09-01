@@ -199,9 +199,7 @@ impl QueueDialog {
             }
             // a job waiting on a conflict shows its dialog when
             // it is brought forward, which `App::foreground_job` arranges.
-            None => DialogOutcome::Accept(DialogResult::Text(
-                JobAction::Foreground(status.id).encode(),
-            )),
+            None => DialogOutcome::Accept(DialogResult::Job(JobAction::Foreground(status.id))),
         }
     }
 
@@ -217,7 +215,7 @@ impl QueueDialog {
         let Some(status) = self.selected() else {
             return DialogOutcome::Consumed;
         };
-        DialogOutcome::Act(DialogResult::Text(JobAction::Forget(status.id).encode()))
+        DialogOutcome::Act(DialogResult::Job(JobAction::Forget(status.id)))
     }
 
     /// Whether the view should close itself: it has shown work and now has
@@ -570,10 +568,9 @@ mod tests {
         let mut d = dialog();
         d.handle_key(&key(KeyCode::Down));
         match d.handle_key(&key(KeyCode::Enter)) {
-            DialogOutcome::Accept(DialogResult::Text(text)) => assert_eq!(
-                JobAction::parse(&text),
-                Some(JobAction::Foreground(JobId(2)))
-            ),
+            DialogOutcome::Accept(DialogResult::Job(action)) => {
+                assert_eq!(Some(action), Some(JobAction::Foreground(JobId(2))))
+            }
             other => panic!("{other:?}"),
         }
     }
@@ -589,10 +586,9 @@ mod tests {
             "waiting"
         );
         match d.handle_key(&key(KeyCode::Enter)) {
-            DialogOutcome::Accept(DialogResult::Text(text)) => assert_eq!(
-                JobAction::parse(&text),
-                Some(JobAction::Foreground(JobId(3)))
-            ),
+            DialogOutcome::Accept(DialogResult::Job(action)) => {
+                assert_eq!(Some(action), Some(JobAction::Foreground(JobId(3))))
+            }
             other => panic!("{other:?}"),
         }
     }
@@ -638,15 +634,15 @@ mod tests {
         // stays open on the rest each time: `Act`, not `Accept`.
         d.handle_key(&key(KeyCode::Home));
         match d.handle_key(&key(KeyCode::Delete)) {
-            DialogOutcome::Act(DialogResult::Text(text)) => {
-                assert_eq!(JobAction::parse(&text), Some(JobAction::Forget(JobId(1))));
+            DialogOutcome::Act(DialogResult::Job(action)) => {
+                assert_eq!(Some(action), Some(JobAction::Forget(JobId(1))));
             }
             other => panic!("{other:?}"),
         }
         d.handle_key(&key(KeyCode::End));
         match d.handle_key(&key(KeyCode::Delete)) {
-            DialogOutcome::Act(DialogResult::Text(text)) => {
-                assert_eq!(JobAction::parse(&text), Some(JobAction::Forget(JobId(4))));
+            DialogOutcome::Act(DialogResult::Job(action)) => {
+                assert_eq!(Some(action), Some(JobAction::Forget(JobId(4))));
             }
             other => panic!("{other:?}"),
         }

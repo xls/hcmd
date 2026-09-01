@@ -24,19 +24,11 @@
 //!
 //! # How a job dialog answers
 //!
-//! [`crate::dialog::DialogResult`] is fixed by the contract and has no
-//! job-shaped variant, so the three dialogs that act on a *running job* answer
-//! with [`crate::dialog::DialogResult::Text`] carrying a [`JobAction`].
-//! [`JobAction::parse`] turns it back into a typed value, so the arm in
-//! `input::dialog_accepted` is a `match` and not string handling:
-//!
-//! ```
-//! use holoscommander::ops::JobId;
-//! use holoscommander::ui::dialog::JobAction;
-//!
-//! let text = JobAction::Background(JobId(3)).encode();
-//! assert_eq!(JobAction::parse(&text), Some(JobAction::Background(JobId(3))));
-//! ```
+//! The three dialogs that act on a *running job* answer with
+//! [`crate::dialog::DialogResult::Job`] carrying a typed [`JobAction`], so the
+//! arm in `input::dialog_accepted` matches the value directly - no spelling it
+//! into text and parsing it back, which could fail at runtime for a value the
+//! program itself produced.
 //!
 //! # The rules every dialog in here keeps
 //!
@@ -72,7 +64,6 @@ pub mod tabbed;
 pub mod template;
 pub mod theme;
 
-use std::fmt;
 use std::time::Duration;
 
 use ratatui::Frame;
@@ -429,17 +420,6 @@ pub enum JobAction {
 }
 
 impl JobAction {
-    /// The verb half of the encoding.
-    pub const fn verb(&self) -> &'static str {
-        match self {
-            Self::Background(_) => "background",
-            Self::Cancel(_) => "cancel",
-            Self::Foreground(_) => "foreground",
-            Self::Forget(_) => "forget",
-            Self::Retry(_) => "retry",
-        }
-    }
-
     /// Which job it is about.
     pub const fn id(&self) -> JobId {
         match self {
@@ -450,58 +430,11 @@ impl JobAction {
             | Self::Retry(id) => *id,
         }
     }
-
-    /// The wire form: `background 3`.
-    pub fn encode(&self) -> String {
-        format!("{} {}", self.verb(), self.id().0)
-    }
-
-    /// Read one back. `None` for anything that is not one of these - which is
-    /// every other dialog's `Text` answer, so an arm that calls this can share
-    /// a match with them.
-    pub fn parse(text: &str) -> Option<Self> {
-        let (verb, id) = text.split_once(' ')?;
-        let id = JobId(id.trim().parse::<u64>().ok()?);
-        match verb {
-            "background" => Some(Self::Background(id)),
-            "cancel" => Some(Self::Cancel(id)),
-            "foreground" => Some(Self::Foreground(id)),
-            "forget" => Some(Self::Forget(id)),
-            "retry" => Some(Self::Retry(id)),
-            _ => None,
-        }
-    }
-}
-
-impl fmt::Display for JobAction {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.encode())
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_job_action_survives_a_round_trip_through_text() {
-        for action in [
-            JobAction::Background(JobId(1)),
-            JobAction::Cancel(JobId(0)),
-            JobAction::Foreground(JobId(42)),
-            JobAction::Forget(JobId(7)),
-            JobAction::Retry(JobId(u64::MAX)),
-        ] {
-            let text = action.encode();
-            assert_eq!(JobAction::parse(&text), Some(action), "{text}");
-        }
-        // Every other dialog's Text answer must not look like one of these.
-        assert_eq!(JobAction::parse("*.bak"), None);
-        assert_eq!(JobAction::parse("/srv/media/*.*"), None);
-        assert_eq!(JobAction::parse("background"), None);
-        assert_eq!(JobAction::parse("background x"), None);
-        assert_eq!(JobAction::parse("photos 2026"), None);
-    }
 
     #[test]
     fn a_bar_is_exactly_the_width_it_is_given() {

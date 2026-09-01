@@ -30,10 +30,10 @@
 //! **All three go through [`crate::dialog::Accelerated::press`]**, which is the
 //! one place either button acts, so "neither route is the real one" is true by
 //! construction rather than by three copies staying in step. Each answers with
-//! a [`super::JobAction`], because [`crate::dialog::DialogResult`] has no
-//! job-shaped variant - including `Esc`, which must **answer** rather than
-//! merely close: a dialog that pops without cancelling leaves a worker running
-//! with nothing watching it.
+//! a typed [`super::JobAction`] in a [`crate::dialog::DialogResult::Job`] -
+//! including `Esc`, which must **answer** rather than merely close: a dialog
+//! that pops without cancelling leaves a worker running with nothing watching
+//! it.
 //!
 //! # Smoothing ("must not flicker wildly")
 //!
@@ -352,16 +352,12 @@ impl ProgressDialog {
 
     /// `Esc`, and the `Cancel` button: stop the job.
     fn cancel(&self) -> DialogOutcome {
-        DialogOutcome::Accept(DialogResult::Text(
-            JobAction::Cancel(self.status.id).encode(),
-        ))
+        DialogOutcome::Accept(DialogResult::Job(JobAction::Cancel(self.status.id)))
     }
 
     /// `F2`, and the `Background` button.
     fn background(&self) -> DialogOutcome {
-        DialogOutcome::Accept(DialogResult::Text(
-            JobAction::Background(self.status.id).encode(),
-        ))
+        DialogOutcome::Accept(DialogResult::Job(JobAction::Background(self.status.id)))
     }
 }
 
@@ -669,8 +665,8 @@ mod tests {
         // nothing watching it.
         let mut d = dialog();
         match d.handle_key(&key(KeyCode::Esc)) {
-            DialogOutcome::Accept(DialogResult::Text(text)) => {
-                assert_eq!(JobAction::parse(&text), Some(JobAction::Cancel(JobId(3))));
+            DialogOutcome::Accept(DialogResult::Job(action)) => {
+                assert_eq!(Some(action), Some(JobAction::Cancel(JobId(3))));
             }
             other => panic!("Esc must cancel the job, got {other:?}"),
         }
@@ -681,11 +677,8 @@ mod tests {
         // "Neither route is the 'real' one."
         let mut d = dialog();
         match d.handle_key(&key(KeyCode::F(2))) {
-            DialogOutcome::Accept(DialogResult::Text(text)) => {
-                assert_eq!(
-                    JobAction::parse(&text),
-                    Some(JobAction::Background(JobId(3)))
-                );
+            DialogOutcome::Accept(DialogResult::Job(action)) => {
+                assert_eq!(Some(action), Some(JobAction::Background(JobId(3))));
             }
             other => panic!("F2 must background, got {other:?}"),
         }
@@ -693,11 +686,8 @@ mod tests {
         let mut d = dialog();
         assert!(d.ring.is(BACKGROUND));
         match d.handle_key(&key(KeyCode::Enter)) {
-            DialogOutcome::Accept(DialogResult::Text(text)) => {
-                assert_eq!(
-                    JobAction::parse(&text),
-                    Some(JobAction::Background(JobId(3)))
-                );
+            DialogOutcome::Accept(DialogResult::Job(action)) => {
+                assert_eq!(Some(action), Some(JobAction::Background(JobId(3))));
             }
             other => panic!("Enter on Background must background, got {other:?}"),
         }
@@ -706,8 +696,8 @@ mod tests {
         d.handle_key(&key(KeyCode::Tab));
         assert!(d.ring.is(CANCEL));
         match d.handle_key(&key(KeyCode::Enter)) {
-            DialogOutcome::Accept(DialogResult::Text(text)) => {
-                assert_eq!(JobAction::parse(&text), Some(JobAction::Cancel(JobId(3))));
+            DialogOutcome::Accept(DialogResult::Job(action)) => {
+                assert_eq!(Some(action), Some(JobAction::Cancel(JobId(3))));
             }
             other => panic!("Enter on Cancel must cancel, got {other:?}"),
         }
@@ -918,17 +908,16 @@ mod tests {
         // here. All three go through `Accelerated::press`.
         let mut d = dialog();
         match d.handle_key(&alt('b')) {
-            DialogOutcome::Accept(DialogResult::Text(text)) => assert_eq!(
-                JobAction::parse(&text),
-                Some(JobAction::Background(JobId(3)))
-            ),
+            DialogOutcome::Accept(DialogResult::Job(action)) => {
+                assert_eq!(Some(action), Some(JobAction::Background(JobId(3))))
+            }
             other => panic!("Alt+B backgrounded, got {other:?}"),
         }
 
         let mut d = dialog();
         match d.handle_key(&alt('n')) {
-            DialogOutcome::Accept(DialogResult::Text(text)) => {
-                assert_eq!(JobAction::parse(&text), Some(JobAction::Cancel(JobId(3))))
+            DialogOutcome::Accept(DialogResult::Job(action)) => {
+                assert_eq!(Some(action), Some(JobAction::Cancel(JobId(3))))
             }
             other => panic!("Alt+N cancelled, got {other:?}"),
         }

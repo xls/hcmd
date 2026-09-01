@@ -137,7 +137,7 @@ impl SummaryDialog {
 
     /// Retry, in one place, for `Enter` and for `Alt+R` alike.
     fn retry(&self) -> DialogOutcome {
-        DialogOutcome::Accept(DialogResult::Text(JobAction::Retry(self.id).encode()))
+        DialogOutcome::Accept(DialogResult::Job(JobAction::Retry(self.id)))
     }
 
     /// Which button the ring's index means, given that a clean job has one.
@@ -444,8 +444,8 @@ mod tests {
         d.handle_key(&key(KeyCode::Left));
         assert_eq!(d.focused(), RETRY);
         match d.handle_key(&key(KeyCode::Enter)) {
-            DialogOutcome::Accept(DialogResult::Text(text)) => {
-                assert_eq!(JobAction::parse(&text), Some(JobAction::Retry(JobId(4))));
+            DialogOutcome::Accept(DialogResult::Job(action)) => {
+                assert_eq!(Some(action), Some(JobAction::Retry(JobId(4))));
             }
             other => panic!("{other:?}"),
         }
@@ -563,8 +563,8 @@ mod tests {
         //
         let mut d = dialog(3);
         match d.handle_key(&alt('r')) {
-            DialogOutcome::Accept(DialogResult::Text(text)) => {
-                assert_eq!(JobAction::parse(&text), Some(JobAction::Retry(JobId(4))));
+            DialogOutcome::Accept(DialogResult::Job(action)) => {
+                assert_eq!(Some(action), Some(JobAction::Retry(JobId(4))));
             }
             other => panic!("Alt+R pressed Retry failures, got {other:?}"),
         }
