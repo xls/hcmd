@@ -578,21 +578,49 @@ pub struct JobSummary {
     pub first_difference: Option<u64>,
 }
 
+/// How a finished job ended.
+///
+/// The one classification of a terminal [`JobSummary`], so the rule that
+/// cancelling outranks failing lives in exactly one place
+/// ([`JobSummary::outcome`]) rather than being re-derived - and re-disagreed -
+/// at every consumer. The failure detail itself stays on the summary
+/// ([`JobSummary::failures`]); this only says which of the three a job is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Outcome {
+    /// Ran to the end, nothing failed, nothing cancelled.
+    Clean,
+    /// The user stopped it. Any file it recorded is the one it was interrupted
+    /// on, not a failure offered for retry.
+    Cancelled,
+    /// Ran to the end and something could not be done. Has at least one
+    /// [`JobFailure`], and is the one outcome the queue keeps for retry.
+    Failed,
+}
+
 impl JobSummary {
-    /// True when nothing failed and nothing was cancelled.
-    pub fn is_clean(&self) -> bool {
-        self.failures.is_empty() && !self.cancelled
+    /// How a finished job ended, classified once.
+    ///
+    /// This is the single place the rule "cancelling outranks failing" is
+    /// decided. A job stopped part-way through a file records that file, so a
+    /// cancelled summary routinely carries a [`JobFailure`]; every consumer
+    /// asks here rather than re-deriving the precedence from `cancelled` and
+    /// `failures` on its own. When those derivations disagreed, a cancelled job
+    /// read as failed was the "1 failed - Retry?" box on a Cancel, and the
+    /// cancelled row the queue would not clear.
+    pub fn outcome(&self) -> Outcome {
+        if self.cancelled {
+            Outcome::Cancelled
+        } else if self.failures.is_empty() {
+            Outcome::Clean
+        } else {
+            Outcome::Failed
+        }
     }
 
-    /// True when the job failed and was not cancelled: the one finished state
-    /// worth keeping in the queue, because there is still something to act on.
-    ///
-    /// Cancellation is deliberately not failure. A job stopped part-way through
-    /// a file can record that file as a failure, but the user asked for it to
-    /// stop, so it is treated as cancelled and cleared rather than kept as an
-    /// error they did not make.
-    pub fn is_failure(&self) -> bool {
-        !self.cancelled && !self.failures.is_empty()
+    /// True when the job ran to the end with nothing failed and nothing
+    /// cancelled.
+    pub fn is_clean(&self) -> bool {
+        matches!(self.outcome(), Outcome::Clean)
     }
 
     /// A one-line status-line report.

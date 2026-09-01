@@ -247,16 +247,19 @@ fn a_reread_keeps_the_marks_and_the_cursor() {
     assert_eq!(tab.marks.len(), 2);
 
     app.reread(Side::Left);
-    // The rows stay on screen while the read is in flight - clearing them
-    // here was a visible flash of bare background after every copy. The
-    // cursor is a hint until the listing lands, and the marks are
-    // untouched.
+    // A local rescan updates the listing in place: the rows, the cursor and
+    // the marks stay exactly as they are while the read runs off to the
+    // side, and the incoming batch reconciles into them when it lands.
     assert_eq!(
         app.left.active_tab().entries.len(),
         4,
-        "the old rows are still drawn until the replacement arrives"
+        "the rows are untouched while the rescan is in flight"
     );
-    assert!(app.left.active_tab().replace_on_next_batch);
+    assert!(
+        app.left.active_tab().merging.is_some(),
+        "a same-directory re-read rescans rather than clearing"
+    );
+    assert!(!app.left.active_tab().replace_on_next_batch);
     app.left.active_tab_mut().clamp_cursor();
     assert_eq!(app.left.active_tab().cursor, 3);
     assert_eq!(app.left.active_tab().marks.len(), 2);
@@ -269,6 +272,55 @@ fn a_reread_keeps_the_marks_and_the_cursor() {
     assert!(!tab.marks.contains("b"));
     assert_eq!(tab.marks.len(), 1);
     assert_eq!(tab.cursor, 2, "clamped into the shorter listing");
+}
+
+#[test]
+fn a_rescan_updates_in_place_and_keeps_a_survivors_computed_column() {
+    // The watch's re-read must not blank the git column: a row that is still
+    // there keeps its flag, a row that left is dropped, a new row appears, and
+    // nothing on screen is cleared and repainted in between.
+    let mut app = App::headless(Config::default(), Keymap::builtin(), Theme::blue());
+    app.navigate(Side::Left, VfsPath::local("/x"));
+    deliver(&mut app, Side::Left, &["a", "b", "c"]);
+    // Stand in for a computed column: give "a" a git flag the recompute would
+    // otherwise fill.
+    for entry in &mut app.left.active_tab_mut().entries {
+        if entry.name == "a" {
+            entry.git_state = Some(crate::git::FileState::Modified);
+        }
+    }
+
+    app.reread(Side::Left);
+    assert!(app.left.active_tab().merging.is_some());
+    // "b" left the directory, "d" is new.
+    deliver(&mut app, Side::Left, &["a", "c", "d"]);
+
+    let tab = app.left.active_tab();
+    let names: Vec<&str> = tab.entries.iter().map(|e| e.name.as_str()).collect();
+    assert_eq!(
+        names,
+        vec!["a", "c", "d"],
+        "gone dropped, new added, in place"
+    );
+    let a = tab
+        .entries
+        .iter()
+        .find(|e| e.name == "a")
+        .expect("a survived");
+    assert_eq!(
+        a.git_state,
+        Some(crate::git::FileState::Modified),
+        "a survivor keeps its git flag across a rescan rather than blanking"
+    );
+    let d = tab
+        .entries
+        .iter()
+        .find(|e| e.name == "d")
+        .expect("d is new");
+    assert_eq!(
+        d.git_state, None,
+        "a genuinely new row has no flag until the recompute fills it"
+    );
 }
 
 #[test]

@@ -43,7 +43,7 @@ use crate::dialog::{
     Dialog, DialogKey, DialogOutcome, DialogResult, DialogStyle, MessageDialog, draw_text,
 };
 use crate::input::{DialogId, KeyCode};
-use crate::ops::JobStatus;
+use crate::ops::{JobStatus, Outcome};
 use crate::ui::text;
 
 /// The footer's hint line. Not controls to focus - the queue view has no focus
@@ -113,11 +113,17 @@ impl QueueDialog {
     }
 
     /// The state word for one job: what the queue view exists to say.
+    ///
+    /// A finished job's word comes from [`JobSummary::outcome`], the one place
+    /// the cancelled-vs-failed rule is decided, so the label can never disagree
+    /// with whether the job is pruned or offered a retry.
     pub fn state_of(status: &JobStatus) -> &'static str {
         match status.finished.as_ref() {
-            Some(summary) if summary.cancelled => "cancelled",
-            Some(summary) if !summary.failures.is_empty() => "failed",
-            Some(_) => "done",
+            Some(summary) => match summary.outcome() {
+                Outcome::Cancelled => "cancelled",
+                Outcome::Failed => "failed",
+                Outcome::Clean => "done",
+            },
             None if status.needs_attention() => "waiting",
             None if status.started => "running",
             None => "queued",

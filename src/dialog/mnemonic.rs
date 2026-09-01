@@ -883,7 +883,7 @@ mod tests {
         add(
             "ProgressDialog",
             "the only one",
-            &ProgressDialog::new(JobStatus::queued(JobId(3), JobKind::Copy), 1024 * 1024),
+            &ProgressDialog::new(JobStatus::queued(JobId(3), JobKind::Copy)),
         );
         add(
             "RenameDialog",

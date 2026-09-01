@@ -553,6 +553,19 @@ pub struct Tab {
     /// Bookkeeping for the streaming read path, not part of the tab
     /// model: it is never saved and never restored.
     pub sorted_rows: usize,
+    /// The incoming listing of a **rescan in progress**, accumulated off to the
+    /// side while the visible rows stay put.
+    ///
+    /// A rescan re-reads the same directory (a watch fired, or `F2`) and
+    /// updates the listing *in place* rather than clearing and rebuilding it:
+    /// rows that still exist keep everything they had computed - git state,
+    /// marks, the cursor - only their filesystem fields refresh, rows that
+    /// vanished are dropped and genuinely new rows are added. So nothing on
+    /// screen blanks and repaints. The batches land here until the read
+    /// completes, and [`Tab::merge_listing`] reconciles them with `entries`
+    /// then. `None` for an ordinary read, which clears and replaces as before
+    /// (a `cd` to a different directory has nothing to reconcile against).
+    pub merging: Option<Vec<Entry>>,
 }
 
 impl Tab {
@@ -578,7 +591,42 @@ impl Tab {
             virtual_view: None,
             remote_view: None,
             sorted_rows: 0,
+            merging: None,
         }
+    }
+
+    /// Fold a completed rescan's rows into the visible listing in place.
+    ///
+    /// The rows that survive keep their per-row computed state - the git flag,
+    /// and whatever a future column caches on an [`Entry`] - because only their
+    /// filesystem fields are refreshed from the new read; rows whose name is
+    /// gone from disk are removed, and names that are new are appended (their
+    /// git flag left unset for the recompute that the read schedules to fill).
+    /// Nothing is cleared, so a rescan never blanks the panel.
+    pub fn merge_listing(&mut self, directories_first: bool) {
+        let Some(incoming) = self.merging.take() else {
+            return;
+        };
+        let mut fresh: std::collections::HashMap<String, Entry> = incoming
+            .into_iter()
+            .map(|entry| (entry.mark_key().into_owned(), entry))
+            .collect();
+        // Refresh the survivors and drop what is gone, in one pass.
+        self.entries.retain_mut(|entry| {
+            if let Some(mut updated) = fresh.remove(entry.mark_key().as_ref()) {
+                // Carry the per-row computed state onto the new filesystem data
+                // rather than the other way round, so a row that was there
+                // keeps its git flag until the recompute refreshes it.
+                updated.git_state = entry.git_state;
+                *entry = updated;
+                true
+            } else {
+                false
+            }
+        });
+        // Whatever names are left in `fresh` were not on screen: they are new.
+        self.entries.extend(fresh.into_values());
+        self.sort_entries(directories_first);
     }
 
     /// The entry under the cursor, or `None` for an empty listing.

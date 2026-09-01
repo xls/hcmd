@@ -216,15 +216,12 @@ pub const MNEMONICS: &[(usize, char)] = &[(BACKGROUND, 'b'), (CANCEL, 'n')];
 #[derive(Debug)]
 pub struct ProgressDialog {
     status: JobStatus,
-    /// `ops.file_bar_min_size`: below this the per-file bar is omitted because
-    /// it would only ever flash.
-    file_bar_min: u64,
     smoother: Smoother,
     ring: FocusRing,
 }
 
 impl ProgressDialog {
-    /// A dialog viewing `status`. `file_bar_min` is `ops.file_bar_min_size`.
+    /// A dialog viewing `status`.
     ///
     /// # Byte counts here are human-readable whatever `panel.human_sizes` says
     ///
@@ -235,12 +232,11 @@ impl ProgressDialog {
     /// nobody reads while a copy is running, and it crowds out the file count
     /// beside it. A progress dialog answers "how much is left", not "exactly
     /// how big is this".
-    pub fn new(status: JobStatus, file_bar_min: u64) -> Self {
+    pub fn new(status: JobStatus) -> Self {
         let mut smoother = Smoother::new();
         smoother.push(status.throughput, status.eta);
         Self {
             status,
-            file_bar_min,
             smoother,
             ring: FocusRing::new(2),
         }
@@ -317,11 +313,18 @@ impl ProgressDialog {
     fn rows(&self, area: Rect) -> Vec<(Slot, Rect)> {
         let mut wanted = Vec::with_capacity(6);
         let bars_fit = area.width >= MIN_BAR_WIDTH;
-        if bars_fit && self.status.show_file_bar(self.file_bar_min) {
+        // Both bars, always, whenever the box is wide enough for a bar at all.
+        // The per-file bar used to come and go with the current file's size -
+        // shown for a big file, dropped for a small one - and every time it did
+        // the rows below it jumped up a line and back, so a copy of many
+        // differently sized files made the dialog twitch on every file. A file
+        // too small to have meaningful progress just draws an empty bar, which
+        // is steady where a vanishing row was not.
+        if bars_fit {
             wanted.push(Slot::FileBar);
         }
         wanted.push(Slot::File);
-        if bars_fit && self.status.show_batch_bar() {
+        if bars_fit {
             wanted.push(Slot::BatchBar);
         }
         wanted.push(Slot::Counts);
@@ -409,9 +412,10 @@ impl Dialog for ProgressDialog {
     }
 
     fn size_hint(&self) -> (u16, u16) {
-        // Six interior rows at the widest, and the diagram is 52 columns of
-        // interior. `centred` clamps both.
-        (56, 8)
+        // Six interior rows, and wide enough that a long path keeps a useful
+        // tail after the head is cropped - the file being copied is what the
+        // box is about. `centred` clamps both to the terminal.
+        (72, 8)
     }
 
     /// Follow this dialog's own job, and ignore every other row.
@@ -555,7 +559,7 @@ mod tests {
     }
 
     fn dialog() -> ProgressDialog {
-        ProgressDialog::new(running(), 1024 * 1024)
+        ProgressDialog::new(running())
     }
 
     fn render(d: &ProgressDialog, w: u16, h: u16, ascii: bool) -> Buffer {
@@ -643,7 +647,7 @@ mod tests {
         status.file = "/tmp/empty.txt".to_string();
         status.files_total = 1;
         status.files_done = 1;
-        let d = ProgressDialog::new(status, 0);
+        let d = ProgressDialog::new(status);
         for (w, h) in [(200u16, 50u16), (80, 24), (60, 15), (24, 4)] {
             for ascii in [false, true] {
                 let out = dump(&render_inner(&d, w, h, ascii));
@@ -810,21 +814,25 @@ mod tests {
     }
 
     #[test]
-    fn a_small_single_file_has_no_bar_at_all_and_that_is_intended() {
-        // below `ops.file_bar_min_size` and a batch of one.
+    fn both_bars_are_always_present_so_the_height_does_not_twitch() {
+        // A tiny single file - below what used to earn a per-file bar, and a
+        // batch of one. Both bars are drawn all the same: a copy of many
+        // differently sized files used to gain and lose the per-file row on
+        // every file, jumping the rows below it, and a steady empty bar beats a
+        // vanishing one.
         let mut status = JobStatus::queued(JobId(1), JobKind::Copy);
         status.files_total = 1;
         status.file_bytes_total = 400;
         status.file_bytes_done = 100;
         status.file = "/tmp/a.txt".to_string();
-        let d = ProgressDialog::new(status, 1024 * 1024);
+        let d = ProgressDialog::new(status);
         let slots: Vec<Slot> = d
             .rows(Rect::new(0, 0, 50, 6))
             .into_iter()
             .map(|(s, _)| s)
             .collect();
-        assert!(!slots.contains(&Slot::FileBar), "{slots:?}");
-        assert!(!slots.contains(&Slot::BatchBar), "{slots:?}");
+        assert!(slots.contains(&Slot::FileBar), "{slots:?}");
+        assert!(slots.contains(&Slot::BatchBar), "{slots:?}");
         assert!(slots.contains(&Slot::File), "{slots:?}");
         assert!(slots.contains(&Slot::Counts), "{slots:?}");
     }
@@ -871,7 +879,7 @@ mod tests {
         status.files_done = 4_000;
         status.bytes_done = 900_000;
         status.file = "/srv/media".to_string();
-        let d = ProgressDialog::new(status, 1024 * 1024);
+        let d = ProgressDialog::new(status);
         assert_eq!(d.status().fraction(), None);
         let line = d.counts_line(false);
         assert!(line.contains("4000 files"), "{line}");
@@ -896,7 +904,7 @@ mod tests {
                 first_difference: None,
             }),
         });
-        let d = ProgressDialog::new(status, 1024 * 1024);
+        let d = ProgressDialog::new(status);
         let out = dump(&render(&d, 60, 15, false));
         assert!(out.contains("Copying"), "{out}");
     }

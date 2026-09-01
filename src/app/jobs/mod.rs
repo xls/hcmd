@@ -26,7 +26,7 @@ use crate::app::{App, PackRequest};
 use crate::input::{DialogId, Focus};
 use crate::ops::{
     Decision, JobEvent, JobHandle, JobId, JobKind, JobRequest, JobSpec, JobStatus, JobSummary,
-    JobUpdate,
+    JobUpdate, Outcome,
 };
 use crate::panel::Side;
 use crate::ui::dialog::{ConflictDialog, ProgressDialog, QueueDialog, SummaryDialog};
@@ -605,13 +605,17 @@ impl App {
     /// act on - open its errors, retry it. Cancellation is not failure: a job
     /// stopped part-way through a file may record the file it was interrupted
     /// on, but the user asked for it to stop, so it goes like any other
-    /// cancelled task ([`JobSummary::is_failure`] draws that line).
+    /// cancelled task ([`JobSummary::outcome`] draws that line, once).
     fn prune_completed_jobs(&mut self) {
         let done: Vec<JobId> = self
             .jobs
             .rows()
             .iter()
-            .filter(|j| j.finished.as_deref().is_some_and(|s| !s.is_failure()))
+            .filter(|j| {
+                j.finished
+                    .as_deref()
+                    .is_some_and(|s| s.outcome() != Outcome::Failed)
+            })
             .map(|j| j.id)
             .collect();
         for id in done {
@@ -752,7 +756,14 @@ impl App {
             // a job that finishes in the background "does not
             // steal focus"; its result waits in the queue view.
             _ if background => {}
-            _ if summary.failures.is_empty() => self.message = Some(summary.message()),
+            // A clean finish, and a cancelled one, report in the status line
+            // and nothing more. Cancelling is not failure: a copy stopped
+            // part-way through a file records that file, but the user pressed
+            // Cancel and must not be answered with a "1 failed - Retry?" box
+            // for having done so. `outcome` is the one place that line is drawn.
+            _ if summary.outcome() != Outcome::Failed => {
+                self.message = Some(summary.message());
+            }
             // "show a summary at the end with the option to
             // retry the failures".
             _ => {
@@ -860,8 +871,7 @@ impl App {
         if let Some(id) = want
             && let Some(status) = self.job(id)
         {
-            let min = self.config.ops.file_bar_min_size.bytes();
-            self.push_dialog(Box::new(ProgressDialog::new(status.clone(), min)));
+            self.push_dialog(Box::new(ProgressDialog::new(status.clone())));
         }
     }
 
@@ -1232,6 +1242,49 @@ mod tests {
         app.sync_job_dialogs();
 
         assert!(app.job(id).is_none(), "a cancelled task clears itself");
+    }
+
+    #[test]
+    fn cancelling_a_copy_shows_no_failure_dialog_for_the_interrupted_file() {
+        // The bug: Esc on a foreground copy recorded the in-flight file as a
+        // failure, and the "1 failed - Retry?" summary popped up a moment
+        // later. Pressing Cancel must never be answered with a retry box.
+        let mut app = App::headless(Config::default(), Keymap::builtin(), Theme::blue());
+        let id = app.request_job(JobSpec::new(
+            JobKind::Copy,
+            vec![VfsPath::local("/etc/hostname")],
+            Some(VfsPath::local("/tmp")),
+        ));
+        app.apply_job_event(JobUpdate {
+            id,
+            event: JobEvent::Finished {
+                summary: Box::new(JobSummary {
+                    kind: JobKind::Copy,
+                    files_done: 0,
+                    dirs_done: 0,
+                    bytes_done: 0,
+                    skipped: 0,
+                    failures: vec![crate::ops::JobFailure {
+                        path: VfsPath::local("/tmp/hostname"),
+                        error: "cancelled mid-copy".to_string(),
+                    }],
+                    cancelled: true,
+                    elapsed: std::time::Duration::ZERO,
+                    sized: Vec::new(),
+                    differing: Vec::new(),
+                    first_difference: None,
+                }),
+            },
+        });
+
+        app.sync_job_dialogs();
+
+        let ids: Vec<DialogId> = app.dialogs().iter().map(|f| f.dialog.id()).collect();
+        assert!(
+            !ids.contains(&DialogId::JobSummary),
+            "a cancelled job must not raise a failure summary: {ids:?}"
+        );
+        assert!(app.job(id).is_none(), "and the cancelled job is cleared");
     }
 
     #[test]

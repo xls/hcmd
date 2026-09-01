@@ -661,7 +661,7 @@ mod tests {
             eta: Some(Duration::from_secs(89)),
             elapsed: Duration::from_secs(34),
         });
-        let progress = ProgressDialog::new(status.clone(), 1024 * 1024);
+        let progress = ProgressDialog::new(status.clone());
 
         let now = SystemTime::now();
         let conflict = ConflictDialog::new(

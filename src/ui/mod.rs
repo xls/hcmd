@@ -951,10 +951,7 @@ mod tests {
                     &cfg,
                 )),
             ),
-            (
-                "progress",
-                Box::new(ProgressDialog::new(running.clone(), 1024 * 1024)),
-            ),
+            ("progress", Box::new(ProgressDialog::new(running.clone()))),
             (
                 "conflict",
                 Box::new(ConflictDialog::new(

@@ -367,6 +367,11 @@ impl Session {
         // a bare pty answers no capability query, and criteria 2
         // and 6 need keys that only the Kitty protocol can express.
         cmd.env("HCMD_KEYBOARD_PROTOCOL", "enhanced");
+        // No filesystem watch under the harness: an inotify thread per session,
+        // times the number running in parallel, perturbs the screen-settle
+        // timing these tests poll on. What the watch does is covered by unit
+        // tests, not here.
+        cmd.env("HCMD_NO_FS_WATCH", "1");
         cmd.env("XDG_CONFIG_HOME", &home);
         cmd.env("XDG_STATE_HOME", &home);
         if let Some(stage) = panic_test {

@@ -38,6 +38,7 @@
 //! replaces the rows only when the new ones arrive, so refreshing costs a
 //! directory read and disturbs nothing the user was in the middle of.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::app::{App, ReadRequest, VfsEvent, leaving_name};
@@ -170,6 +171,9 @@ impl App {
         // place a capability answer lives.
         tab.clear_entries();
         tab.marks.clear();
+        // A different directory has nothing to reconcile against, so any rescan
+        // that was mid-flight is abandoned rather than merged into the new one.
+        tab.merging = None;
         tab.cursor = 0;
         tab.scroll = 0;
         tab.loading = true;
@@ -234,6 +238,53 @@ impl App {
         self.sync_shell_cwd(side);
     }
 
+    /// The real directories the panels are showing, for the filesystem watch
+    /// to point at.
+    ///
+    /// Only local paths: a change under `/home` arrives from inotify, but there
+    /// is nothing to watch on an S3 bucket or an SFTP host, and an archive path
+    /// is a file the panel reads, not a directory the kernel reports on. The
+    /// two panels may be in the same directory, so the caller deduplicates.
+    pub fn watch_targets(&self) -> Vec<PathBuf> {
+        [Side::Left, Side::Right]
+            .into_iter()
+            .filter_map(|side| {
+                self.panel(side)
+                    .active_tab()
+                    .path
+                    .local_path()
+                    .map(std::path::Path::to_path_buf)
+            })
+            .collect()
+    }
+
+    /// Re-read whichever panel is showing one of `changed`, after the
+    /// filesystem watch reported activity there.
+    ///
+    /// A watch is set on a directory and its events name the entries inside it,
+    /// so a panel showing directory `d` is stale when a changed path is `d`
+    /// itself or a direct child of it. Matched per side rather than rereading
+    /// both, so a change under the left panel does not re-walk the right.
+    pub fn reread_changed(&mut self, changed: &[PathBuf]) {
+        for side in [Side::Left, Side::Right] {
+            let Some(dir) = self
+                .panel(side)
+                .active_tab()
+                .path
+                .local_path()
+                .map(std::path::Path::to_path_buf)
+            else {
+                continue;
+            };
+            let touched = changed
+                .iter()
+                .any(|path| path == &dir || path.parent() == Some(dir.as_path()));
+            if touched {
+                self.reread(side);
+            }
+        }
+    }
+
     /// `F2` / `Ctrl+R`: re-read a panel's active tab **in place**.
     ///
     /// Deliberately not [`App::navigate`] to the same path. the design makes
@@ -268,12 +319,26 @@ impl App {
         if tab.pending_select.is_none() {
             tab.pending_select = tab.cursor_name();
         }
-        // The listing is rebuilt from scratch rather than appended to - but the
-        // old rows stay on screen until the replacement arrives. Clearing here
-        // left the panel empty for every frame until the first batch landed,
-        // which is a visible flash of bare background after every copy.
-        tab.replace_on_next_batch = true;
-        self.request_read(side, tab_index, path);
+        // A rescan updates the listing in place instead of rebuilding it, so
+        // nothing on screen blanks: the rows stay, their computed columns stay,
+        // and the read reconciles into them when it completes. Only a plain
+        // local directory qualifies - a virtual listing is flat and can hold
+        // two rows of one name from different directories, and a remote one has
+        // no stable in-place identity to reconcile against, so both keep the
+        // old clear-and-replace.
+        let mergeable =
+            tab.virtual_view.is_none() && tab.remote_view.is_none() && path.local_path().is_some();
+        if mergeable {
+            tab.merging = Some(Vec::new());
+            // A merge keeps the rows and their sizes on screen, so neither the
+            // "reading…" state nor a size-cache flush belongs on this path.
+            self.request_read_inner(side, tab_index, path, true);
+        } else {
+            // The old rows stay on screen until the replacement arrives;
+            // clearing here would flash bare background after every copy.
+            tab.replace_on_next_batch = true;
+            self.request_read(side, tab_index, path);
+        }
     }
 
     /// Ask for a listing without disturbing the tab (used by the event loop on
@@ -286,10 +351,33 @@ impl App {
     /// event loop's own refresh after a job - rather than for the ones someone
     /// remembered.
     pub fn request_read(&mut self, side: Side, tab_index: usize, path: VfsPath) -> u64 {
-        self.jobs.sizes.invalidate(&path);
+        self.request_read_inner(side, tab_index, path, false)
+    }
+
+    /// [`App::request_read`], told whether to keep the rows and their cached
+    /// sizes on screen (`keep`) or to clear as an ordinary read does.
+    ///
+    /// A rescan (a same-directory re-read that reconciles in place) keeps them:
+    /// the listing does not blank, so there is no "reading…" to show and the
+    /// walked-folder sizes stay put rather than being flushed and left blank
+    /// until the user asks for them again. Every other read clears, which is
+    /// what the size-invalidation guarantee ("a re-read invalidates the cached
+    /// size of that tree") is about.
+    fn request_read_inner(
+        &mut self,
+        side: Side,
+        tab_index: usize,
+        path: VfsPath,
+        keep: bool,
+    ) -> u64 {
+        if !keep {
+            self.jobs.sizes.invalidate(&path);
+        }
         let generation = self.next_generation();
         if let Some(tab) = self.panel_mut(side).tab_mut(tab_index) {
-            tab.loading = true;
+            if !keep {
+                tab.loading = true;
+            }
             tab.generation = generation;
         }
         self.forget_container_attempt(side, tab_index);
@@ -438,6 +526,16 @@ impl App {
                     self.container_attempts.remove(&generation);
                 }
                 let tab = self.panel_mut(side).tab_mut(tab_index)?;
+                // A rescan collects its rows off to the side and leaves the
+                // visible listing - rows, cursor, git flags, sizes - untouched
+                // until `Done` reconciles them in [`Tab::merge_listing`]. The
+                // `..` row is kept, and the same hidden-file rule applies, so
+                // the buffer is the whole listing the merge reconciles against;
+                // a row it does not contain is one that left the directory.
+                if let Some(buffer) = tab.merging.as_mut() {
+                    buffer.extend(batch.into_iter().filter(|e| show_hidden || !e.is_hidden));
+                    return None;
+                }
                 // The first batch of a re-read replaces what is on screen; the
                 // rest append to it.
                 if std::mem::take(&mut tab.replace_on_next_batch) {
@@ -516,7 +614,15 @@ impl App {
                     });
                 let tab = self.panel_mut(side).tab_mut(tab_index)?;
                 tab.loading = false;
-                tab.sort_entries(directories_first);
+                // A rescan reconciles its buffered rows into the visible ones
+                // now, in place; an ordinary read has already built `entries`
+                // and only needs the final sort. Either way the order is the
+                // same as the incremental one the batches kept.
+                if tab.merging.is_some() {
+                    tab.merge_listing(directories_first);
+                } else {
+                    tab.sort_entries(directories_first);
+                }
                 tab.resolve_pending_select();
                 // The listing is complete, so a name that has not turned up is
                 // not going to. Drop the request rather than letting it fire
@@ -528,10 +634,13 @@ impl App {
                 tab.prune_marks();
             }
             VfsEvent::Failed { message, .. } => {
-                // A re-read that failed before producing anything: the rows on
-                // screen describe a directory we can no longer read, so they go
-                // rather than sitting there looking current.
-                if std::mem::take(&mut tab.replace_on_next_batch) {
+                // A re-read that failed outright - a rescan or an ordinary one -
+                // drops the rows it was refreshing, buffered half and all: they
+                // describe a directory we can no longer read, and leaving them
+                // up would have them sit there looking current. The rescan's
+                // in-place update only holds while the read is succeeding.
+                let was_rescan = tab.merging.take().is_some();
+                if was_rescan || std::mem::take(&mut tab.replace_on_next_batch) {
                     tab.clear_entries();
                 }
                 tab.loading = false;

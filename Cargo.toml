@@ -24,6 +24,11 @@ unicode-segmentation = "1.13.3"
 chrono               = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
 thiserror            = "2.0.20"
 trash                = "5.2.6"
+# The design: the panels watch their own directory and refresh when it changes
+# underneath - a sync writing files, an archive being packed, anything at all -
+# rather than needing a `Ctrl+R`. `notify` is the standard cross-platform
+# watcher (inotify on Linux); the 200 ms debounce is ours, in the event loop.
+notify               = { version = "8.0.0", default-features = false, features = ["macos_fsevent"] }
 # `anyhow` was declared here and used nowhere: `crate::error::Error` is this
 # program's error type, every fallible function returns `crate::Result`, and a
 # second error type in the dependency list is an invitation to start a second

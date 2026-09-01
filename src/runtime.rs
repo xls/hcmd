@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crossterm::event::Event;
+use notify::Watcher;
 use ratatui::layout::Rect;
 use tokio::sync::mpsc;
 
@@ -359,6 +360,41 @@ pub async fn event_loop() -> Result<()> {
     let (key_tx, mut key_rx) = mpsc::channel::<std::io::Result<Event>>(term::EVENT_CHANNEL_DEPTH);
     term::spawn_event_thread(key_tx);
 
+    // The filesystem watch: the two panels' own directories, kept live so a
+    // change made underneath them - a sync writing files, an archive being
+    // packed, anything at all - refreshes the panel without a `Ctrl+R`. The
+    // native backend (inotify on Linux) pushes events; nothing polls. Events
+    // are coalesced and the panels re-read after 200 ms of quiet, so a busy
+    // directory is walked once when it settles rather than on every write.
+    let (fswatch_tx, mut fswatch_rx) = mpsc::channel::<std::path::PathBuf>(256);
+    // `HCMD_NO_FS_WATCH` turns the watch off: the acceptance harness sets it so
+    // an inotify thread per session does not perturb the timing its screen-
+    // settle polling depends on. With it unset - every real run - the watch is
+    // created as normal.
+    let mut watcher = if std::env::var_os("HCMD_NO_FS_WATCH").is_some() {
+        None
+    } else {
+        let tx = fswatch_tx.clone();
+        notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+            if let Ok(event) = res {
+                for path in event.paths {
+                    // Full when a flood is already queued; dropping is safe
+                    // because the debounce coalesces to one re-read regardless.
+                    let _ = tx.try_send(path);
+                }
+            }
+        })
+        .ok()
+    };
+    // The directories currently watched, so each frame adds only what the
+    // panels moved onto and drops only what they left.
+    let mut watched: std::collections::HashSet<std::path::PathBuf> =
+        std::collections::HashSet::new();
+    // Paths reported changed since the last re-read, and when the quiet after
+    // them is up. `None` when nothing is pending.
+    let mut fs_dirty: Vec<std::path::PathBuf> = Vec::new();
+    let mut fs_deadline: Option<std::time::Instant> = None;
+
     loop {
         // `Alt+F7` and `Ctrl+B` queued a search and this starts
         // it, for the same reason a read is serviced here - `dispatch` may not
@@ -563,6 +599,32 @@ pub async fn event_loop() -> Result<()> {
         // finished job reports and the panels re-read.
         app.sync_job_dialogs();
 
+        // Point the watch at the directories the panels are showing now: add
+        // the ones they moved onto, drop the ones they left. A path the native
+        // backend cannot watch (a network mount, say) fails here and is simply
+        // not added - `Ctrl+R` still refreshes it - rather than taking anything
+        // down.
+        if let Some(w) = watcher.as_mut() {
+            let targets: std::collections::HashSet<std::path::PathBuf> =
+                app.watch_targets().into_iter().collect();
+            for gone in watched.difference(&targets).cloned().collect::<Vec<_>>() {
+                let _ = w.unwatch(&gone);
+                watched.remove(&gone);
+            }
+            for added in targets.difference(&watched).cloned().collect::<Vec<_>>() {
+                if w.watch(&added, notify::RecursiveMode::NonRecursive).is_ok() {
+                    watched.insert(added);
+                }
+            }
+        }
+        // The quiet after a change is up: re-read whichever panel it touched.
+        // Before the read is serviced below, so the walk is spawned this frame.
+        if fs_deadline.is_some_and(|at| std::time::Instant::now() >= at) {
+            fs_deadline = None;
+            let changed = std::mem::take(&mut fs_dirty);
+            app.reread_changed(&changed);
+        }
+
         // Serviced here, after everything that can queue a read - a keystroke's
         // `dispatch` from the last iteration and, crucially, the re-read a
         // finished job just queued in `sync_job_dialogs`. When a background job
@@ -675,6 +737,10 @@ pub async fn event_loop() -> Result<()> {
             app.quick_view_deadline(),
             app.drives_deadline(),
             walk_tick,
+            // The filesystem-watch debounce: wake when the quiet after a change
+            // is up, so the panel re-reads on its own with nothing else going
+            // on to keep the loop turning.
+            fs_deadline,
         ]
         .into_iter()
         .flatten()
@@ -772,6 +838,26 @@ pub async fn event_loop() -> Result<()> {
                 // A directory's git flags arrived; merge them into the rows
                 // that asked, if that listing is still on screen.
                 app.apply_git_status_event(event);
+            }
+            Some(path) = fswatch_rx.recv() => {
+                // A watched directory changed. Drain whatever else is already
+                // queued in the same breath - a copy or a sync fires many
+                // events at once - and arm a 200 ms throttle.
+                //
+                // A throttle, not a debounce: the deadline is set only when it
+                // is not already armed, so a long write - compressing a folder
+                // fires a steady stream of events for as long as it runs -
+                // refreshes the panel every 200 ms *while* it happens, rather
+                // than a debounce that keeps pushing the deadline out and so
+                // never fires until the writing stops. That last case was the
+                // bug: the new archive appeared only when the job ended.
+                fs_dirty.push(path);
+                while let Ok(more) = fswatch_rx.try_recv() {
+                    fs_dirty.push(more);
+                }
+                if fs_deadline.is_none() {
+                    fs_deadline = Some(std::time::Instant::now() + Duration::from_millis(200));
+                }
             }
             Some(outcome) = link_rx.recv() => {
                 // One system call, already made. What is left is a sentence
