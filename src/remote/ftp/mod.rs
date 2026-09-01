@@ -75,12 +75,12 @@ use suppaftp::types::{Features, FileType, FtpError, FtpResult, Mode};
 use suppaftp::{FtpStream, ImplFtpStream, RustlsConnector, RustlsFtpStream, TlsStream};
 
 use crate::config::RemoteConfig;
-use crate::dialog::SecretAnswer;
 use crate::error::{Error, Result};
 use crate::remote::auth::{
     ANONYMOUS_PASSWORD, AuthPlan, AuthSequence, MAX_ASKS, Method, Outcome, SecretKind, is_anonymous,
 };
 use crate::remote::keyring::SecretStore;
+use crate::remote::prompter::Prompter;
 use crate::remote::secret::Secret;
 use crate::remote::transport::RemoteTransport;
 use crate::remote::{Protocol, Target};
@@ -145,7 +145,7 @@ impl FtpFs {
         password: Option<Secret>,
         config: &RemoteConfig,
         store: Arc<dyn SecretStore>,
-        hooks: BlockingHooks,
+        hooks: Prompter,
     ) -> Result<Arc<Self>> {
         let timeout = config.connect_timeout.duration();
         let addr = resolve(&target, timeout)?;
@@ -444,46 +444,6 @@ impl Drop for FtpFs {
     }
 }
 
-/// How the blocking connect path asks the user a question
-/// (the design names the type and does not define it; the
-/// report records that).
-///
-/// FTP's only question is a password, so this is one closure. The event loop
-/// builds it out of a `RemoteEvent::Secret` and a `oneshot`; a test builds it
-/// out of a constant. A `None` answer is a refusal, which is how `Esc`
-/// cancels a connect with no second path.
-pub struct BlockingHooks {
-    /// Ask for a secret. `None` is a refusal.
-    ask: Box<dyn Fn(SecretKind, bool) -> Option<SecretAnswer> + Send + Sync>,
-}
-
-impl BlockingHooks {
-    /// Hooks that ask through `ask`.
-    pub fn new(
-        ask: impl Fn(SecretKind, bool) -> Option<SecretAnswer> + Send + Sync + 'static,
-    ) -> Self {
-        Self { ask: Box::new(ask) }
-    }
-
-    /// Hooks that refuse every question, for a connect that has nowhere to ask
-    /// - a test, or any context with no UI.
-    pub fn none() -> Self {
-        Self::new(|_, _| None)
-    }
-
-    /// Put the question on the screen and wait for the answer.
-    pub fn ask_secret(&self, kind: SecretKind, offer_keyring: bool) -> Option<SecretAnswer> {
-        (self.ask)(kind, offer_keyring)
-    }
-}
-
-impl std::fmt::Debug for BlockingHooks {
-    /// The closure can produce a secret, so nothing about it is printed.
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("BlockingHooks")
-    }
-}
-
 // ------------------------------------------------------------ connecting ----
 
 /// What logged in, kept only long enough to open the rest of the pool.
@@ -630,7 +590,7 @@ fn authenticate(
     plan: AuthPlan,
     typed: Option<Secret>,
     store: &dyn SecretStore,
-    hooks: &BlockingHooks,
+    hooks: &Prompter,
 ) -> Result<Credential> {
     let authority = target.authority();
     if is_anonymous(&target.user) {
@@ -695,7 +655,7 @@ fn authenticate(
                     // a keyring exists; where it opted in and there is none,
                     // the dialog says so instead.
                     let offer = opted_in && store.available();
-                    match hooks.ask_secret(kind, offer) {
+                    match hooks.ask_secret_blocking(kind, offer) {
                         Some(answer) => (answer.secret, answer.remember),
                         None => {
                             return Err(Error::msg(format!(
@@ -1361,7 +1321,7 @@ mod tests {
             &store,
             // Hooks that would panic if they were ever asked: an anonymous
             // login must not put a prompt on the screen.
-            &BlockingHooks::new(|_, _| panic!("an anonymous login asked for a password")),
+            &Prompter::fixed(|_, _| panic!("an anonymous login asked for a password")),
         );
         assert!(credential.is_ok());
         assert_eq!(logged(&log), vec!["LOGIN anonymous".to_string()]);
@@ -1928,6 +1888,9 @@ c2Vjb25k
         let text = format!("{fs:?}");
         assert!(text.contains("ftp.example.org"), "{text}");
         assert!(!text.to_lowercase().contains("password"), "{text}");
-        assert_eq!(format!("{:?}", BlockingHooks::none()), "BlockingHooks");
+        assert_eq!(
+            format!("{:?}", Prompter::refusing()),
+            "Prompter { attempt: None }"
+        );
     }
 }

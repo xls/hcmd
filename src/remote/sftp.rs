@@ -109,17 +109,10 @@ pub const MAX_WINDOW: usize = 1024 * 1024;
 /// that constructs one; see the report's list of deviations.
 #[derive(Clone)]
 pub struct ConnectHooks {
-    /// Where a question goes.
-    events: tokio::sync::mpsc::Sender<RemoteEvent>,
-    /// Which attempt is asking, so an answer to an abandoned attempt is
-    /// dropped rather than applied.
-    ///
-    /// Held as the `u64` inside [`ConnectId`] rather than as the id, because
-    /// [`ConnectId`] is another module's type and its derives are not this
-    /// module's to depend on; the field is public, so rebuilding it is always
-    /// possible and never a clone.
-    attempt: u64,
-    /// The `known_hosts` file to verify against.
+    /// The secret question, which every protocol asks the same way.
+    prompter: crate::remote::prompter::Prompter,
+    /// The `known_hosts` file to verify against. The half that is SFTP's own:
+    /// no other protocol here has a host key to check.
     known_hosts: PathBuf,
 }
 
@@ -131,15 +124,14 @@ impl ConnectHooks {
         known_hosts: PathBuf,
     ) -> Self {
         Self {
-            events,
-            attempt: attempt.0,
+            prompter: crate::remote::prompter::Prompter::to_loop(events, attempt),
             known_hosts,
         }
     }
 
     /// This attempt's id.
     fn attempt(&self) -> ConnectId {
-        ConnectId(self.attempt)
+        self.prompter.attempt().unwrap_or(ConnectId(0))
     }
 
     /// Show the fingerprint and ask.
@@ -155,7 +147,10 @@ impl ConnectHooks {
             fingerprint: fingerprint.to_string(),
             reply,
         };
-        if self.events.send(event).await.is_err() {
+        let Some(events) = self.prompter.events() else {
+            return false;
+        };
+        if events.send(event).await.is_err() {
             return false;
         }
         matches!(answer.await, Ok(true))
@@ -170,22 +165,14 @@ impl ConnectHooks {
             line,
             file: file.to_path_buf(),
         };
-        let _ = self.events.send(event).await;
+        if let Some(events) = self.prompter.events() {
+            let _ = events.send(event).await;
+        }
     }
 
     /// Ask for a password or a passphrase.
     async fn ask_secret(&self, kind: SecretKind, offer_keyring: bool) -> Option<SecretAnswer> {
-        let (reply, answer) = tokio::sync::oneshot::channel();
-        let event = RemoteEvent::Secret {
-            attempt: self.attempt(),
-            kind,
-            offer_keyring,
-            reply,
-        };
-        if self.events.send(event).await.is_err() {
-            return None;
-        }
-        answer.await.ok().flatten()
+        self.prompter.ask_secret(kind, offer_keyring).await
     }
 }
 
@@ -194,7 +181,7 @@ impl fmt::Debug for ConnectHooks {
     /// walked to a pending secret.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ConnectHooks")
-            .field("attempt", &self.attempt)
+            .field("attempt", &self.attempt().0)
             .field("known_hosts", &self.known_hosts)
             .finish()
     }

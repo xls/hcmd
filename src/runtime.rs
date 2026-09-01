@@ -35,7 +35,7 @@ use crate::error::Result;
 use crate::input::{Focus, dispatch};
 use crate::ops::{self, JobUpdate};
 use crate::panel::{self, Side};
-use crate::remote::ftp::{BlockingHooks, FtpFs};
+use crate::remote::ftp::FtpFs;
 use crate::remote::sftp::{ConnectHooks, SftpFs};
 use crate::remote::transport::RemoteTransport;
 use crate::remote::{Protocol, RemoteFs, RemoteRegistry, Target, keyring, known_hosts};
@@ -1468,7 +1468,7 @@ async fn connect_smb(
     tx: mpsc::Sender<RemoteEvent>,
     attempt: crate::remote::connect::ConnectId,
 ) -> Result<(Arc<dyn RemoteTransport>, String)> {
-    let hooks = crate::remote::smb::SmbHooks::new(tx, attempt);
+    let hooks = crate::remote::prompter::Prompter::to_loop(tx, attempt);
     let fs = crate::remote::smb::connect(target, plan, password, config, store, hooks).await?;
     let start = fs.start_dir().to_string();
     Ok((fs as Arc<dyn RemoteTransport>, start))
@@ -1490,20 +1490,9 @@ async fn connect_ftp(
     attempt: crate::remote::connect::ConnectId,
 ) -> Result<(Arc<dyn RemoteTransport>, String)> {
     let joined = tokio::task::spawn_blocking(move || {
-        let hooks = BlockingHooks::new(move |kind, offer_keyring| {
-            let (reply, answer) = tokio::sync::oneshot::channel();
-            let event = RemoteEvent::Secret {
-                attempt,
-                kind,
-                offer_keyring,
-                reply,
-            };
-            if tx.blocking_send(event).is_err() {
-                return None;
-            }
-            // A dropped sender is a refusal, which is how `Esc` cancels.
-            answer.blocking_recv().ok().flatten()
-        });
+        // The same question the other two protocols ask, waited on from the
+        // blocking thread FTP runs on rather than awaited.
+        let hooks = crate::remote::prompter::Prompter::to_loop(tx, attempt);
         let fs = FtpFs::connect(target, plan, password, &config, store, hooks)?;
         let start = fs.start_dir().to_string();
         Ok::<_, crate::Error>((fs, start))

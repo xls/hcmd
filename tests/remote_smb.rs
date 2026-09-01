@@ -44,9 +44,9 @@ use std::sync::Arc;
 
 use holoscommander::config::RemoteConfig;
 use holoscommander::remote::connect::ConnectId;
+use holoscommander::remote::prompter::Prompter;
 use holoscommander::remote::secret::Secret;
 use holoscommander::remote::smb::SmbFs;
-use holoscommander::remote::smb::SmbHooks;
 use holoscommander::remote::transport::RemoteTransport;
 use holoscommander::remote::{Protocol, Target, auth::AuthPlan, keyring};
 
@@ -92,7 +92,7 @@ async fn connect() -> Arc<SmbFs> {
         password,
         &RemoteConfig::default(),
         keyring::store(),
-        SmbHooks::new(tx, ConnectId(1)),
+        Prompter::to_loop(tx, ConnectId(1)),
     )
     .await
     .expect("connects to the server named in the environment")

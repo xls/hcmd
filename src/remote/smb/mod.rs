@@ -50,7 +50,6 @@
 pub mod actor;
 pub mod connect;
 pub mod files;
-pub mod hooks;
 pub mod io;
 pub mod ops;
 pub mod task;
@@ -70,7 +69,6 @@ use ops::SmbOps;
 
 pub use actor::SmbActor;
 pub use connect::connect;
-pub use hooks::SmbHooks;
 
 /// One connected SMB server, behind [`RemoteTransport`].
 pub struct SmbFs {

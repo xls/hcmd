@@ -32,8 +32,8 @@ use crate::remote::secret::Secret;
 use crate::remote::{Protocol, Target};
 
 use super::actor::SmbActor;
-use super::hooks::SmbHooks;
 use super::{SmbFs, ops};
+use crate::remote::prompter::Prompter;
 
 /// Whether a user name means a login with no credential.
 ///
@@ -136,7 +136,7 @@ pub async fn connect(
     typed: Option<Secret>,
     config: &RemoteConfig,
     store: Arc<dyn SecretStore>,
-    hooks: SmbHooks,
+    hooks: Prompter,
 ) -> Result<Arc<SmbFs>> {
     let authority = target.authority();
     let start = start_dir(target.dir.as_deref());

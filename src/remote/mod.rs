@@ -47,6 +47,7 @@ pub mod hosts;
 pub mod keyring;
 pub mod known_hosts;
 pub mod prompt;
+pub mod prompter;
 pub mod s3;
 pub mod secret;
 pub mod sftp;
