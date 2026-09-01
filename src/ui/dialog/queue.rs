@@ -39,6 +39,9 @@ use crate::ui::text;
 /// The footer's hint line.
 const HINT: &str = "Enter open  Del forget  Esc panels";
 
+/// How wide each row's own progress bar is drawn.
+const ROW_BAR_WIDTH: usize = 16;
+
 /// the queue view.
 #[derive(Debug)]
 pub struct QueueDialog {
@@ -105,37 +108,24 @@ impl QueueDialog {
     }
 
     /// One row of the list: id, what it is, how it is going.
-    pub fn row_text(&self, status: &JobStatus, _ascii: bool) -> String {
+    pub fn row_text(&self, status: &JobStatus, ascii: bool) -> String {
         let state = Self::state_of(status);
         let detail = match status.finished.as_ref() {
             Some(summary) => summary.message(),
             None if status.needs_attention() => "a conflict needs an answer".to_string(),
             None => {
-                let percent = status.fraction().map_or_else(String::new, |f| {
-                    // `JobStatus::fraction` clamps to 0.0..=1.0 and returns
-                    // `None` rather than dividing by a zero total, so the
-                    // product is 0..=100 and the cast cannot lose anything.
-                    #[allow(
-                        clippy::cast_possible_truncation,
-                        clippy::cast_sign_loss,
-                        reason = "JobStatus::fraction clamps to 0.0..=1.0 or returns None"
-                    )]
-                    let pct = (f * 100.0).round() as u64;
-                    format!("{pct:>3} %  ")
-                });
-                if status.files_total > 0 {
-                    format!(
-                        "{percent}{} / {} files",
-                        status.files_done, status.files_total
-                    )
+                // A visual bar with its percent, then what it is counting - the
+                // same bar the single-job progress dialog draws, so the two read
+                // the same.
+                let bar = super::bar_text(status.fraction(), ROW_BAR_WIDTH, ascii);
+                let counts = if status.files_total > 0 {
+                    format!("{} / {} files", status.files_done, status.files_total)
                 } else if status.files_done > 0 {
-                    format!("{percent}{} files", status.files_done)
+                    format!("{} files", status.files_done)
                 } else {
-                    format!(
-                        "{percent}{}",
-                        crate::panel::format::human_size(status.bytes_done)
-                    )
-                }
+                    crate::panel::format::human_size(status.bytes_done)
+                };
+                format!("{bar}  {counts}")
             }
         };
         // `*` marks the job the progress dialog is currently a view of, so a
@@ -203,14 +193,41 @@ impl QueueDialog {
         }
     }
 
-    /// The rows available for the list, and the footer.
-    fn regions(area: Rect) -> (Rect, Option<Rect>) {
-        if area.height <= 1 {
-            return (area, None);
+    /// The combined progress of every running job, by bytes, or `None` when no
+    /// job is running or none reports a total. What the overall bar shows.
+    fn overall(&self) -> Option<f64> {
+        let mut done = 0u64;
+        let mut total = 0u64;
+        for job in &self.jobs {
+            if job.finished.is_none() {
+                done = done.saturating_add(job.bytes_done);
+                total = total.saturating_add(job.bytes_total);
+            }
         }
-        let list = Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1));
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a progress bar does not need byte-exact precision"
+        )]
+        (total > 0).then(|| (done as f64 / total as f64).clamp(0.0, 1.0))
+    }
+
+    /// The rows available for the list, an optional overall-progress row above
+    /// the footer, and the footer itself.
+    fn regions(area: Rect, has_overall: bool) -> (Rect, Option<Rect>, Option<Rect>) {
+        if area.height <= 1 {
+            return (area, None, None);
+        }
         let footer = row(area, area.height.saturating_sub(1));
-        (list, footer)
+        // The overall bar takes the row just above the hint, when a job is
+        // running to fill it and the box is tall enough to spare the row.
+        if has_overall && area.height >= 3 {
+            let overall = row(area, area.height.saturating_sub(2));
+            let list = Rect::new(area.x, area.y, area.width, area.height.saturating_sub(2));
+            (list, overall, footer)
+        } else {
+            let list = Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1));
+            (list, None, footer)
+        }
     }
 
     /// The job a screen row belongs to, once scrolling is taken into account.
@@ -244,7 +261,11 @@ impl Dialog for QueueDialog {
 
     fn size_hint(&self) -> (u16, u16) {
         let rows = u16::try_from(self.jobs.len().max(1)).unwrap_or(u16::MAX);
-        (66, rows.saturating_add(3).clamp(5, 20))
+        // Borders and the hint are three; the overall bar, when a job is
+        // running to fill it, is a fourth - reserved here so it never steals a
+        // job's row from the list.
+        let chrome = if self.overall().is_some() { 4 } else { 3 };
+        (72, rows.saturating_add(chrome).clamp(5, 21))
     }
 
     /// The queue view lists every job, so it takes the table whole
@@ -306,7 +327,7 @@ impl Dialog for QueueDialog {
     /// Record the window this frame will show, so the next frame starts from
     /// it rather than from the cursor.
     fn layout(&mut self, area: Rect) {
-        let (list, _) = Self::regions(area);
+        let (list, _, _) = Self::regions(area, self.overall().is_some());
         self.scroll = self.visible(usize::from(list.height)).start;
     }
 
@@ -315,7 +336,8 @@ impl Dialog for QueueDialog {
             return;
         }
         let body: Style = style.body();
-        let (list, footer) = Self::regions(area);
+        let overall = self.overall();
+        let (list, overall_rect, footer) = Self::regions(area, overall.is_some());
 
         if self.jobs.is_empty() {
             if let Some(rect) = row(list, 0) {
@@ -344,6 +366,19 @@ impl Dialog for QueueDialog {
                 );
                 draw_text(f, rect, &padded, style.button(selected), style.ascii);
             }
+        }
+
+        if let (Some(rect), Some(fraction)) = (overall_rect, overall) {
+            let running = self.jobs.iter().filter(|j| j.finished.is_none()).count();
+            let bar = super::bar_text(Some(fraction), 24, style.ascii);
+            let text = format!("Overall {bar}  {running} running");
+            let padded = text::fit_left(
+                &text,
+                usize::from(rect.width),
+                text::Crop::End,
+                ellipsis(style.ascii),
+            );
+            draw_text(f, rect, &padded, body, style.ascii);
         }
 
         if let Some(rect) = footer {
@@ -653,7 +688,7 @@ mod tests {
     fn a_one_row_interior_still_draws_a_job_and_survives() {
         let d = dialog();
         for h in 0u16..4 {
-            let (list, footer) = QueueDialog::regions(Rect::new(0, 0, 40, h));
+            let (list, _, footer) = QueueDialog::regions(Rect::new(0, 0, 40, h), true);
             assert!(list.bottom() <= h);
             if let Some(rect) = footer {
                 assert!(rect.bottom() <= h);

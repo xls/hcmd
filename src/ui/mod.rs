@@ -326,6 +326,7 @@ pub fn draw(f: &mut Frame, app: &App) {
     }
     panelview::draw(f, app, Side::Left, l.left);
     panelview::draw(f, app, Side::Right, l.right);
+    draw_activity_indicator(f, app, l.right);
     cmdline::draw(f, app, l.cmdline);
     if l.keybar.height > 0 {
         draw_keybar(f, app, l.keybar);
@@ -431,6 +432,37 @@ fn draw_too_small(f: &mut Frame, app: &App, area: Rect) {
 }
 
 /// The menu bar.
+/// A small `[·●···]` in the right panel's top-right corner while background
+/// jobs are running - the only hint they exist without opening the queue.
+///
+/// Drawn over the top border just before the corner, and only when the panel is
+/// wide enough that it does not crowd the border. Its animation is the size
+/// walk's, so the two read the same; when that is turned off it still shows
+/// dots, because here the point is only "something is happening".
+fn draw_activity_indicator(f: &mut Frame, app: &App, panel: Rect) {
+    const CELLS: u16 = 7; // `[` + five animation cells + `]`.
+    if !app.jobs.any_active() || panel.height == 0 || panel.width < CELLS.saturating_add(12) {
+        return;
+    }
+    let style = match app.config.panel.size_walk_style {
+        crate::config::SizeWalkStyle::Off => crate::config::SizeWalkStyle::Dots,
+        other => other,
+    };
+    let anim =
+        panelview::walk_indicator(style, app.animation.elapsed(), app.config.ui.ascii_borders);
+    let depth = app.color_depth;
+    let style = Style::new()
+        .fg(app.theme.quantize(app.theme.panel.marked_fg, depth))
+        .bg(app.theme.quantize(app.theme.panel.bg, depth));
+    // Leave the corner glyph itself, so the box still closes cleanly.
+    let x = panel.right().saturating_sub(CELLS.saturating_add(1));
+    let rect = Rect::new(x, panel.y, CELLS, 1);
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(format!("[{anim}]"), style))),
+        rect,
+    );
+}
+
 fn draw_menubar(f: &mut Frame, app: &App, area: Rect) {
     if area.width == 0 || area.height == 0 {
         return;

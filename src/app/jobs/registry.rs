@@ -103,6 +103,13 @@ impl Jobs {
             .any(|status| status.finished.is_none() && status.kind == crate::ops::JobKind::Size)
     }
 
+    /// True while any job is unfinished - running, queued or waiting on an
+    /// answer. Drives the top-right activity indicator and keeps its animation
+    /// advancing.
+    pub fn any_active(&self) -> bool {
+        self.rows.iter().any(|status| status.finished.is_none())
+    }
+
     /// True while a size walk covering `path` is still running.
     ///
     /// `Space` or `Ctrl+L` on a directory queues a [`JobKind::Size`] over it;

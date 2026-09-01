@@ -2,7 +2,7 @@
 //!
 //! Rendered as each panel block's **top border title**: the device, its label,
 //! and free of total space -
-//! `d [dev]  1,062,892,164 k of 3,907,000,316 k free`.
+//! `d [dev]  988G of 3.6T free (73% used)`.
 //!
 //! This is display only. `Alt+F1`/`Alt+F2` open the device picker, which
 //! the design puts in v0.7 and which is out of scope here.
@@ -14,8 +14,6 @@
 use std::path::Path;
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
-
-use super::columns::group_digits;
 
 /// How stale the free-space figure is allowed to get.
 const REFRESH: Duration = Duration::from_secs(5);
@@ -63,16 +61,37 @@ pub fn best_match(mounts: &[Volume], path: &Path) -> Option<Volume> {
         .cloned()
 }
 
-/// The the design volume line for a mount.
+/// The longest volume line for a mount: human-readable free-of-total, with the
+/// percentage in use.
 ///
-/// Sizes are in `k` - 1024 bytes, as Total Commander counts them - with
-/// thousands separators, matching the reference panel.
+/// The condensed top border has room for the figures in the same shortened
+/// units the rest of the program uses (`847G`, not a nine-digit kilobyte
+/// count), so the `% used` fits beside them and answers the question the raw
+/// numbers only imply.
 pub fn line(volume: &Volume) -> String {
+    let used = volume.total.saturating_sub(volume.free);
+    let percent = if volume.total > 0 {
+        // used <= total, so the ratio is 0.0..=1.0 and the product 0..=100.
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a percentage does not need byte-exact precision"
+        )]
+        let pct = (used as f64 / volume.total as f64 * 100.0).round();
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "pct is 0.0..=100.0"
+        )]
+        let pct = pct as u64;
+        pct
+    } else {
+        0
+    };
     format!(
-        "[{}]  {} k of {} k free",
+        "[{}]  {} of {} free ({percent}% used)",
         volume.label,
-        group_digits(volume.free / 1024),
-        group_digits(volume.total / 1024),
+        human(volume.free),
+        human(volume.total),
     )
 }
 
@@ -219,10 +238,14 @@ mod tests {
     #[test]
     // The device name is deliberately absent: the design drops it because a
     // LUKS or LVM mapper called `root` says nothing about where you are.
-    fn the_line_matches_the_reference_panel() {
-        assert_eq!(
-            line(&v("/")),
-            "[/]  1,062,892,164 k of 3,907,000,316 k free"
+    fn the_line_is_human_readable_with_a_used_percentage() {
+        let line = line(&v("/"));
+        assert!(line.starts_with("[/]  "), "{line}");
+        assert!(line.contains(" free ("), "{line}");
+        assert!(line.contains("% used)"), "{line}");
+        assert!(
+            !line.contains(" k of "),
+            "human units, not raw kilobytes: {line}"
         );
     }
 

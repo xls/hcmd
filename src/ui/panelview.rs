@@ -308,7 +308,7 @@ fn draw_quick_status(f: &mut Frame, app: &App, area: Rect, g: Glyphs) {
     );
 }
 
-/// `d [dev]  1,062,892,164 k of 3,907,000,316 k free`.
+/// `d [dev]  988G of 3.6T free (73% used)`.
 /// The panel's directory and its active file mask, for the top border.
 ///
 /// A mask other than `*` is how a quick filter shows itself, so it

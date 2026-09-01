@@ -645,12 +645,13 @@ pub async fn event_loop() -> Result<()> {
         // more deadlines of the same kind: nothing wakes the loop when a
         // cursor has simply been still for 150 ms, or when a volume was
         // mounted while a popup is open, so the timeout has to.
-        // While a directory is being walked, wake often enough to step the
-        // size-column animation even if the walk itself is quiet (a slow or
-        // network tree reports progress sparsely).
+        // While any job is running, wake often enough to step the animations -
+        // the size-column walk indicator and the top-right activity dot - even
+        // when the job itself reports progress sparsely (a slow or network
+        // tree, or a job parked on a question).
         let walk_tick = app
             .jobs
-            .any_walking()
+            .any_active()
             .then(|| std::time::Instant::now() + Duration::from_millis(100));
         let deadline = [
             app.console_switch_deadline(),
