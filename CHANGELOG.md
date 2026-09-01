@@ -2,6 +2,12 @@
 
 Notable changes per release, one line each. Newest first.
 
+## v0.9.13
+
+- Holding Ins in a large directory no longer skips rows or marks them twice: a rescan that finished while you were moving used to put the cursor back where it had been when the rescan started.
+- A directory that changes while it is being read no longer starts a second read on top of the first every 200 ms.
+- Shift with a movement key sweeps the mark, the way Total Commander does it: shift+up, shift+down, shift+pgup, shift+pgdn, shift+home and shift+end. The row the sweep starts on decides whether it marks or clears, and a partial page at either edge sweeps to the edge.
+
 ## v0.9.12
 
 - Ctrl+A under a quick-search filter marks only the rows you can see, and F8 then deletes only those - it used to mark every file in the directory, hidden ones included.
