@@ -171,6 +171,10 @@ impl App {
         // place a capability answer lives.
         tab.clear_entries();
         tab.marks.clear();
+        // A quick-search filter belongs to the directory it was typed in; a new
+        // directory drops it. A re-read of the *same* directory keeps it, which
+        // is why this lives here and not in `clear_entries`.
+        tab.clear_filter();
         // A different directory has nothing to reconcile against, so any rescan
         // that was mid-flight is abandoned rather than merged into the new one.
         tab.merging = None;

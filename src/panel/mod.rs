@@ -436,6 +436,20 @@ pub struct RemoteView {
     pub disconnected: bool,
 }
 
+/// A quick-search filter: what the user typed, and how names are matched
+/// against it. Held so the visibility of a row can be recomputed at any time -
+/// after a rescan, a sort, or a widened query - from the listing as it stands,
+/// rather than from a narrowed copy taken when the filter began.
+#[derive(Debug, Clone)]
+pub struct QuickFilter {
+    /// The typed query.
+    pub query: String,
+    /// Prefix / substring / fuzzy.
+    pub mode: crate::config::QuickSearchMode,
+    /// How case is handled.
+    pub case: crate::config::QuickSearchCase,
+}
+
 /// One tab: a working folder and nothing more.
 #[derive(Debug, Clone)]
 pub struct Tab {
@@ -462,11 +476,13 @@ pub struct Tab {
     pub marks: HashSet<String>,
     /// This tab's sort order.
     pub sort: SortState,
-    /// The full listing saved while a quick-search filter is narrowing the
-    /// view. `None` when nothing is filtered - the ordinary case. Held so the
-    /// filter can widen and, on `Esc`, restore the whole listing without a
-    /// re-read. Reset whenever a fresh listing replaces `entries`.
-    prefilter: Option<Vec<Entry>>,
+    /// The quick-search filter narrowing what is *shown*, or `None` - the
+    /// ordinary case. The filter never touches `entries`: it is a predicate the
+    /// renderer and the cursor consult, so the full listing is always present
+    /// and a re-read (or a background rescan) has the whole directory to
+    /// reconcile against and nothing to clobber. It is dropped on a directory
+    /// change and survives a re-read of the same directory.
+    quick_filter: Option<QuickFilter>,
     /// The tab-bar label.
     pub title: String,
     /// True while a listing is still streaming in.
@@ -583,7 +599,7 @@ impl Tab {
             scroll: 0,
             marks: HashSet::new(),
             sort: SortState::default(),
-            prefilter: None,
+            quick_filter: None,
             loading: false,
             generation: 0,
             pending_select: None,
@@ -634,47 +650,95 @@ impl Tab {
         self.entries.get(self.cursor)
     }
 
-    /// True while a quick-search filter is narrowing the listing.
+    /// True while a quick-search filter is hiding non-matching rows.
     pub const fn is_quick_filtered(&self) -> bool {
-        self.prefilter.is_some()
+        self.quick_filter.is_some()
     }
 
-    /// Narrow the listing to the entries a predicate keeps, saving the full
-    /// listing the first time so it can be restored. The `..` row is always
-    /// kept, and the filter is always re-applied to the *saved* listing rather
-    /// than the already-narrowed one, so widening the query brings rows back.
-    /// The cursor lands on the first real entry that survives.
-    pub fn filter_to(&mut self, keep: impl Fn(&Entry) -> bool) {
-        if self.prefilter.is_none() {
-            self.prefilter = Some(self.entries.clone());
+    /// Whether a row is shown under the current filter. The `..` row is always
+    /// shown - it is navigation, not content - and everything is shown when no
+    /// filter is set.
+    pub fn shows(&self, entry: &Entry) -> bool {
+        match &self.quick_filter {
+            None => true,
+            Some(filter) => {
+                entry.is_parent
+                    || crate::input::quicksearch::quick_match(
+                        &entry.name,
+                        &filter.query,
+                        filter.mode,
+                        filter.case,
+                    )
+            }
         }
-        let Some(source) = self.prefilter.as_ref() else {
-            return;
-        };
-        let filtered: Vec<Entry> = source
+    }
+
+    /// Whether the row at `index` is shown.
+    fn shows_index(&self, index: usize) -> bool {
+        self.entries.get(index).is_some_and(|e| self.shows(e))
+    }
+
+    /// The next shown row strictly after `from`, if any.
+    fn next_shown(&self, from: usize) -> Option<usize> {
+        (from.saturating_add(1)..self.entries.len()).find(|&i| self.shows_index(i))
+    }
+
+    /// The previous shown row strictly before `from`, if any.
+    fn prev_shown(&self, from: usize) -> Option<usize> {
+        (0..from).rev().find(|&i| self.shows_index(i))
+    }
+
+    /// The first shown *real* row - the match the cursor lands on when a filter
+    /// is applied. Falls back to the first shown row (the `..`) and then to 0.
+    fn first_match(&self) -> usize {
+        self.entries
             .iter()
-            .filter(|e| e.is_parent || keep(e))
-            .cloned()
-            .collect();
-        self.entries = filtered;
-        self.cursor = self.entries.iter().position(|e| !e.is_parent).unwrap_or(0);
+            .position(|e| !e.is_parent && self.shows(e))
+            .or_else(|| self.entries.iter().position(|e| self.shows(e)))
+            .unwrap_or(0)
+    }
+
+    /// The last shown row, for `End` under a filter.
+    fn last_shown(&self) -> usize {
+        (0..self.entries.len())
+            .rev()
+            .find(|&i| self.shows_index(i))
+            .unwrap_or(0)
+    }
+
+    /// The entry indices a `rows`-tall viewport draws, top to bottom: the shown
+    /// rows from `scroll` down when a filter is active, and the plain
+    /// `scroll..scroll+rows` window otherwise. Always in bounds.
+    pub fn shown_window(&self, rows: usize) -> Vec<usize> {
+        let start = self.scroll.min(self.entries.len());
+        if self.is_quick_filtered() {
+            (start..self.entries.len())
+                .filter(|&i| self.shows_index(i))
+                .take(rows)
+                .collect()
+        } else {
+            (start..start.saturating_add(rows).min(self.entries.len())).collect()
+        }
+    }
+
+    /// Set (or replace) the quick-search filter and land the cursor on the
+    /// first match, the way type-navigation does. The listing itself is never
+    /// touched - only which of its rows are drawn.
+    pub fn set_quick_filter(
+        &mut self,
+        query: String,
+        mode: crate::config::QuickSearchMode,
+        case: crate::config::QuickSearchCase,
+    ) {
+        self.quick_filter = Some(QuickFilter { query, mode, case });
+        self.cursor = self.first_match();
         self.scroll = 0;
     }
 
-    /// Restore the full listing a filter saved, putting the cursor back on the
-    /// entry it was on so ending a filter keeps the file the user had reached.
-    /// A no-op when nothing was filtered.
+    /// End the filter, leaving the cursor exactly where it is - on the file the
+    /// user had reached. Every row is shown again; nothing is re-read.
     pub fn clear_filter(&mut self) {
-        let selected = self.current().map(|e| e.name.clone());
-        let Some(full) = self.prefilter.take() else {
-            return;
-        };
-        self.entries = full;
-        if let Some(name) = selected
-            && let Some(index) = self.entries.iter().position(|e| e.name == name)
-        {
-            self.cursor = index;
-        }
+        self.quick_filter = None;
     }
 
     /// True when the entry under the cursor is marked.
@@ -748,10 +812,12 @@ impl Tab {
     pub fn clear_entries(&mut self) {
         self.entries.clear();
         self.sorted_rows = 0;
-        // A fresh listing is about to arrive, so the filter's saved copy of the
-        // old one is stale: drop it rather than restore it. The quick-search
-        // buffer is cleared on the same read.
-        self.prefilter = None;
+        // The filter is deliberately *not* cleared here. This runs on a re-read
+        // of the same directory as well as on a directory change, and a filter
+        // must survive the first - a background rescan that rebuilt the listing
+        // and dropped the filter was the bug this design closes. A directory
+        // change drops the filter in `App::navigate_selecting`, where it
+        // belongs, because only there is it a different directory.
     }
 
     /// Try to satisfy [`Tab::pending_select`] against the entries read so far.
@@ -799,6 +865,10 @@ impl Tab {
         if rows == 0 {
             return;
         }
+        if self.is_quick_filtered() {
+            self.scroll_into_view_filtered(rows);
+            return;
+        }
         if self.cursor < self.scroll {
             self.scroll = self.cursor;
         } else if self.cursor >= self.scroll.saturating_add(rows) {
@@ -808,6 +878,32 @@ impl Tab {
         if self.scroll > max_scroll {
             self.scroll = max_scroll;
         }
+    }
+
+    /// [`Tab::scroll_into_view`] when a filter hides rows: the window holds
+    /// `rows` *shown* entries, so the count between `scroll` and the cursor is
+    /// what matters, not the raw index distance.
+    fn scroll_into_view_filtered(&mut self, rows: usize) {
+        if self.cursor < self.scroll {
+            self.scroll = self.cursor;
+            return;
+        }
+        // Walk `scroll` forward, over shown rows only, until the cursor is
+        // within the last `rows` shown entries of the window.
+        while self.shown_between(self.scroll, self.cursor) > rows {
+            match self.next_shown(self.scroll) {
+                Some(next) => self.scroll = next,
+                None => break,
+            }
+        }
+    }
+
+    /// How many shown rows lie in `start..=end`. Cheap: only called while a
+    /// filter is active, on a listing the user is interacting with.
+    fn shown_between(&self, start: usize, end: usize) -> usize {
+        (start..=end.min(self.entries.len().saturating_sub(1)))
+            .filter(|&i| self.shows_index(i))
+            .count()
     }
 
     /// The rows a viewport `rows` tall shows, as an index range into
@@ -832,6 +928,23 @@ impl Tab {
             self.scroll = 0;
             return;
         }
+        if self.is_quick_filtered() {
+            // Step over shown rows only; a step that runs off the end of the
+            // shown rows stays on the last one it reached.
+            for _ in 0..delta.unsigned_abs() {
+                let next = if delta >= 0 {
+                    self.next_shown(self.cursor)
+                } else {
+                    self.prev_shown(self.cursor)
+                };
+                match next {
+                    Some(index) => self.cursor = index,
+                    None => break,
+                }
+            }
+            self.scroll_into_view(rows);
+            return;
+        }
         let last = self.entries.len().saturating_sub(1);
         self.cursor = if delta >= 0 {
             self.cursor.saturating_add(delta.unsigned_abs()).min(last)
@@ -841,25 +954,44 @@ impl Tab {
         self.scroll_into_view(rows);
     }
 
-    /// Put the cursor on a row, clamping.
+    /// Put the cursor on a row, clamping. Under a filter the target is snapped
+    /// to the nearest shown row so the cursor never rests on a hidden one.
     pub fn move_to(&mut self, index: usize, rows: usize) {
         if self.entries.is_empty() {
             self.cursor = 0;
             self.scroll = 0;
             return;
         }
-        self.cursor = index.min(self.entries.len().saturating_sub(1));
+        let last = self.entries.len().saturating_sub(1);
+        let target = index.min(last);
+        self.cursor = if self.is_quick_filtered() && !self.shows_index(target) {
+            self.next_shown(target)
+                .or_else(|| self.prev_shown(target))
+                .unwrap_or(target)
+        } else {
+            target
+        };
         self.scroll_into_view(rows);
     }
 
     /// `Home`.
     pub fn move_first(&mut self, rows: usize) {
-        self.move_to(0, rows);
+        let target = if self.is_quick_filtered() {
+            self.first_match()
+        } else {
+            0
+        };
+        self.move_to(target, rows);
     }
 
     /// `End`.
     pub fn move_last(&mut self, rows: usize) {
-        self.move_to(self.entries.len().saturating_sub(1), rows);
+        let target = if self.is_quick_filtered() {
+            self.last_shown()
+        } else {
+            self.entries.len().saturating_sub(1)
+        };
+        self.move_to(target, rows);
     }
 
     /// `PgUp`. A zero-row viewport still moves by one, so the key is never dead.
@@ -1677,45 +1809,91 @@ mod tests {
         tab
     }
 
+    /// Names shown under the current filter, in draw order.
+    fn shown_names(tab: &Tab) -> Vec<&str> {
+        tab.shown_window(100)
+            .into_iter()
+            .filter_map(|i| tab.entries.get(i).map(|e| e.name.as_str()))
+            .collect()
+    }
+
     #[test]
-    fn a_filter_narrows_to_the_matches_and_keeps_the_parent_row() {
+    fn a_filter_shows_the_matches_and_leaves_the_listing_whole() {
+        use crate::config::{QuickSearchCase, QuickSearchMode};
         let mut tab = listed(&["alpha", "beta", "album", "gamma"]);
         tab.cursor = 4;
-        tab.filter_to(|e| e.name.starts_with("al"));
-        let shown: Vec<&str> = tab.entries.iter().map(|e| e.name.as_str()).collect();
-        assert_eq!(shown, ["..", "alpha", "album"], "only the matches, plus ..");
-        assert_eq!(tab.cursor, 1, "the cursor lands on the first real match");
+        tab.set_quick_filter(
+            "al".to_string(),
+            QuickSearchMode::Prefix,
+            QuickSearchCase::Smart,
+        );
+        // The listing is untouched - the filter only decides what is drawn.
+        let all: Vec<&str> = tab.entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(
+            all,
+            ["..", "alpha", "beta", "album", "gamma"],
+            "entries are never narrowed"
+        );
+        assert_eq!(
+            shown_names(&tab),
+            ["..", "alpha", "album"],
+            "only the matches, plus .."
+        );
+        assert_eq!(
+            tab.entries.get(tab.cursor).map(|e| e.name.as_str()),
+            Some("alpha"),
+            "the cursor lands on the first match, by real index"
+        );
         assert!(tab.is_quick_filtered());
     }
 
     #[test]
-    fn widening_a_filter_brings_rows_back_from_the_saved_listing() {
+    fn widening_a_filter_shows_more_of_the_same_listing() {
+        use crate::config::{QuickSearchCase, QuickSearchMode};
         let mut tab = listed(&["alpha", "beta", "album"]);
-        tab.filter_to(|e| e.name.starts_with("alp"));
-        assert_eq!(tab.entries.len(), 2, "'..' and alpha");
-        // A shorter query filters the *original* listing, not the narrowed one.
-        tab.filter_to(|e| e.name.starts_with("al"));
-        let shown: Vec<&str> = tab.entries.iter().map(|e| e.name.as_str()).collect();
-        assert_eq!(shown, ["..", "alpha", "album"]);
+        tab.set_quick_filter(
+            "alp".to_string(),
+            QuickSearchMode::Prefix,
+            QuickSearchCase::Smart,
+        );
+        assert_eq!(shown_names(&tab), ["..", "alpha"]);
+        // A shorter query shows more - from the full listing, which never went
+        // anywhere.
+        tab.set_quick_filter(
+            "al".to_string(),
+            QuickSearchMode::Prefix,
+            QuickSearchCase::Smart,
+        );
+        assert_eq!(shown_names(&tab), ["..", "alpha", "album"]);
+        assert_eq!(tab.entries.len(), 4, "'..' and the three files, throughout");
     }
 
     #[test]
-    fn clearing_a_filter_restores_the_listing_on_the_reached_file() {
+    fn clearing_a_filter_keeps_the_cursor_on_the_reached_file() {
+        use crate::config::{QuickSearchCase, QuickSearchMode};
         let mut tab = listed(&["alpha", "beta", "album", "gamma"]);
-        tab.filter_to(|e| e.name.starts_with("al"));
-        tab.cursor = 2; // "album" within the filtered view
+        tab.set_quick_filter(
+            "al".to_string(),
+            QuickSearchMode::Prefix,
+            QuickSearchCase::Smart,
+        );
+        // Reach "album" - a real index into the whole listing.
+        tab.cursor = tab
+            .entries
+            .iter()
+            .position(|e| e.name == "album")
+            .expect("album");
         tab.clear_filter();
         assert!(!tab.is_quick_filtered());
-        let shown: Vec<&str> = tab.entries.iter().map(|e| e.name.as_str()).collect();
-        assert_eq!(
-            shown,
-            ["..", "alpha", "beta", "album", "gamma"],
-            "whole listing back"
-        );
         assert_eq!(
             tab.entries.get(tab.cursor).map(|e| e.name.as_str()),
             Some("album"),
-            "cursor stays on the file that was reached"
+            "the cursor stays on the file that was reached"
+        );
+        assert_eq!(
+            shown_names(&tab),
+            ["..", "alpha", "beta", "album", "gamma"],
+            "and every row is shown again"
         );
     }
 

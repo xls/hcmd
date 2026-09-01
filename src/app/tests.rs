@@ -231,6 +231,49 @@ pub fn deliver(app: &mut App, side: Side, names: &[&str]) {
 }
 
 #[test]
+fn a_rescan_keeps_the_quick_search_filter_and_the_whole_listing() {
+    // The bug: a background rescan rebuilt the listing and the filter, which
+    // used to hold a narrowed copy, was clobbered - the hidden rows came back.
+    // The filter is now a view over the untouched listing, so a re-read of the
+    // same directory has the whole thing to reconcile against and the filter
+    // rides through it.
+    use crate::config::{QuickSearchCase, QuickSearchMode};
+    let mut app = App::headless(Config::default(), Keymap::builtin(), Theme::blue());
+    app.navigate(Side::Left, VfsPath::local("/x"));
+    deliver(&mut app, Side::Left, &["alpha", "beta", "album"]);
+    app.left.active_tab_mut().set_quick_filter(
+        "al".to_string(),
+        QuickSearchMode::Prefix,
+        QuickSearchCase::Smart,
+    );
+    assert!(app.left.active_tab().is_quick_filtered());
+
+    // A background rescan re-reads the same directory; a new file has appeared.
+    app.reread(Side::Left);
+    deliver(&mut app, Side::Left, &["alpha", "beta", "album", "delta"]);
+
+    assert!(
+        app.left.active_tab().is_quick_filtered(),
+        "the filter survives the rescan"
+    );
+    let names: Vec<&str> = app
+        .left
+        .active_tab()
+        .entries
+        .iter()
+        .map(|e| e.name.as_str())
+        .collect();
+    assert!(
+        names.contains(&"beta"),
+        "the whole listing is present, not a narrowed copy: {names:?}"
+    );
+    assert!(
+        names.contains(&"delta"),
+        "and the newly-arrived file is there: {names:?}"
+    );
+}
+
+#[test]
 fn a_reread_keeps_the_marks_and_the_cursor() {
     // selection is "preserved across re-reads where the path
     // still exists, cleared on directory change". A re-read is not a

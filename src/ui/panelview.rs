@@ -488,10 +488,14 @@ fn draw_entries(
         local_ids,
     };
 
-    for row in 0..usize::from(area.height) {
-        let index = tab.scroll.saturating_add(row);
+    // The rows to draw, top to bottom: the whole `scroll..` window normally,
+    // and only the rows a quick-search filter leaves shown when one is active.
+    // The cursor is a real index into `entries` either way, so a hidden row is
+    // simply skipped rather than the listing being narrowed.
+    let window = tab.shown_window(usize::from(area.height));
+    for (row, &index) in window.iter().enumerate() {
         let Some(entry) = tab.entries.get(index) else {
-            break;
+            continue;
         };
         let y = area
             .y

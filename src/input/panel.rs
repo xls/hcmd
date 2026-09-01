@@ -120,7 +120,7 @@ pub(super) fn refilter(app: &mut App) {
     if query.is_empty() {
         tab.clear_filter();
     } else {
-        tab.filter_to(|e| quicksearch::quick_match(&e.name, &query, mode, case));
+        tab.set_quick_filter(query, mode, case);
     }
     let rows = app.active_panel().view_rows;
     app.active_panel_mut()

@@ -34,20 +34,10 @@ impl App {
         if !keep_filter {
             panel.quick.clear();
         }
-        let len = panel.active_tab().entries.len();
-        if len == 0 {
-            return;
-        }
-        let last = len.saturating_sub(1);
-        let tab = panel.active_tab_mut();
-        let next = if delta >= 0 {
-            tab.cursor.saturating_add(delta.unsigned_abs()).min(last)
-        } else {
-            tab.cursor.saturating_sub(delta.unsigned_abs())
-        };
-        tab.cursor = next;
         let rows = panel.view_rows;
-        panel.active_tab_mut().scroll_into_view(rows);
+        // `move_by` walks shown rows only when a filter is hiding some, and is
+        // the ordinary index step otherwise; it also clamps and scrolls.
+        panel.active_tab_mut().move_by(delta, rows);
         // the quick view follows the active panel's cursor.
         // Here rather than in the key handlers, because every key that moves a
         // cursor comes through this one function and a debounce armed in only
@@ -63,10 +53,8 @@ impl App {
         if !keep_filter {
             panel.quick.clear();
         }
-        let last = panel.active_tab().entries.len().saturating_sub(1);
-        panel.active_tab_mut().cursor = index.min(last);
         let rows = panel.view_rows;
-        panel.active_tab_mut().scroll_into_view(rows);
+        panel.active_tab_mut().move_to(index, rows);
         self.note_quick_view_cursor();
     }
 
