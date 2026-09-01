@@ -739,19 +739,26 @@ fn value_line(text: &str, key: &str, needle: &str) -> Option<usize> {
 pub struct Schema {
     /// `key -> allowed child keys`. An empty child set means "any child is
     /// fine" (an open table such as `[terminal.sequences]`).
-    tables: BTreeMap<String, Option<Vec<&'static str>>>,
-    scalars: Vec<&'static str>,
+    tables: BTreeMap<String, Option<Vec<String>>>,
+    scalars: Vec<String>,
 }
 
 impl Schema {
     /// Declare a top-level scalar key.
-    pub fn scalar(&mut self, name: &'static str) {
-        self.scalars.push(name);
+    pub fn scalar(&mut self, name: &str) {
+        self.scalars.push(name.to_string());
     }
 
     /// Declare a table and the leaf keys it accepts.
-    pub fn table(&mut self, name: &str, keys: &[&'static str]) {
-        self.tables.insert(name.to_string(), Some(keys.to_vec()));
+    pub fn table<I, S>(&mut self, name: &str, keys: I)
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.tables.insert(
+            name.to_string(),
+            Some(keys.into_iter().map(Into::into).collect()),
+        );
     }
 
     /// Declare a table whose keys are user-chosen.
@@ -770,11 +777,11 @@ impl Schema {
     /// Is `key` allowed inside `table`? An empty `table` means the top level.
     fn allows(&self, table: &str, key: &str) -> bool {
         if table.is_empty() {
-            return self.scalars.contains(&key) || self.tables.contains_key(key);
+            return self.scalars.iter().any(|s| s == key) || self.tables.contains_key(key);
         }
         match self.tables.get(table) {
             Some(None) => true,
-            Some(Some(keys)) => keys.contains(&key),
+            Some(Some(keys)) => keys.iter().any(|k| k == key),
             None => false,
         }
     }
@@ -900,165 +907,81 @@ fn warn_at(text: &str, file_label: &str, key: &str, message: &str) -> String {
     }
 }
 
-/// The schema for `config.toml`.
+/// Tables whose keys the user invents, so no struct field can enumerate them:
+/// a column name, a language name, a key name, a glob. Everything else the
+/// validator knows comes from the structs themselves.
+const OPEN_TABLES: &[&str] = &[
+    "panel.columns.width",
+    "panel.columns.min_chars",
+    "open.handlers.match",
+    "viewer.highlight.lsp",
+    "terminal.sequences",
+    "filetypes.match",
+];
+
+/// The schema for `config.toml`, built from the same walk of [`Config`] that
+/// writes the file.
+///
+/// It used to be a second list, kept by hand beside the structs, and it drifted
+/// exactly as a second list does: `viewer` gained two keys in v0.4 and this did
+/// not, so writing either one was reported as an unknown key in a file the
+/// program itself had generated. One walk answers both questions now, so a new
+/// option is a field and nothing else.
 static CONFIG_SCHEMA: std::sync::LazyLock<Schema> = std::sync::LazyLock::new(|| {
-    let mut s = Schema::default();
-    s.table(
-        "ui",
-        &[
-            "theme",
-            "ascii_borders",
-            "show_menubar",
-            "show_keybar",
-            "mouse",
-            "split_ratio",
-            "confirm_exit",
-        ],
-    );
-    s.table(
-        "panel",
-        &[
-            "show_hidden",
-            "git_status",
-            "directories_first",
-            "human_sizes",
-            "thousands_separator",
-            "dir_brackets",
-            "attr_style",
-            "date_format",
-            "quick_search",
-            "quick_search_case",
-            "quick_search_filter",
-            "size_walk_style",
-            "digit_keys",
-            "max_tabs",
-            "show_tab_bar",
-            "columns",
-            "name_truncate",
-            "name_min_width",
-        ],
-    );
-    s.table(
-        "panel.columns",
-        &[
-            "order",
-            "width",
-            "min_chars",
-            "hide_priority",
-            "name_truncate",
-            "name_min_width",
-        ],
-    );
-    s.open_table("panel.columns.width");
-    s.open_table("panel.columns.min_chars");
-    s.table(
-        "console",
-        &[
-            "enabled",
-            "shell",
-            "switch_on_run",
-            // how long `auto` waits before deciding.
-            "switch_delay",
-            "scrollback",
-            "history_size",
-            // the command line is the shell's own input line, and
-            // a multi-line prompt needs the rows to say so.
-            "cmdline_rows",
-            "sync_cwd",
-            "inject_hooks",
-        ],
-    );
-    s.table("open", &["execute", "execute_in", "handlers"]);
-    s.table("open.handlers", &["match", "command"]);
-    s.open_table("open.handlers.match");
-    s.table("editor", &["command", "args", "warn_above"]);
-    s.table(
-        "viewer",
-        &[
-            "wrap",
-            "line_numbers",
-            // the two keys. They have been on `ViewerConfig` since
-            // v0.4 and were missing here, so writing either one was reported as
-            // an unknown key - the design.
-            "cursor",
-            "copy_max",
-            "tab_width",
-            "default_mode",
-            "open_as_document",
-            "diff_against_git",
-            "render",
-            "hex_width",
-            "hex",
-            "index_chunk",
-            "encoding",
-            "highlight",
-            // the quick view is the viewer, so its debounce is a
-            // `[viewer]` key.
-            "quick_view_delay",
-        ],
-    );
-    // the grouping table, likewise missing entirely. Note that
-    // 10.2.1's own example writes `width` here while the implementation spells
-    // it `viewer.hex_width`; the schema accepts the implementation's spelling
-    // only, because harmonising the two is a config change with a migration.
-    s.table("viewer.hex", &["group", "format", "endian"]);
-    s.table(
-        "viewer.encoding",
-        &["default", "detect", "fallback", "bom", "shortlist"],
-    );
-    s.table("viewer.highlight", &["engine", "max_size", "lsp"]);
-    s.table("viewer.render", &["max_size"]);
-    s.open_table("viewer.highlight.lsp");
-    s.table(
-        "ops",
-        &[
-            "follow_symlinks",
-            "preserve_attrs",
-            "trash_on_delete",
-            "confirm_overwrite",
-            "background_queue",
-            // the progress dialog's per-file bar, and the two
-            // transfer-rate numbers.
-            "file_bar_min_size",
-            "rate_window",
-            "rate_min_samples",
-            // the Shift+F2: how far two mtimes may drift and still
-            // count as the same, and whether the bytes are read at all.
-            "compare_mtime_slack",
-            "compare_contents",
-        ],
-    );
-    s.table(
-        "archive",
-        &[
-            "enter_on_click",
-            "temp_dir",
-            "rewrite_warn_size",
-            "rewrite_max_size",
-        ],
-    );
-    s.table("search", &["engine", "respect_gitignore"]);
-    s.table("devices", &["show_all"]);
-    s.table(
-        "remote",
-        &[
-            "default_protocol",
-            "connect_timeout",
-            "keepalive",
-            "view_max_size",
-            "pool_size",
-            "strict_host_keys",
-            "s3_credentials_from_env",
-            "listing_ttl",
-            "pipeline",
-        ],
-    );
-    s.table("terminal", &["keyboard_protocol", "colors", "sequences"]);
-    s.open_table("terminal.sequences");
-    s.table("filetypes", &["match", "slot"]);
-    s.open_table("filetypes.match");
-    s
+    let mut schema = schema_of(&emit::config_schema());
+    // An array-of-tables header says a `[[filetypes]]` block exists; the rule
+    // struct is what says what one holds. The generated file writes these from
+    // a curated example rather than from the walk, so their keys reach the
+    // validator here - still from the struct, never from a list beside it.
+    let mut rule = Vec::new();
+    config::FiletypeRule::describe("", &mut rule);
+    schema.table("filetypes", leaf_keys(&rule));
+    let mut handler = Vec::new();
+    config::OpenHandler::describe("", &mut handler);
+    schema.table("open.handlers", leaf_keys(&handler));
+    schema
 });
+
+/// The option keys in a schema, ignoring any nesting below them.
+fn leaf_keys(items: &[emit::SchemaItem]) -> Vec<String> {
+    items
+        .iter()
+        .filter_map(|item| match item {
+            emit::SchemaItem::Option { key, .. } => Some(key.clone()),
+            emit::SchemaItem::Section { .. } | emit::SchemaItem::ArraySection { .. } => None,
+        })
+        .collect()
+}
+
+/// Turn the generator's schema into the validator's.
+fn schema_of(items: &[emit::SchemaItem]) -> Schema {
+    let mut keys: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for item in items {
+        match item {
+            emit::SchemaItem::Section { path, .. }
+            | emit::SchemaItem::ArraySection { path, .. } => {
+                keys.entry(path.clone()).or_default();
+            }
+            emit::SchemaItem::Option { section, key, .. } => {
+                keys.entry(section.clone()).or_default().push(key.clone());
+            }
+        }
+    }
+    let mut schema = Schema::default();
+    for (path, leaves) in keys {
+        if path.is_empty() {
+            for key in leaves {
+                schema.scalar(&key);
+            }
+        } else {
+            schema.table(&path, leaves);
+        }
+    }
+    for open in OPEN_TABLES {
+        schema.open_table(open);
+    }
+    schema
+}
 
 /// `--check-config`: validate and report.
 ///
@@ -1583,6 +1506,24 @@ mod tests {
         assert_eq!(cfg.remote.connect_timeout.duration().as_secs(), 10);
         // The example file's deprecated engine value still loads.
         assert_eq!(cfg.viewer.highlight.engine, HighlightEngine::Syntect);
+    }
+
+    #[test]
+    fn the_validator_knows_every_option_the_generator_writes() {
+        // The two used to be separate lists, and they drifted: `viewer` gained
+        // keys the validator was never told about, so the program warned about
+        // a file it had written itself. They are one walk now, and this is what
+        // says so - a new option cannot reach the file without reaching the
+        // validator on the way.
+        for item in &emit::config_schema() {
+            let emit::SchemaItem::Option { section, key, .. } = item else {
+                continue;
+            };
+            assert!(
+                CONFIG_SCHEMA.allows(section, key),
+                "the generator writes {key:?} under {section:?}, the validator rejects it"
+            );
+        }
     }
 
     #[test]

@@ -93,27 +93,13 @@ pub fn join_section(parent: &str, key: &str) -> String {
     }
 }
 
-/// The whole configuration schema, in file order.
-///
-/// The built-ins come from walking [`Config`]; the walk ends at a seam where
-/// registered options (a plugin's own `[section] key`, once that exists) are
-/// appended, so [`generate`] emits the built-ins and anything registered from
-/// the one list. Nothing registers yet, so [`registered_items`] is empty today.
+/// The whole configuration schema, in file order: every table and option the
+/// structs describe. Both the generated file and the unknown-key validator are
+/// built from this one walk, so an option exists in exactly one place.
 pub fn config_schema() -> Vec<SchemaItem> {
     let mut items = Vec::new();
     Config::describe("", &mut items);
-    items.extend(registered_items());
     items
-}
-
-/// Schema entries contributed by something other than the built-in structs.
-///
-/// Empty for now. It exists as the place additional options are appended rather
-/// than hard-wiring the built-ins as the only possible source: the generator
-/// already consumes an extensible list, so a later registry has one obvious
-/// seam to feed into and nothing else has to change.
-fn registered_items() -> Vec<SchemaItem> {
-    Vec::new()
 }
 
 /// Generate the reference `config.toml` from a config value, every option

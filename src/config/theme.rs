@@ -720,12 +720,12 @@ fn distance(a: Rgb, b: Rgb) -> u32 {
 static THEME_SCHEMA: std::sync::LazyLock<super::Schema> = std::sync::LazyLock::new(|| {
     let mut s = super::Schema::default();
     s.scalar("name");
-    s.table("panel", PanelTheme::SLOTS);
-    s.table("cmdline", CmdlineTheme::SLOTS);
-    s.table("keybar", KeybarTheme::SLOTS);
-    s.table("dialog", DialogTheme::SLOTS);
-    s.table("viewer", ViewerTheme::SLOTS);
-    s.table("syn", SynTheme::SLOTS);
+    s.table("panel", PanelTheme::SLOTS.iter().copied());
+    s.table("cmdline", CmdlineTheme::SLOTS.iter().copied());
+    s.table("keybar", KeybarTheme::SLOTS.iter().copied());
+    s.table("dialog", DialogTheme::SLOTS.iter().copied());
+    s.table("viewer", ViewerTheme::SLOTS.iter().copied());
+    s.table("syn", SynTheme::SLOTS.iter().copied());
     s.open_table("fallback_16");
     s
 });

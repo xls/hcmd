@@ -565,7 +565,7 @@ pub enum ExecuteIn {
 }
 
 /// One `[[open.handlers]]` rule.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct OpenHandler {
     /// What it matches.
@@ -1367,7 +1367,7 @@ pub struct TerminalConfig {
 // --------------------------------------------------------- filetypes --------
 
 /// One `[[filetypes]]` rule.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ConfigDoc)]
 #[serde(default)]
 pub struct FiletypeRule {
     /// What it matches.
