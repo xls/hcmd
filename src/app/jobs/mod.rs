@@ -29,7 +29,7 @@ use crate::ops::{
     JobUpdate,
 };
 use crate::panel::Side;
-use crate::ui::dialog::{ConflictDialog, ProgressDialog, SummaryDialog};
+use crate::ui::dialog::{ConflictDialog, ProgressDialog, QueueDialog, SummaryDialog};
 use crate::vfs::{BackendKind, VfsPath};
 
 impl App {
@@ -476,12 +476,22 @@ impl App {
             .filter(|j| j.background && j.finished.is_some())
     }
 
-    /// Drop a finished job's status row.
+    /// Drop a job's status row, stopping it first if it is still going.
     ///
-    /// The queue view keeps finished rows until the user dismisses them
-    /// (the design lists "pending, active and failed"), so nothing removes
-    /// them automatically.
+    /// `Del` in the queue view removes the selected job now - the user is done
+    /// with it, whether it has finished or not. A job that is still running has
+    /// its worker cancelled before the row goes, so the worker notices,
+    /// removes any partial destination and exits rather than being orphaned
+    /// mid-copy. A finished job has no worker left to cancel, so for it this is
+    /// just the row leaving. Either way the list is shorter the instant the key
+    /// is pressed, which is what "cancelled and removed" means.
     pub fn forget_job(&mut self, id: JobId) {
+        // Stop the worker before dropping its handle: `JobHandle::cancel` sets
+        // the flag and releases a worker parked on a conflict question, so a
+        // waiting job is not left blocked on an answer that will never come.
+        if let Some(handle) = self.jobs.handle(id) {
+            handle.cancel();
+        }
         // Row, spec, handle and queue slot together: a job forgotten before
         // it ever started must not be handed out by a later `release`, since
         // nothing would render it and nothing would be able to cancel it.
@@ -577,11 +587,80 @@ impl App {
     ///    what makes a backgrounded job come back "exactly as it was".
     pub fn sync_job_dialogs(&mut self) {
         self.settle_finished_jobs();
+        self.prune_completed_jobs();
+        self.foreground_blocked_job();
         self.sync_progress_dialog();
         self.sync_conflict_dialog();
         let jobs = self.jobs.rows().to_vec();
         for frame in &mut self.dialogs {
             frame.dialog.job_update(&jobs);
+        }
+        self.close_emptied_queue();
+    }
+
+    /// Drop every finished job the user has nothing left to do with.
+    ///
+    /// A task that completed or was cancelled leaves the queue on its own; only
+    /// a *failure* stays, because it is the one outcome with something still to
+    /// act on - open its errors, retry it. Cancellation is not failure: a job
+    /// stopped part-way through a file may record the file it was interrupted
+    /// on, but the user asked for it to stop, so it goes like any other
+    /// cancelled task ([`JobSummary::is_failure`] draws that line).
+    fn prune_completed_jobs(&mut self) {
+        let done: Vec<JobId> = self
+            .jobs
+            .rows()
+            .iter()
+            .filter(|j| j.finished.as_deref().is_some_and(|s| !s.is_failure()))
+            .map(|j| j.id)
+            .collect();
+        for id in done {
+            self.jobs.forget(id);
+        }
+    }
+
+    /// Bring a stuck background task to the foreground.
+    ///
+    /// A background worker that blocks on a question emits it as a pending
+    /// decision. Since one task runs at a time, the moment the main thread sees
+    /// a blocked background job it opens it - exactly as pressing `Enter` on it
+    /// in the queue would - so the progress dialog and the question on it are on
+    /// screen without the user having to go looking. The other tasks stay in
+    /// the queue. Nothing happens while a task is already foreground: the one on
+    /// screen is answered first.
+    fn foreground_blocked_job(&mut self) {
+        if self.progress_job().is_some() {
+            return;
+        }
+        let blocked = self
+            .jobs
+            .rows()
+            .iter()
+            .find(|j| j.finished.is_none() && j.background && j.needs_attention())
+            .map(|j| j.id);
+        if let Some(id) = blocked {
+            self.foreground_job(id);
+        }
+    }
+
+    /// Close the queue view once it has run dry.
+    ///
+    /// A finish removes its job and `Del` removes one by hand; when the last
+    /// job goes the view has nothing left to show, so it returns to the panels
+    /// on its own - "if no tasks are left you can close the dialog". A queue the
+    /// user opened with nothing running is left alone: it said "no jobs in the
+    /// queue" on purpose.
+    fn close_emptied_queue(&mut self) {
+        let close = self.dialogs.last().is_some_and(|frame| {
+            frame.dialog.id() == DialogId::JobQueue
+                && frame
+                    .dialog
+                    .as_any()
+                    .and_then(|any| any.downcast_ref::<QueueDialog>())
+                    .is_some_and(QueueDialog::should_auto_close)
+        });
+        if close {
+            self.pop_dialog();
         }
     }
 
@@ -1082,5 +1161,175 @@ mod tests {
         ));
         assert!(app.foreground_job_status().is_none());
         assert_ne!(id, dir);
+    }
+
+    /// A summary for a `Size` walk that ended with the given failures.
+    fn size_summary(failures: Vec<crate::ops::JobFailure>) -> JobSummary {
+        JobSummary {
+            kind: JobKind::Size,
+            files_done: 1,
+            dirs_done: 0,
+            bytes_done: 0,
+            skipped: 0,
+            failures,
+            cancelled: false,
+            elapsed: std::time::Duration::ZERO,
+            sized: Vec::new(),
+            differing: Vec::new(),
+            first_difference: None,
+        }
+    }
+
+    #[test]
+    fn a_clean_job_drops_out_of_the_queue_and_a_failed_one_stays() {
+        // "completed tasks automatically disappear" - a clean finish has
+        // nothing left to look at, so its row goes; a failure is the way back
+        // to the summary, so it stays.
+        let mut app = App::headless(Config::default(), Keymap::builtin(), Theme::blue());
+        let clean = app.request_job(JobSpec::size(vec![VfsPath::local("/a")]));
+        let failed = app.request_job(JobSpec::size(vec![VfsPath::local("/b")]));
+        app.apply_job_event(JobUpdate {
+            id: clean,
+            event: JobEvent::Finished {
+                summary: Box::new(size_summary(Vec::new())),
+            },
+        });
+        app.apply_job_event(JobUpdate {
+            id: failed,
+            event: JobEvent::Finished {
+                summary: Box::new(size_summary(vec![crate::ops::JobFailure {
+                    path: VfsPath::local("/b"),
+                    error: "Permission denied".to_string(),
+                }])),
+            },
+        });
+
+        app.sync_job_dialogs();
+
+        assert!(app.job(clean).is_none(), "the clean walk left the queue");
+        assert!(app.job(failed).is_some(), "the failed one is still there");
+    }
+
+    #[test]
+    fn a_cancelled_job_is_cleared_even_with_a_stray_failure() {
+        // The bug: a task cancelled part-way through a file recorded that file
+        // as a failure and so was mistaken for a failed job and kept. Cancelled
+        // is not failed - the user stopped it, so it goes.
+        let mut app = App::headless(Config::default(), Keymap::builtin(), Theme::blue());
+        let id = app.request_job(JobSpec::size(vec![VfsPath::local("/a")]));
+        let mut summary = size_summary(vec![crate::ops::JobFailure {
+            path: VfsPath::local("/a/mid-file"),
+            error: "cancelled mid-copy".to_string(),
+        }]);
+        summary.cancelled = true;
+        app.apply_job_event(JobUpdate {
+            id,
+            event: JobEvent::Finished {
+                summary: Box::new(summary),
+            },
+        });
+
+        app.sync_job_dialogs();
+
+        assert!(app.job(id).is_none(), "a cancelled task clears itself");
+    }
+
+    #[test]
+    fn a_blocked_background_task_is_brought_to_the_foreground() {
+        // A stuck background worker emits its blockage as a pending decision;
+        // the main thread opens it, as pressing Enter on it would, so the
+        // question is on screen rather than waiting in the queue.
+        let mut app = App::headless(Config::default(), Keymap::builtin(), Theme::blue());
+        let id = app.request_job(JobSpec::new(
+            JobKind::Copy,
+            vec![VfsPath::local("/etc/hostname")],
+            Some(VfsPath::local("/tmp")),
+        ));
+        app.background_job(id);
+        assert!(app.job(id).is_some_and(|j| j.background));
+
+        // The worker parks on a conflict.
+        if let Some(status) = app.jobs.status_mut(id) {
+            status.started = true;
+            status.pending_decision = Some(Box::new(crate::ops::ConflictRequest {
+                source: VfsPath::local("/etc/hostname"),
+                dest: VfsPath::local("/tmp/hostname"),
+                source_size: 1,
+                dest_size: 2,
+                source_mtime: None,
+                dest_mtime: None,
+                both_dirs: false,
+                dest_is_dir: false,
+            }));
+        }
+
+        app.sync_job_dialogs();
+
+        assert!(
+            app.job(id).is_some_and(|j| !j.background),
+            "the blocked task was brought to the foreground"
+        );
+    }
+
+    #[test]
+    fn the_queue_view_closes_once_its_last_job_leaves() {
+        // "if no tasks are left you can close the dialog": a queue opened on
+        // work returns to the panels when the work is gone.
+        let mut app = App::headless(Config::default(), Keymap::builtin(), Theme::blue());
+        let id = app.request_job(JobSpec::size(vec![VfsPath::local("/a")]));
+        app.push_dialog(Box::new(QueueDialog::new(app.jobs.rows().to_vec())));
+        assert!(app.dialog_is_open());
+
+        app.apply_job_event(JobUpdate {
+            id,
+            event: JobEvent::Finished {
+                summary: Box::new(size_summary(Vec::new())),
+            },
+        });
+        app.sync_job_dialogs();
+
+        assert!(app.job(id).is_none());
+        assert!(!app.dialog_is_open(), "an emptied queue closes itself");
+    }
+
+    #[test]
+    fn forgetting_a_running_job_cancels_its_worker_before_dropping_the_row() {
+        // `Del` on a job that is still going stops it, rather than orphaning a
+        // worker that keeps copying with no row to cancel it from.
+        let mut app = App::headless(Config::default(), Keymap::builtin(), Theme::blue());
+        let id = app.request_job(JobSpec::new(
+            JobKind::Copy,
+            vec![VfsPath::local("/etc/hostname")],
+            Some(VfsPath::local("/tmp")),
+        ));
+        // Stand in for the worker the event loop would have spawned: a handle
+        // whose cancel flag this test can read back.
+        let cancel = crate::ops::CancelFlag::new();
+        let (decisions, _rx) = tokio::sync::mpsc::channel(2);
+        app.jobs.register(crate::ops::JobHandle {
+            id,
+            kind: JobKind::Copy,
+            cancel: cancel.clone(),
+            decisions,
+        });
+        assert!(app.job(id).is_some());
+
+        app.forget_job(id);
+
+        assert!(cancel.is_cancelled(), "the worker was told to stop");
+        assert!(app.job(id).is_none(), "and the row is gone at once");
+    }
+
+    #[test]
+    fn a_queue_opened_with_nothing_running_stays_up() {
+        // The other half of the rule: opened empty on purpose (Alt+F9 on an
+        // idle session), it says "no jobs" rather than flashing shut.
+        let mut app = App::headless(Config::default(), Keymap::builtin(), Theme::blue());
+        app.push_dialog(Box::new(QueueDialog::new(Vec::new())));
+        app.sync_job_dialogs();
+        assert!(
+            app.dialog_is_open(),
+            "an empty queue the user asked for stays"
+        );
     }
 }

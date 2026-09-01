@@ -516,6 +516,11 @@ pub async fn event_loop() -> Result<()> {
         }
 
         let size = term.terminal().size()?;
+        // Below the minimum the screen is one message, and a dialog cannot be
+        // drawn to confirm a quit - so `Esc`, `F10` and `q` leave at once when
+        // the terminal is that small, which is the only thing the message
+        // promises the user can do.
+        let tiny = crate::term::too_small(size.width, size.height);
         // "The PTY is resized with the terminal." The shell is
         // given the *whole* screen even while the panels are showing, because
         // `Ctrl+O` hands it exactly that - a `vim` started from
@@ -673,6 +678,9 @@ pub async fn event_loop() -> Result<()> {
         tokio::select! {
             maybe = key_rx.recv() => {
                 match maybe {
+                    Some(Ok(event)) if tiny && is_escape_hatch(&event) => {
+                        app.should_quit = true;
+                    }
                     Some(Ok(event)) => {
                         let route = app.input_route();
                         apply_input(&mut app, &mut term, event, opening_viewer, &mut held_keys)?;
@@ -1742,6 +1750,21 @@ pub fn track_modifiers(app: &mut App, key: crossterm::event::KeyEvent) {
         // An ordinary key: keep only the modifiers it agrees are down.
         None => app.keyboard.note_key(key.modifiers),
     }
+}
+
+/// Whether a key is one of the ways out offered on the too-small screen:
+/// `Esc`, `F10`, or `q`. A press, not a release.
+fn is_escape_hatch(event: &Event) -> bool {
+    use crossterm::event::{KeyCode, KeyEventKind};
+    matches!(
+        event,
+        Event::Key(key)
+            if key.kind != KeyEventKind::Release
+                && matches!(
+                    key.code,
+                    KeyCode::Esc | KeyCode::F(10) | KeyCode::Char('q') | KeyCode::Char('Q')
+                )
+    )
 }
 
 /// Insert a bracketed paste at the command-line caret.

@@ -584,6 +584,17 @@ impl JobSummary {
         self.failures.is_empty() && !self.cancelled
     }
 
+    /// True when the job failed and was not cancelled: the one finished state
+    /// worth keeping in the queue, because there is still something to act on.
+    ///
+    /// Cancellation is deliberately not failure. A job stopped part-way through
+    /// a file can record that file as a failure, but the user asked for it to
+    /// stop, so it is treated as cancelled and cleared rather than kept as an
+    /// error they did not make.
+    pub fn is_failure(&self) -> bool {
+        !self.cancelled && !self.failures.is_empty()
+    }
+
     /// A one-line status-line report.
     pub fn message(&self) -> String {
         let verb = match self.kind {

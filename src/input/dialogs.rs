@@ -122,6 +122,15 @@ pub(super) fn dialog_key(app: &mut App, press: KeyPress, ctx: KeyContext) -> Res
                 dialog_answered(app, id, job, result);
             }
         }
+        DialogOutcome::Act(result) => {
+            // The queue view's `Del`: the job it names is cancelled or dropped,
+            // but the dialog stays open on the jobs that remain. Nothing is
+            // popped; the id and job come from the dialog still on top.
+            if let Some(dialog) = app.top_dialog() {
+                let (id, job) = (dialog.id(), dialog.job());
+                dialog_answered(app, id, job, result);
+            }
+        }
         DialogOutcome::Push(next) => app.push_dialog(next),
         DialogOutcome::Replace(next) => {
             app.pop_dialog();

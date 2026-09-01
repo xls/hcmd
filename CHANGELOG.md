@@ -2,6 +2,17 @@
 
 Notable changes per release, one line each. Newest first.
 
+## v0.9.9
+
+- Alt+F9 opens a background jobs dialog: a progress bar per job, an overall bar, and a small activity indicator in the panel's bottom-right corner while any work is running.
+- In that dialog Del cancels and removes a job at once; a completed or cancelled job disappears on its own, and the dialog closes once nothing is left.
+- A background task that blocks on a question is brought to the foreground on its own, so the prompt is on screen instead of waiting unseen in the queue.
+- The size cell animates while a folder is being walked, in place of <DIR>; the style is configurable (panel.size_walk_style, off to keep <DIR>).
+- The panel's top bar shows free space in human-readable units with the percentage in use, rather than a raw kilobyte count.
+- hcmd --update-config appends commented examples of newly added options to an existing config without changing any of your settings, and the installer offers to run it.
+- The configuration is reloaded as soon as the editor opened from the menu's "Edit configuration" is closed.
+- Below its minimum screen size the app now says so, and its size, and lets you quit with Esc, F10 or Q instead of drawing a broken layout.
+
 ## v0.9.8
 
 - Quick search can now filter the listing to matches as you type (panel.quick_search_filter, off by default); the arrows walk what is left and Esc brings the whole listing back.

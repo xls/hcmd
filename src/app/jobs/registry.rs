@@ -43,7 +43,7 @@ pub struct Jobs {
     /// Jobs whose progress dialog the user closed, so it is not immediately
     /// put back while the worker winds down. Cancelling is not instantaneous.
     dismissed: HashSet<JobId>,
-    /// Jobs whose `Finished` has already been acted on, so the summary opens
+    /// Jobs whose `Finished` has already been acted on, so a finish is reported
     /// once rather than on every frame.
     settled: HashSet<JobId>,
     /// "When this job finishes cleanly, re-read this panel and put the cursor
@@ -223,6 +223,7 @@ impl Jobs {
         self.rows.retain(|j| j.id != id);
         self.handles.remove(&id);
         self.specs.remove(&id);
+        self.dismissed.remove(&id);
         if self.queue.contains(id) {
             self.queue.cancel(id);
         }

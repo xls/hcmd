@@ -772,6 +772,7 @@ mod tests {
         match outcome {
             DialogOutcome::Accept(DialogResult::Text(text)) => Some(text.clone()),
             DialogOutcome::Accept(_)
+            | DialogOutcome::Act(_)
             | DialogOutcome::Consumed
             | DialogOutcome::Ignored
             | DialogOutcome::Cancel

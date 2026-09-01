@@ -10,9 +10,19 @@
 //! │ #1 Copying          running    43 %   10 / 200 files │
 //! │ #2 Moving to trash  waiting    a conflict needs an…  │
 //! │ #3 Deleting         failed     3 failed              │
-//! │ Enter open · Del forget · Esc panels                 │
+//! │ Enter open · Del cancel · Esc close                  │
 //! └──────────────────────────────────────────────────────┘
 //! ```
+//!
+//! # `Del` cancels; the list keeps itself
+//!
+//! A job the user is done with is not "forgotten" by hand: a clean or
+//! cancelled job drops out of the list on its own the frame after it settles,
+//! so the queue view shows only work that is still going or still has a failure
+//! to look at. `Del` removes the selected job now - a running one is cancelled
+//! (its worker stopped and its partial output cleaned up) and a failed one is
+//! simply dropped, both leaving the list the instant the key is pressed. The
+//! dialog stays open on the jobs that remain, and closes itself once none do.
 //!
 //! # A finished job's failures open here, not over the panels
 //!
@@ -36,8 +46,9 @@ use crate::input::{DialogId, KeyCode};
 use crate::ops::JobStatus;
 use crate::ui::text;
 
-/// The footer's hint line.
-const HINT: &str = "Enter open  Del forget  Esc panels";
+/// The footer's hint line. Not controls to focus - the queue view has no focus
+/// ring - just a reminder of what the three keys do.
+const HINT: &str = "Enter open  Del cancel  Esc close";
 
 /// How wide each row's own progress bar is drawn.
 const ROW_BAR_WIDTH: usize = 16;
@@ -54,6 +65,10 @@ pub struct QueueDialog {
     /// were recomputed from the cursor alone. Written by
     /// [`crate::dialog::Dialog::layout`], once per frame, before the draw.
     scroll: usize,
+    /// Whether this view has ever had a job in it. A queue that empties out
+    /// after showing work closes itself; one opened with nothing in it stays,
+    /// saying "no jobs in the queue", because the user asked to see it.
+    seen_jobs: bool,
 }
 
 impl QueueDialog {
@@ -64,6 +79,7 @@ impl QueueDialog {
     /// half the row.
     pub fn new(jobs: Vec<JobStatus>) -> Self {
         Self {
+            seen_jobs: !jobs.is_empty(),
             jobs,
             cursor: 0,
             scroll: 0,
@@ -74,6 +90,7 @@ impl QueueDialog {
     /// there - a job finishing must not move the selection under the user.
     pub fn update(&mut self, jobs: Vec<JobStatus>) {
         let selected = self.selected().map(|status| status.id);
+        self.seen_jobs = self.seen_jobs || !jobs.is_empty();
         self.jobs = jobs;
         self.cursor = selected
             .and_then(|id| self.jobs.iter().position(|status| status.id == id))
@@ -182,15 +199,25 @@ impl QueueDialog {
         }
     }
 
-    /// `Del`: drop a finished job from the list. A running one is left alone -
-    /// forgetting a live job would orphan its worker.
-    fn forget(&self) -> DialogOutcome {
-        match self.selected() {
-            Some(status) if status.finished.is_some() => {
-                DialogOutcome::Accept(DialogResult::Text(JobAction::Forget(status.id).encode()))
-            }
-            _ => DialogOutcome::Consumed,
-        }
+    /// `Del`: remove the selected job now - cancelled if it was still running,
+    /// simply dropped if it had already finished.
+    ///
+    /// One action for both, because [`crate::app::App::forget_job`] cancels a
+    /// live job's worker before it drops the row: the operation stops and the
+    /// row leaves the list the instant the key is pressed. The dialog stays
+    /// open ([`DialogOutcome::Act`], not `Accept`) on the jobs that remain, and
+    /// closes itself once none do.
+    fn remove(&self) -> DialogOutcome {
+        let Some(status) = self.selected() else {
+            return DialogOutcome::Consumed;
+        };
+        DialogOutcome::Act(DialogResult::Text(JobAction::Forget(status.id).encode()))
+    }
+
+    /// Whether the view should close itself: it has shown work and now has
+    /// none left. A queue opened empty stays open, saying so.
+    pub fn should_auto_close(&self) -> bool {
+        self.seen_jobs && self.jobs.is_empty()
     }
 
     /// The combined progress of every running job, by bytes, or `None` when no
@@ -248,6 +275,12 @@ impl QueueDialog {
 impl Dialog for QueueDialog {
     fn id(&self) -> DialogId {
         DialogId::JobQueue
+    }
+
+    /// So the sync can ask [`Self::should_auto_close`] whether an emptied queue
+    /// should return to the panels.
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
     }
 
     fn title(&self) -> String {
@@ -319,7 +352,7 @@ impl Dialog for QueueDialog {
                 self.cursor = self.jobs.len().saturating_sub(1);
                 DialogOutcome::Consumed
             }
-            KeyCode::Delete => self.forget(),
+            KeyCode::Delete => self.remove(),
             _ => DialogOutcome::Ignored,
         }
     }
@@ -592,19 +625,40 @@ mod tests {
     }
 
     #[test]
-    fn del_forgets_a_finished_job_and_leaves_a_live_one_alone() {
+    fn del_removes_the_selected_job_whether_running_or_finished() {
         let mut d = dialog();
-        assert!(matches!(
-            d.handle_key(&key(KeyCode::Delete)),
-            DialogOutcome::Consumed
-        ));
+        // A running job and a finished one both leave by the same action -
+        // `forget_job` cancels the live one's worker on the way out. The dialog
+        // stays open on the rest each time: `Act`, not `Accept`.
+        d.handle_key(&key(KeyCode::Home));
+        match d.handle_key(&key(KeyCode::Delete)) {
+            DialogOutcome::Act(DialogResult::Text(text)) => {
+                assert_eq!(JobAction::parse(&text), Some(JobAction::Forget(JobId(1))));
+            }
+            other => panic!("{other:?}"),
+        }
         d.handle_key(&key(KeyCode::End));
         match d.handle_key(&key(KeyCode::Delete)) {
-            DialogOutcome::Accept(DialogResult::Text(text)) => {
+            DialogOutcome::Act(DialogResult::Text(text)) => {
                 assert_eq!(JobAction::parse(&text), Some(JobAction::Forget(JobId(4))));
             }
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn a_queue_that_empties_after_showing_work_closes_itself() {
+        let mut d = dialog();
+        assert!(!d.should_auto_close(), "there is still work to show");
+        d.update(Vec::new());
+        assert!(d.should_auto_close(), "nothing left, so it closes");
+    }
+
+    #[test]
+    fn a_queue_opened_with_nothing_running_stays_open() {
+        // Alt+F9 on an idle session says so rather than flashing shut.
+        let d = QueueDialog::new(Vec::new());
+        assert!(!d.should_auto_close());
     }
 
     #[test]
@@ -671,7 +725,7 @@ mod tests {
         for (w, h) in [(200u16, 50u16), (80, 24), (60, 15)] {
             for ascii in [false, true] {
                 let out = dump(&render(&dialog(), w, h, ascii));
-                assert!(out.contains("Esc panels"), "{w}x{h} ascii={ascii}:\n{out}");
+                assert!(out.contains("Esc close"), "{w}x{h} ascii={ascii}:\n{out}");
             }
         }
     }

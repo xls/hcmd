@@ -412,6 +412,7 @@ fn draw_too_small(f: &mut Frame, app: &App, area: Rect) {
             "{}x{}, need {MIN_WIDTH}x{MIN_HEIGHT}",
             area.width, area.height
         ),
+        "Esc / F10 / q to quit".to_string(),
     ];
     let rows = u16::try_from(lines.len()).unwrap_or(1).min(area.height);
     let top = area.y.saturating_add(area.height.saturating_sub(rows) / 2);
@@ -431,38 +432,54 @@ fn draw_too_small(f: &mut Frame, app: &App, area: Rect) {
     f.set_cursor_position((area.x, top));
 }
 
-/// The menu bar.
-/// A small `[·●···]` in the right panel's top-right corner while background
-/// jobs are running - the only hint they exist without opening the queue.
+/// A small `[·●···]` in the right panel's **bottom-right** corner while
+/// background jobs are running - the only hint they exist without opening the
+/// queue.
 ///
-/// Drawn over the top border just before the corner, and only when the panel is
-/// wide enough that it does not crowd the border. Its animation is the size
-/// walk's, so the two read the same; when that is turned off it still shows
-/// dots, because here the point is only "something is happening".
+/// Drawn over the bottom border just before the corner, where nothing else is
+/// drawn, and only when the panel is wide enough that it does not crowd the
+/// border. Its animation is the size walk's, so the two read the same; when
+/// that is turned off it still shows dots, because here the point is only
+/// "something is happening".
 fn draw_activity_indicator(f: &mut Frame, app: &App, panel: Rect) {
+    const WIDTH: usize = 5; // animation cells between the brackets
     const CELLS: u16 = 7; // `[` + five animation cells + `]`.
     if !app.jobs.any_active() || panel.height == 0 || panel.width < CELLS.saturating_add(12) {
         return;
     }
-    let style = match app.config.panel.size_walk_style {
-        crate::config::SizeWalkStyle::Off => crate::config::SizeWalkStyle::Dots,
-        other => other,
-    };
-    let anim =
-        panelview::walk_indicator(style, app.animation.elapsed(), app.config.ui.ascii_borders);
+    // Deliberately the ASCII animation, never the panel's chosen glyph style.
+    // The size column can afford a decorated glyph because it owns its cell;
+    // this indicator sits one column from the box corner, and the block-drawing
+    // and dot glyphs the pretty styles use are *ambiguous width* - a terminal
+    // set to render them two cells wide pushes the closing bracket off its
+    // column and the animation bleeds into it. `#` and `.` are one cell in
+    // every terminal, so the bracket always closes where it is drawn.
+    let anim = panelview::walk_indicator(
+        crate::config::SizeWalkStyle::Snake,
+        app.animation.elapsed(),
+        true,
+    );
+    // A belt-and-braces clamp: whatever the animation returns is forced to
+    // exactly five columns, so the field can never grow and shove the bracket.
+    let anim = text::fit_left(&anim, WIDTH, Crop::End, "");
     let depth = app.color_depth;
     let style = Style::new()
         .fg(app.theme.quantize(app.theme.panel.marked_fg, depth))
         .bg(app.theme.quantize(app.theme.panel.bg, depth));
-    // Leave the corner glyph itself, so the box still closes cleanly.
-    let x = panel.right().saturating_sub(CELLS.saturating_add(1));
-    let rect = Rect::new(x, panel.y, CELLS, 1);
+    // The bottom border row of the panel box, right end. Two columns are left
+    // between the `]` and the box corner: one blank so the bracket does not
+    // butt against the corner, and the corner glyph itself so the box still
+    // closes cleanly.
+    let x = panel.right().saturating_sub(CELLS.saturating_add(2));
+    let y = panel.bottom().saturating_sub(1);
+    let rect = Rect::new(x, y, CELLS, 1);
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(format!("[{anim}]"), style))),
         rect,
     );
 }
 
+/// The menu bar.
 fn draw_menubar(f: &mut Frame, app: &App, area: Rect) {
     if area.width == 0 || area.height == 0 {
         return;
@@ -2230,6 +2247,59 @@ mod tests {
         ] {
             assert_ne!(q(fg), q(bg), "{what} bar is unreadable at 16 colours");
         }
+    }
+
+    #[test]
+    fn the_activity_indicator_sits_on_the_bottom_border_not_the_volume_line() {
+        // Twice reported drawn over the top border's free-space figure; it
+        // belongs on the bottom border of the right panel, right end, clear of
+        // the corner. This pins the row so it cannot drift back up.
+        use crate::ops::JobSpec;
+        let mut a = app();
+        a.request_job(JobSpec::size(vec![VfsPath::local("/etc")]));
+        let buf = render(&a, 100, 30);
+        let area = *buf.area();
+
+        let right_half = |y: u16| -> String {
+            (area.right().saturating_sub(20)..area.right())
+                .map(|x| buf.cell((x, y)).map_or(" ", |c| c.symbol()))
+                .collect()
+        };
+        let row_with_bracket = (area.y..area.bottom())
+            .find(|&y| right_half(y).contains('['))
+            .expect("the indicator is drawn somewhere on the right");
+
+        // The volume line is the top border of the panel box: it carries the
+        // free-space figure, and the indicator must not be on it.
+        let top = right_half(area.y);
+        assert!(
+            top.contains("free"),
+            "the top border carries the volume line"
+        );
+        assert!(
+            !top.contains('['),
+            "the indicator bled onto the volume line: |{top}|"
+        );
+        // The bracket's row is a horizontal border, not a text line.
+        let bracket_row = right_half(row_with_bracket);
+        assert!(
+            !bracket_row.contains("free"),
+            "the indicator landed on the volume line: |{bracket_row}|"
+        );
+        assert!(
+            bracket_row.contains(']'),
+            "the closing bracket is drawn, not bled off: |{bracket_row}|"
+        );
+        // The animation between the brackets is ASCII on purpose: an
+        // ambiguous-width glyph would render two cells wide in some terminals
+        // and shove the closing bracket off its column.
+        let start = bracket_row.find('[').expect("an opening bracket");
+        let end = bracket_row[start..].find(']').expect("a closing bracket") + start;
+        let inside = &bracket_row[start + 1..end];
+        assert!(
+            inside.is_ascii(),
+            "the indicator animation must be ASCII, not |{inside}|"
+        );
     }
 
     #[test]

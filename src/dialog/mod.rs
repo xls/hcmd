@@ -383,6 +383,10 @@ pub enum DialogOutcome {
     Cancel,
     /// Close and act on the result (`Enter`, `OK`).
     Accept(DialogResult),
+    /// Act on the result but **stay open**: the queue view's `Del`, which
+    /// cancels or drops the selected job and then keeps showing the ones that
+    /// remain.
+    Act(DialogResult),
     /// Stay open and open another on top: the copy dialog's `+ F7`.
     Push(Box<dyn Dialog>),
     /// Close and open another in its place.
@@ -396,6 +400,7 @@ impl std::fmt::Debug for DialogOutcome {
             Self::Ignored => f.write_str("Ignored"),
             Self::Cancel => f.write_str("Cancel"),
             Self::Accept(result) => write!(f, "Accept({result:?})"),
+            Self::Act(result) => write!(f, "Act({result:?})"),
             Self::Push(_) => f.write_str("Push(..)"),
             Self::Replace(_) => f.write_str("Replace(..)"),
         }
