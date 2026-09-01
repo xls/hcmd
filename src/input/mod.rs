@@ -907,6 +907,14 @@ pub(crate) fn run_action(app: &mut App, action: Action, press: KeyPress) -> Resu
                 }
             }
         }
+        A::OtherPanelSameDir => {
+            // The panel's own directory, not the row under the cursor: this is
+            // "bring the other side here", which is the move before a copy
+            // between two places in one tree. `other_panel_cd` answers the
+            // different question of where the thing under the cursor lives.
+            let here = app.active_panel().active_tab().path.clone();
+            app.navigate(app.active_side.other(), here);
+        }
         A::LeaveVirtual => {
             // the design makes this a second, *state-dependent* meaning of
             // `Ctrl+R` and `Esc` rather than a binding of its own - "one key,

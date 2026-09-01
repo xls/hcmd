@@ -285,6 +285,7 @@ actions! {
     Home              = "home",              V01,  "Go to the home directory";
     GotoPath          = "goto_path",         V01,  "Prompt for a path and go there";
     OtherPanelCd      = "other_panel_cd",    V01,  "Show the entry under the cursor in the other panel";
+    OtherPanelSameDir = "other_panel_same_dir", V09, "Show this panel's own directory in the other panel";
     FocusCmdline      = "focus_cmdline",     V01,  "Move focus to the command line";
     PutSelected       = "put_selected",      V01,  "Insert the entry under the cursor at the command line caret";
     PutSelectedPath   = "put_selected_path", V01,  "Insert the full path of the entry under the cursor at the caret";

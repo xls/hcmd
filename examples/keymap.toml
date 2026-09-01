@@ -236,6 +236,8 @@ home              = ["ctrl+home", "ctrl+shift+g"]
 # keeps this usable where ctrl+shift+g cannot be delivered.
 goto_path         = ["ctrl+g"]
 other_panel_cd    = ["ctrl+left", "ctrl+right"]
+# Bring the other panel here: its own directory, not the row under the cursor.
+other_panel_same_dir = ["ctrl+e"]
 focus_cmdline     = ["left", "right"]
 put_selected      = ["ctrl+enter", "alt+enter"]
 toggle_select     = ["insert"]
