@@ -85,6 +85,10 @@ impl ArchiveFormat for ZipFormat {
         WriteModel::Member
     }
 
+    fn can_create(&self) -> bool {
+        true
+    }
+
     fn index(&self, container: &Path, sink: &mut dyn IndexSink) -> Result<()> {
         let mut archive = open(container)?;
         let count = archive.len();

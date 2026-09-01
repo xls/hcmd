@@ -78,12 +78,15 @@ pub fn run(vfs: &dyn Vfs, spec: &JobSpec, ctx: &mut JobContext, into: PackInto) 
         return;
     };
     let format = into.format.backend();
-    if !format.write_model().writable() {
-        // refused up front, before a source is read.
+    if !format.can_create() {
+        // refused up front, before a source is read. `can_create`, not
+        // `write_model`: this job makes a new container, and a format that
+        // can rewrite a member of an existing archive is not thereby one
+        // that a selection can be packed into.
         ctx.start(0, 0);
         ctx.fail(
             dest,
-            format!("a {} archive cannot be written to", into.format),
+            format!("a new {} archive cannot be created", into.format),
         );
         return;
     }

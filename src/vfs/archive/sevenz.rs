@@ -79,6 +79,10 @@ impl ArchiveFormat for SevenZFormat {
         WriteModel::FullRewrite
     }
 
+    fn can_create(&self) -> bool {
+        true
+    }
+
     fn index(&self, container: &Path, sink: &mut dyn IndexSink) -> Result<()> {
         let archive = sevenz_rust2::Archive::open(container)
             .map_err(|e| Error::msg(format!("{}: {e}", container.display())))?;

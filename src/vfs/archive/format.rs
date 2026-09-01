@@ -494,6 +494,22 @@ pub trait ArchiveFormat: Send + Sync + std::fmt::Debug {
         let _ = container;
     }
 
+    /// Can `Alt+F5` create a **new** archive of this format?
+    ///
+    /// A different question from [`ArchiveFormat::write_model`], which
+    /// answers for members of an archive that already exists. The two agree
+    /// today only because every member-writable format happens to be a
+    /// container: a single-file compressor that learned to rewrite its one
+    /// member would become writable without ever becoming something five
+    /// files fit into, and a pack offer filtered on `writable()` would then
+    /// fail at the job. The pack dialog and the pack runner ask this instead.
+    ///
+    /// `true` exactly where [`ArchiveFormat::create`] is implemented; the
+    /// default matches `create`'s default refusal.
+    fn can_create(&self) -> bool {
+        false
+    }
+
     /// Create a new archive at `dest` holding `edits` (`Alt+F5`).
     fn create(
         &self,
@@ -928,6 +944,43 @@ mod tests {
             rar.apply(Path::new("/x.rar"), &[], &mut NoProgress),
             Err(Error::Unsupported(_))
         ));
+    }
+
+    #[test]
+    fn creating_is_a_narrower_capability_than_writing() {
+        // `can_create` implies a writable model, never the other way round:
+        // a format an archive can be made of must also accept the write.
+        for id in FormatId::ALL {
+            let backend = id.backend();
+            assert!(
+                !backend.can_create() || backend.write_model().writable(),
+                "{id}: creatable formats accept writes"
+            );
+        }
+        // `.rar` cannot be written at all, and the single-file compressors
+        // are one stream rather than a container: none of them is a pack
+        // target, whatever their write model becomes.
+        for id in [
+            FormatId::Rar,
+            FormatId::Gz,
+            FormatId::Bz2,
+            FormatId::Xz,
+            FormatId::Zst,
+        ] {
+            assert!(!id.backend().can_create(), "{id} is not a pack target");
+        }
+        // Every container that accepts writes can also be made from nothing.
+        for id in [
+            FormatId::Zip,
+            FormatId::Tar,
+            FormatId::TarGz,
+            FormatId::TarBz2,
+            FormatId::TarXz,
+            FormatId::TarZst,
+            FormatId::SevenZ,
+        ] {
+            assert!(id.backend().can_create(), "{id} can be created");
+        }
     }
 
     #[test]

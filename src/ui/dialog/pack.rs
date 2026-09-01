@@ -40,22 +40,29 @@ use crate::vfs::archive::format::{CompressionLevel, FormatId};
 
 /// The formats `Alt+F5` offers, in [`FormatId::ALL`]'s order.
 ///
-/// Derived, not listed: a format is offered here exactly when it can be
-/// written, and each format already answers that through
-/// [`WriteModel::writable`](crate::vfs::archive::format::WriteModel::writable).
+/// Derived, not listed: a format is offered here exactly when a new archive
+/// of it can be created, and each format already answers that through
+/// [`ArchiveFormat::can_create`](crate::vfs::archive::format::ArchiveFormat::can_create).
 /// A second hand-kept list would be one that could drift - offer a `.rar` that
 /// fails at `OK`, or forget a format added later - so the dialog reads the
 /// capability instead of restating it.
 ///
-/// `.rar` is absent for that reason and never will be: "RAR compression is
-/// patent-encumbered and `unrar` cannot write", so its write model is `None`
+/// `can_create`, and not `WriteModel::writable`: the write model answers for
+/// members of an archive that already exists, and the two coincide today only
+/// because every member-writable format happens to be a container. A `.gz`
+/// that learned to rewrite its one member would become writable without ever
+/// becoming something a selection fits into, and a filter on `writable()`
+/// would offer it here and fail at the job.
+///
+/// `.rar` is absent and never will be: "RAR compression
+/// is patent-encumbered and `unrar` cannot write", so nothing can create one
 /// and the filter drops it. Offering a choice that fails at `OK` would be the
 /// opposite of the "refused up front".
 fn packable() -> Vec<FormatId> {
     FormatId::ALL
         .iter()
         .copied()
-        .filter(|f| f.backend().write_model().writable())
+        .filter(|f| f.backend().can_create())
         .collect()
 }
 
@@ -635,23 +642,22 @@ mod tests {
     }
 
     #[test]
-    fn the_offer_is_exactly_the_writable_formats() {
-        // The dialog and the capability cannot disagree: what `Alt+F5` offers
-        // is `FormatId::ALL` filtered by the same `writable()` each format
-        // answers for itself, in the same order. A hand-kept list here would
-        // be a second source of truth free to drift from the first.
-        let want: Vec<FormatId> = FormatId::ALL
-            .iter()
-            .copied()
-            .filter(|f| f.backend().write_model().writable())
-            .collect();
-        assert_eq!(packable(), want);
-        // Every format offered really accepts a write, and none that refuses
-        // one is offered.
-        assert!(
-            packable()
-                .iter()
-                .all(|f| f.backend().write_model().writable())
+    fn the_offer_is_the_seven_container_formats_in_table_order() {
+        // The concrete list, spelled out: an assertion that recomputes the
+        // implementation's own filter cannot fail, and what this test guards
+        // is what the user is offered. A format gaining or losing
+        // `can_create` shows up here as a readable diff.
+        assert_eq!(
+            packable(),
+            [
+                FormatId::Zip,
+                FormatId::Tar,
+                FormatId::TarGz,
+                FormatId::TarBz2,
+                FormatId::TarXz,
+                FormatId::TarZst,
+                FormatId::SevenZ,
+            ]
         );
     }
 

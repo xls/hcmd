@@ -323,6 +323,12 @@ impl ArchiveFormat for TarFormat {
         }
     }
 
+    fn can_create(&self) -> bool {
+        // All five tar rows: one `create` below serves them, whatever the
+        // compression around it.
+        true
+    }
+
     fn release(&self, container: &Path) {
         cursors::forget(container);
     }
