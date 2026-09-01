@@ -9,10 +9,13 @@ name: npm installer
 # typo in it kept six working binaries off the release page. Here it runs in
 # seconds and answers for itself.
 
+# Not on a release tag. The package downloads whatever the latest release is
+# at install time, so a new version of hcmd does not make a new installer -
+# republishing one per release would be a package a day that installs exactly
+# what the last one did. It goes out when the installer itself changes, by
+# hand. (A tag trigger cannot be narrowed by path either: GitHub ignores path
+# filters on tag pushes, so `paths-ignore` here fired on every release.)
 on:
-  push:
-    tags: ["v*"]
-    paths-ignore: ["**"]
   workflow_dispatch:
   pull_request:
     paths:

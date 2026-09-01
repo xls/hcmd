@@ -71,9 +71,6 @@ gate-green)
   [ "$n" -eq 0 ] || { echo "clippy: $n errors"; exit 1; }
   # Linux compiles only one side of every #[cfg]; this compiles the other.
   "$0" macos-check >/dev/null || { "$0" macos-check; exit 1; }
-  # Cheap, and the kind of drift nothing else notices until someone publishes
-  # the wrong version by hand.
-  "$0" npm-version >/dev/null || { "$0" npm-version; exit 1; }
   # ONE run, parsed once. Running the suite twice and comparing the answers
   # let a flaky test make the gate disagree with itself, which is a defect in
   # the oracle rather than in the tree.
@@ -352,22 +349,6 @@ release-assets)
   echo "$have" | grep -q '\.pkg\.tar\.zst$' || missing="$missing an-arch-package"
   [ -z "$missing" ] || { echo "the release is missing:$missing"; exit 1; }
   echo "RELEASE-ASSETS-OK every format published"
-  ;;
-
-# The npm package's version and the crate's are the same version, because they
-# install the same thing. The workflow rewrites `package.json` from `Cargo.toml`
-# before it publishes, so CI never read the committed value - which is exactly
-# how it sat at 0.1.0 while the crate reached 0.9.1, waiting for the first
-# person to publish by hand from a checkout.
-npm-version)
-  ver=$(awk -F'"' '/^version/ { print $2; exit }' Cargo.toml)
-  pkg=$(awk -F'"' '/"version"/ { print $4; exit }' packaging/npm/package.json)
-  [ -n "$ver" ] && [ -n "$pkg" ] || { echo "cannot read one of the two versions"; exit 1; }
-  [ "$ver" = "$pkg" ] || {
-    echo "Cargo.toml is $ver and packaging/npm/package.json is $pkg"
-    exit 1
-  }
-  echo "NPM-VERSION-OK both say $ver"
   ;;
 
 # The shell installer, run for real against the published release, into a

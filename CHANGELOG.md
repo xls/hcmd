@@ -2,6 +2,25 @@
 
 Notable changes per release, one line each. Newest first.
 
+## v0.9.12
+
+- Ctrl+A under a quick-search filter marks only the rows you can see, and F8 then deletes only those - it used to mark every file in the directory, hidden ones included.
+- hcmd --update-config no longer comments out a setting written as `ui.theme = "nord"`, and leaves a file it cannot parse alone instead of rewriting every option at its default.
+- --update-config keeps your `[terminal.sequences]` and `[viewer.highlight.lsp]` entries, which it used to delete.
+- keymap.toml regeneration carries over a binding written under a different section than the shipped file declares it in, and leaves an unparsable keymap alone rather than silently commenting out every binding in it.
+- The git column is drawn whenever `panel.git_status` is on rather than appearing and disappearing as you walk between repositories; a blank cell means the file is clean.
+- A directory shows the state of what is under it, so `src` reads as modified when something inside it is.
+- The git letters are the ones git itself uses: M modified, S staged, A added, U untracked, D deleted, R renamed.
+- Each panel's status line names the branch it is on, right-aligned.
+- Alt+V lists what a commit changed instead of the whole tree at that revision, each row saying what the commit did to it, and coming back out lands on the commit you left and in the folder you started from.
+- A listing chooses its own columns: a commit list shows the name and date, a commit's files show the name, size, date and state.
+- An APK's AndroidManifest.xml opens as the XML it was compiled from; 1 and 2 still show the file's own bytes.
+- A UTF-16 file with no byte order mark opens as text rather than as a hex dump.
+- The console gives the panels back when a command finishes instead of waiting for Ctrl+O.
+- Ctrl+E brings the other panel to this panel's directory.
+- The F9 menu is the size of the menu it shows.
+- Alt+F5 offers only formats an archive can be created in, and no longer prefills a target from a panel that is not local.
+
 ## v0.9.11
 
 - The panels now watch their own directory and refresh on their own when it changes underneath - a sync, an archive being packed, a file written by another program - instead of needing Ctrl+R.
