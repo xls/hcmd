@@ -967,6 +967,37 @@ pub(crate) fn run_action(app: &mut App, action: Action, press: KeyPress) -> Resu
             app.toggle_mark_under_cursor();
             app.move_cursor(1);
         }
+        A::SelectUp => {
+            // The upward twin of `Insert`: the row under the cursor is the one
+            // being decided, so it is toggled before the move either way.
+            app.toggle_mark_under_cursor();
+            app.move_cursor(-1);
+        }
+        A::SelectPageUp => {
+            // A page is what is on screen, counted in the rows a page key
+            // would actually move over - so a partial page at the edge sweeps
+            // to the edge rather than stopping short of it.
+            let panel = app.active_panel();
+            let page = isize::try_from(panel.view_rows.max(1)).unwrap_or(1);
+            let to = panel.active_tab().shown_target(page.saturating_neg());
+            app.mark_cursor_through(to);
+        }
+        A::SelectPageDown => {
+            let panel = app.active_panel();
+            let page = isize::try_from(panel.view_rows.max(1)).unwrap_or(1);
+            let to = panel.active_tab().shown_target(page);
+            app.mark_cursor_through(to);
+        }
+        A::SelectToStart => app.mark_cursor_through(0),
+        A::SelectToEnd => {
+            let last = app
+                .active_panel()
+                .active_tab()
+                .entries
+                .len()
+                .saturating_sub(1);
+            app.mark_cursor_through(last);
+        }
         A::SelectAndSize => {
             // `Space` extends a running search - filenames contain spaces - and
             // marks only when the buffer is empty.

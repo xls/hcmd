@@ -240,7 +240,15 @@ other_panel_cd    = ["ctrl+left", "ctrl+right"]
 other_panel_same_dir = ["ctrl+e"]
 focus_cmdline     = ["left", "right"]
 put_selected      = ["ctrl+enter", "alt+enter"]
-toggle_select     = ["insert"]
+# Shift with a movement key sweeps the mark, the way Total Commander does it.
+# The row the sweep starts on decides whether it marks or clears, so shift+end
+# on a clean listing selects to the bottom and a second one gives it back.
+toggle_select     = ["insert", "shift+down"]
+select_up         = ["shift+up"]
+select_page_up    = ["shift+pgup"]
+select_page_down  = ["shift+pgdn"]
+select_to_start   = ["shift+home"]
+select_to_end     = ["shift+end"]
 select_and_size   = ["space"]
 # The file under the cursor, described: its own facts, and what its contents
 # turn out to be.

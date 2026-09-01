@@ -45,6 +45,20 @@ impl App {
         self.note_quick_view_cursor();
     }
 
+    /// Sweep the mark from the cursor to `index`, and land there.
+    ///
+    /// `Shift` with a movement key, the way Total Commander does it: the row
+    /// the sweep starts on decides whether the run marks or clears, so a
+    /// `Shift+End` on a clean listing selects to the bottom and a second one
+    /// gives it back. See [`crate::panel::Tab::mark_through`].
+    pub fn mark_cursor_through(&mut self, index: usize) {
+        let panel = self.active_panel_mut();
+        panel.quick.clear();
+        let rows = panel.view_rows;
+        panel.active_tab_mut().mark_through(index, rows);
+        self.note_quick_view_cursor();
+    }
+
     /// Put the cursor on a row, clamping. Clears the quick-search buffer.
     pub fn move_cursor_to(&mut self, index: usize) {
         let keep_filter = self.config.panel.quick_search_filter

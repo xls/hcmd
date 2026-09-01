@@ -1225,6 +1225,77 @@ impl Tab {
         true
     }
 
+    /// Mark, or unmark, every shown row between the cursor and `to`, and leave
+    /// the cursor there.
+    ///
+    /// Which of the two it is comes from the row the run *starts* on: an
+    /// unmarked row marks the range and a marked one clears it, so
+    /// `Shift+End` on a clean listing selects to the bottom and pressing it
+    /// again gives the selection back. Toggling each row in turn would instead
+    /// invert whatever was already there, which is not what a sweep means.
+    ///
+    /// Where `delta` shown rows from the cursor lands, clamped.
+    ///
+    /// The same walk [`Tab::move_by`] makes, answered rather than taken: a
+    /// sweep needs the far end of the range *before* it marks anything, and
+    /// counting raw indices instead would step over the rows a filter is
+    /// hiding and stop short of the end.
+    #[must_use]
+    pub fn shown_target(&self, delta: isize) -> usize {
+        let mut at = self.cursor;
+        for _ in 0..delta.unsigned_abs() {
+            let next = if delta >= 0 {
+                self.next_shown(at)
+            } else {
+                self.prev_shown(at)
+            };
+            match next {
+                Some(index) => at = index,
+                // Fewer than a page left: the sweep reaches the end and stops
+                // there, which is what a page key means at the edge.
+                None => break,
+            }
+        }
+        at
+    }
+
+    /// Mark, or unmark, every shown row between the cursor and `to`, and leave
+    /// the cursor there.
+    ///
+    /// Which of the two it is comes from the row the run *starts* on: an
+    /// unmarked row marks the range and a marked one clears it, so `Shift+End`
+    /// on a clean listing selects to the bottom and pressing it again gives
+    /// the selection back. Toggling each row in turn would instead invert
+    /// whatever was already there, which is not what a sweep means.
+    ///
+    /// Only rows the filter shows, for the same reason `Ctrl+A` marks only
+    /// those: a row nobody can see is not one they meant to include.
+    pub fn mark_through(&mut self, to: usize, rows: usize) {
+        let Some(start) = self.entries.get(self.cursor) else {
+            return;
+        };
+        let mark = !self.is_marked(start);
+        let (lo, hi) = if to < self.cursor {
+            (to, self.cursor)
+        } else {
+            (self.cursor, to)
+        };
+        let keys: Vec<String> = self
+            .shown_entries()
+            .filter(|(i, _)| *i >= lo && *i <= hi)
+            .filter(|(_, e)| !e.is_parent)
+            .map(|(_, e)| e.mark_key().into_owned())
+            .collect();
+        for key in keys {
+            if mark {
+                self.marks.insert(key);
+            } else {
+                self.marks.remove(&key);
+            }
+        }
+        self.move_to(to, rows);
+    }
+
     /// `Ctrl+A`: mark everything shown, but never `..`. "Everything" is what
     /// the user can see: under a quick-search filter that is the matches,
     /// exactly as when the filter physically narrowed the listing.
@@ -3049,5 +3120,120 @@ mod tests {
             Some("a"),
             "a fresh listing sorts from its first batch"
         );
+    }
+}
+
+#[cfg(test)]
+mod sweep_tests {
+    use super::*;
+    use crate::vfs::{Entry, VfsPath};
+
+    fn tab_with(names: &[&str]) -> Tab {
+        let mut tab = Tab::new(VfsPath::local("/d"));
+        tab.entries = std::iter::once(Entry::parent_entry())
+            .chain(names.iter().map(|n| Entry::file(*n)))
+            .collect();
+        tab
+    }
+
+    #[test]
+    fn a_sweep_from_a_clean_row_marks_the_range_and_a_second_one_gives_it_back() {
+        // Shift+End on an unmarked row: everything from here down is marked.
+        let mut tab = tab_with(&["a", "b", "c", "d"]);
+        tab.cursor = 2; // "b"
+        tab.mark_through(4, 20);
+        assert_eq!(tab.cursor, 4, "and the cursor lands at the far end");
+        let marked: Vec<&str> = tab
+            .entries
+            .iter()
+            .filter(|e| tab.is_marked(e))
+            .map(|e| e.name.as_str())
+            .collect();
+        assert_eq!(marked, ["b", "c", "d"]);
+
+        // Again from the same row: the run starts marked, so it clears.
+        tab.cursor = 2;
+        tab.mark_through(4, 20);
+        assert!(
+            tab.entries.iter().all(|e| !tab.is_marked(e)),
+            "the sweep gives the selection back rather than inverting it"
+        );
+    }
+
+    #[test]
+    fn a_sweep_upward_covers_the_rows_above_and_never_the_parent() {
+        let mut tab = tab_with(&["a", "b", "c"]);
+        tab.cursor = 3; // "c"
+        tab.mark_through(0, 20); // the `..` row
+        let marked: Vec<&str> = tab
+            .entries
+            .iter()
+            .filter(|e| tab.is_marked(e))
+            .map(|e| e.name.as_str())
+            .collect();
+        assert_eq!(marked, ["a", "b", "c"], "`..` is never markable");
+    }
+
+    #[test]
+    fn a_sweep_marks_only_what_the_filter_shows() {
+        // The same rule Ctrl+A follows: a row nobody can see is not one they
+        // meant to include.
+        let mut tab = tab_with(&["alpha", "beta", "always", "gamma"]);
+        tab.set_quick_filter("al".to_string(), |name: &str| name.starts_with("al"));
+        tab.cursor = 1; // "alpha"
+        tab.mark_through(4, 20);
+        let marked: Vec<&str> = tab
+            .entries
+            .iter()
+            .filter(|e| tab.is_marked(e))
+            .map(|e| e.name.as_str())
+            .collect();
+        assert_eq!(marked, ["alpha", "always"], "beta and gamma are hidden");
+    }
+}
+
+#[cfg(test)]
+mod page_sweep_tests {
+    use super::*;
+    use crate::vfs::{Entry, VfsPath};
+
+    fn tab_of(n: usize) -> Tab {
+        let mut tab = Tab::new(VfsPath::local("/d"));
+        tab.entries = std::iter::once(Entry::parent_entry())
+            .chain((0..n).map(|i| Entry::file(format!("f{i:02}"))))
+            .collect();
+        tab
+    }
+
+    #[test]
+    fn a_partial_page_sweeps_to_the_edge_rather_than_stopping_short() {
+        // Three rows left and a twenty-row page: the sweep reaches the end.
+        let mut tab = tab_of(30);
+        tab.cursor = 28;
+        let to = tab.shown_target(20);
+        assert_eq!(to, 30, "the last row, not twenty past it");
+        tab.mark_through(to, 20);
+        assert_eq!(tab.cursor, 30);
+        assert_eq!(tab.marks.len(), 3, "f27, f28 and f29");
+
+        // And upward, into the `..` row's place at the top.
+        let mut tab = tab_of(30);
+        tab.cursor = 2;
+        let to = tab.shown_target(-20);
+        assert_eq!(to, 0, "the first row");
+        tab.mark_through(to, 20);
+        assert_eq!(tab.marks.len(), 2, "f00 and f01; `..` is never markable");
+    }
+
+    #[test]
+    fn a_page_sweep_counts_shown_rows_and_not_raw_indices() {
+        let mut tab = tab_of(40);
+        tab.set_quick_filter("f1".to_string(), |name: &str| name.starts_with("f1"));
+        // The filter leaves ten rows: f10..f19 at indices 11..=20.
+        tab.cursor = 11;
+        let to = tab.shown_target(5);
+        assert_eq!(to, 16, "five *shown* rows on, not five indices");
+        tab.mark_through(to, 20);
+        assert_eq!(tab.marks.len(), 6, "f10 through f15 inclusive");
     }
 }

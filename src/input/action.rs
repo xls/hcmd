@@ -290,6 +290,11 @@ actions! {
     PutSelected       = "put_selected",      V01,  "Insert the entry under the cursor at the command line caret";
     PutSelectedPath   = "put_selected_path", V01,  "Insert the full path of the entry under the cursor at the caret";
     ToggleSelect      = "toggle_select",     V01,  "Toggle the mark and move down";
+    SelectUp          = "select_up",         V09,  "Toggle the mark and move up";
+    SelectPageUp      = "select_page_up",    V09,  "Mark a page upward";
+    SelectPageDown    = "select_page_down",  V09,  "Mark a page downward";
+    SelectToStart     = "select_to_start",   V09,  "Mark from the cursor to the first row";
+    SelectToEnd       = "select_to_end",     V09,  "Mark from the cursor to the last row";
     SelectAndSize     = "select_and_size",   V02,  "Toggle the mark, sizing a directory";
     SelectMask        = "select_mask",       V02, "Mark by wildcard";
     UnselectMask      = "unselect_mask",     V02, "Unmark by wildcard";
