@@ -466,41 +466,69 @@ fn version_is_older(have: &str, want: &str) -> bool {
 /// An array-of-tables such as `[[filetypes]]` records `(name, "")`: the array
 /// is set as a whole rather than key by key, which is the empty-key form the
 /// generator asks about in [`emit::generate_preserving`].
+///
+/// Read from the parsed document rather than scanned line by line, so every
+/// spelling the format allows - a dotted key, an inline table, a quoted name -
+/// answers here exactly as it does to the loader. A commented line never
+/// parses, so being present *is* being live. The design wants one parser for
+/// one question: a second, looser reading of the same file is how a setting the
+/// loader honours gets commented out by the regeneration meant to preserve it.
+/// An unparsable file yields an empty set, so the fresh layout comes back with
+/// everything commented at its default rather than with the defaults pinned
+/// live over whatever the file was trying to say.
 fn live_keys(text: &str) -> std::collections::HashSet<(String, String)> {
     let mut set = std::collections::HashSet::new();
-    let mut section = String::new();
-    for line in text.lines() {
-        let t = line.trim_start();
-        if t.is_empty() || t.starts_with('#') {
-            continue;
-        }
-        if let Some(rest) = t.strip_prefix("[[") {
-            if let Some(name) = rest.split("]]").next() {
-                let name = name.trim().to_string();
-                set.insert((name.clone(), String::new()));
-                section = name;
+    let Ok(doc) = toml::from_str::<toml::Table>(text) else {
+        return set;
+    };
+    collect_live(&doc, "", &mut set);
+    set
+}
+
+/// Record one table's own keys and recurse into the tables below it. `prefix`
+/// is the dotted section the table sits at, empty at the document root.
+fn collect_live(
+    table: &toml::Table,
+    prefix: &str,
+    set: &mut std::collections::HashSet<(String, String)>,
+) {
+    for (key, value) in table {
+        let path = || {
+            if prefix.is_empty() {
+                key.clone()
+            } else {
+                format!("{prefix}.{key}")
             }
-            continue;
-        }
-        if let Some(rest) = t.strip_prefix('[') {
-            if let Some(name) = rest.split(']').next() {
-                section = name.trim().to_string();
-            }
-            continue;
-        }
-        let key: String = t
-            .chars()
-            .take_while(|c| c.is_alphanumeric() || *c == '_')
-            .collect();
-        if !key.is_empty()
-            && t.get(key.len()..)
-                .map(str::trim_start)
-                .is_some_and(|rest| rest.starts_with('='))
+        };
+        if let Some(inner) = value.as_table() {
+            collect_live(inner, &path(), set);
+        } else if value
+            .as_array()
+            .and_then(|items| items.first())
+            .is_some_and(toml::Value::is_table)
         {
-            set.insert((section.clone(), key));
+            // An array of tables is set as a whole, so the empty key stands for
+            // the array and its entries need no records of their own.
+            set.insert((path(), String::new()));
+        } else {
+            set.insert((prefix.to_string(), key.clone()));
         }
     }
-    set
+}
+
+/// Put `text` where `path` is, keeping the old file as a dated backup, without
+/// ever leaving the path empty or half-written.
+///
+/// The new contents are staged beside the file first, so the only gap between
+/// the old file and the new one is two renames. A configuration file truncated
+/// by a crash is worse than one that was never updated: the program that reads
+/// it next is the one that cannot start.
+fn replace_with_backup(path: &Path, text: &str) -> std::io::Result<Option<PathBuf>> {
+    let staged = path.with_extension("toml.new");
+    fs::write(&staged, text)?;
+    let backup = backup_aside(path)?;
+    fs::rename(&staged, path)?;
+    Ok(backup)
 }
 
 /// Move an existing file aside to a dated backup before it is regenerated, so
@@ -559,43 +587,63 @@ pub fn update_config() -> i32 {
     println!("configuration directory: {}", dir.display());
     let current = env!("CARGO_PKG_VERSION");
 
-    let config_path = dir.join("config.toml");
-    match fs::read_to_string(&config_path) {
-        Ok(user_text) => {
-            let cfg = match toml::from_str::<Config>(&user_text) {
-                Ok(cfg) => cfg,
-                Err(err) => {
-                    println!("  config.toml: {err}; unparsable values fall back to defaults");
-                    Config::default()
-                }
-            };
-            let live = live_keys(&user_text);
-            let is_live =
-                |section: &str, key: &str| live.contains(&(section.to_string(), key.to_string()));
-            let regenerated = emit::generate_preserving(&cfg, &is_live, current);
-            if regenerated == user_text {
-                println!("  config.toml: already up to date");
-            } else {
-                match backup_aside(&config_path) {
-                    Ok(backup) => match fs::write(&config_path, &regenerated) {
-                        Ok(()) => match backup {
-                            Some(b) => println!(
-                                "  config.toml: regenerated (old file kept at {})",
-                                b.display()
-                            ),
-                            None => println!("  config.toml: written"),
-                        },
-                        Err(err) => println!("  config.toml: could not write: {err}"),
-                    },
-                    Err(err) => println!("  config.toml: could not back up the old file: {err}"),
-                }
-            }
-        }
-        Err(_) => println!("  config.toml: not present, nothing to update"),
-    }
-
+    let (config_line, status) = regenerate_config(&dir.join("config.toml"), current);
+    println!("{config_line}");
     println!("{}", regenerate_keymap(&dir.join("keymap.toml"), current));
-    0
+    status
+}
+
+/// Regenerate one `config.toml` in place: keep the options the user set live at
+/// the values they gave them, rewrite the rest commented at their defaults, and
+/// back the old file up dated before the new one lands. Returns the human line
+/// to print and the exit status, so the file work and its reporting stay in one
+/// place a test can drive against a temporary directory - the same shape
+/// [`regenerate_keymap`] gives `keymap.toml`.
+fn regenerate_config(config_path: &Path, current: &str) -> (String, i32) {
+    let Ok(user_text) = fs::read_to_string(config_path) else {
+        return (
+            "  config.toml: not present, nothing to update".to_string(),
+            0,
+        );
+    };
+    let cfg = match toml::from_str::<Config>(&user_text) {
+        Ok(cfg) => cfg,
+        Err(err) => {
+            // Everything below the first bad value is unread: the parse is all
+            // or nothing, so the config here would be the built-in one wearing
+            // the user's key list, and every one of those keys would come back
+            // live - which this file's own model reads as "the user chose
+            // these". One typo would silently pin the defaults over the whole
+            // file. The design would rather do nothing and say where the fault
+            // is.
+            return (
+                format!(
+                    "  config.toml: {err}\n  config.toml: left as it is - fix the value above, then run this again"
+                ),
+                1,
+            );
+        }
+    };
+    let live = live_keys(&user_text);
+    let is_live = |section: &str, key: &str| live.contains(&(section.to_string(), key.to_string()));
+    let regenerated = emit::generate_preserving(&cfg, &is_live, current);
+    if regenerated == user_text {
+        return ("  config.toml: already up to date".to_string(), 0);
+    }
+    match replace_with_backup(config_path, &regenerated) {
+        Ok(Some(b)) => (
+            format!(
+                "  config.toml: regenerated (old file kept at {})",
+                b.display()
+            ),
+            0,
+        ),
+        Ok(None) => ("  config.toml: written".to_string(), 0),
+        Err(err) => (
+            format!("  config.toml: could not replace the old file: {err}"),
+            1,
+        ),
+    }
 }
 
 /// Regenerate one `keymap.toml` in place: keep the bindings the user set live,
@@ -1224,28 +1272,78 @@ mod tests {
     }
 
     #[test]
-    fn an_unparsable_value_falls_back_to_the_default_when_regenerated() {
-        // The loader already drops a value that will not parse and keeps the
-        // default; the regeneration is built on the parsed config, so the bad
-        // value is simply gone and its default is what gets written.
+    fn every_spelling_of_a_set_value_counts_as_live() {
+        // The format lets one setting be written several ways. The loader reads
+        // all of them, so the regeneration has to recognise all of them too - a
+        // looser second reading is how a value the program honours ends up
+        // commented out by the run that was meant to keep it.
+        let dotted = live_keys("ui.theme = \"nord\"\npanel.show_hidden = false\n");
+        assert!(dotted.contains(&("ui".to_string(), "theme".to_string())));
+        assert!(dotted.contains(&("panel".to_string(), "show_hidden".to_string())));
+
+        let inline = live_keys("ui = { theme = \"nord\" }\n");
+        assert!(inline.contains(&("ui".to_string(), "theme".to_string())));
+
+        let quoted = live_keys("[panel]\n\"git_status\" = false\n");
+        assert!(quoted.contains(&("panel".to_string(), "git_status".to_string())));
+
+        let nested = live_keys("[viewer.highlight]\ntheme = \"ansi\"\n");
+        assert!(nested.contains(&("viewer.highlight".to_string(), "theme".to_string())));
+
+        // An array of tables is set as a whole: the empty key stands for it.
+        let array = live_keys("[[filetypes]]\next = [\"rs\"]\n");
+        assert!(array.contains(&("filetypes".to_string(), String::new())));
+
+        // A comment is not a setting, and a file the parser cannot read says
+        // nothing about what the user chose.
+        assert!(live_keys("[panel]\n# git_status = false\n").is_empty());
+        assert!(live_keys("this is not = = toml\n").is_empty());
+    }
+
+    #[test]
+    fn a_dotted_key_survives_a_regeneration() {
         let current = env!("CARGO_PKG_VERSION");
-        let user = "[panel]\nmax_tabs = \"three\"\ngit_status = false\n";
-        // The whole file fails to parse (one bad scalar), so the loader hands
-        // back the default, exactly as `update_config` does.
-        assert!(toml::from_str::<Config>(user).is_err());
-        let cfg = Config::default();
+        let user = "ui.theme = \"nord\"\n";
+        let cfg: Config = toml::from_str(user).expect("a dotted key parses");
         let live = live_keys(user);
         let is_live =
             |section: &str, key: &str| live.contains(&(section.to_string(), key.to_string()));
         let out = emit::generate_preserving(&cfg, &is_live, current);
-        // `git_status` was live in the file, so it stays live, but at the
-        // default value the parsed config carries.
-        assert!(out.contains("\ngit_status = true\n"), "{out}");
         let back: Config = toml::from_str(&out).expect("the regenerated file parses");
         assert_eq!(
-            back.panel.max_tabs, 9,
-            "the bad value is gone, default written"
+            back.ui.theme, "nord",
+            "the setting still takes effect:\n{out}"
         );
+    }
+
+    #[test]
+    fn a_config_the_loader_cannot_read_is_left_alone() {
+        // One bad scalar fails the whole parse, so there is no honest set of
+        // values to regenerate from. Rewriting anyway would hand back the
+        // built-in defaults wearing the user's key list - live, which this file
+        // reads as chosen - so a single typo would quietly reset everything.
+        let dir = std::env::temp_dir().join(format!("hcmd-config-bad-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a temporary directory");
+        let path = dir.join("config.toml");
+        let user = "[panel]\nmax_tabs = \"three\"\ngit_status = false\n";
+        std::fs::write(&path, user).expect("the file is written");
+        let (line, status) = regenerate_config(&path, env!("CARGO_PKG_VERSION"));
+        assert_eq!(status, 1, "the run reports the fault: {line}");
+        assert!(line.contains("left as it is"), "{line}");
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("the file is still there"),
+            user,
+            "not one byte of the user's file was touched"
+        );
+        assert!(
+            std::fs::read_dir(&dir)
+                .expect("the directory reads")
+                .filter_map(std::result::Result::ok)
+                .all(|e| e.file_name() == "config.toml"),
+            "no backup and no staged file left behind"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
