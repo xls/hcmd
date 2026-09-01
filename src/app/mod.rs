@@ -828,6 +828,10 @@ pub struct App {
     /// connect dialog underneath selects the new host rather than staying on
     /// the Add button. Editing leaves the cursor where it was.
     pub pending_new_host: bool,
+    /// True while the external editor the menu opened on `config.toml` is
+    /// running, so the config is re-read when it exits. Only the menu's
+    /// `edit_config` sets it; `F4` on an arbitrary file does not.
+    pub reload_config_after_editor: bool,
     /// The file `F4` is about to edit, held while the large-file warning is
     /// on screen. Taken when the warning is answered yes.
     pub editor_size_pending: Option<VfsPath>,
@@ -967,6 +971,7 @@ impl App {
             pending_keyring: None,
             pending_host_secret: None,
             pending_new_host: false,
+            reload_config_after_editor: false,
             editor_size_pending: None,
             editor_size_confirmed: false,
         }

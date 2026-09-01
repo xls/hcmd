@@ -668,7 +668,11 @@ fn open_config_editor(app: &mut App) {
         Ok(command) => {
             app.draft.sources.clear();
             app.handoff.external = Some(command);
-            app.reload_config();
+            // Reload AFTER the editor exits, not now: the editor runs later,
+            // from the event loop, so reloading here would re-read the file the
+            // user is about to change. The flag makes the loop re-read it once
+            // the editor closes.
+            app.reload_config_after_editor = true;
         }
         Err(why) => app.message = Some(why.to_string()),
     }
@@ -1301,6 +1305,21 @@ mod tests {
     fn press(app: &mut App, code: KeyCode, mods: KeyModifiers) {
         let key = KeyEvent::new(code, mods);
         dispatch(app, key).expect("dispatch never fails on a bound key");
+    }
+
+    #[test]
+    fn editing_the_config_from_the_menu_reloads_when_the_editor_exits() {
+        let mut app = app_with(vec![Entry::file("a.txt")]);
+        run_action(&mut app, Action::EditConfig, KeyPress::plain(KeyCode::Null))
+            .expect("edit_config dispatches");
+        // The editor is queued for the event loop, and the reload waits for it
+        // to exit - reloading now would re-read the file the user is about to
+        // change.
+        assert!(app.handoff.external.is_some(), "the editor is queued");
+        assert!(
+            app.reload_config_after_editor,
+            "the reload is deferred until the editor closes"
+        );
     }
 
     // ------------------------------------------ the rendered view, 3 ----

@@ -476,6 +476,13 @@ pub async fn event_loop() -> Result<()> {
         // reason a read or a job is - `dispatch` may not own the terminal, and
         // this takes it away entirely for as long as the editor runs.
         ops::editor::service(&mut app, &mut term)?;
+        // The menu's "edit configuration" runs the editor through the same
+        // handoff; when it exits, re-read the config so the change is live
+        // without a restart or `Ctrl+Alt+R`. `F4` on an arbitrary file never
+        // sets this, so only the config edit triggers a reload.
+        if std::mem::take(&mut app.reload_config_after_editor) {
+            app.reload_config();
+        }
 
         // `Enter` on a file queued an open and this resolves it -
         // one read of the file's head, then the execute policy, a handler, the
