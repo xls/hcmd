@@ -53,15 +53,20 @@
 //!
 //! # Where the box lands
 //!
-//! The dialog asks for the full width, draws the six titles across the first
-//! row of its own interior and hangs the dropdown under the open one. It
-//! declares no [`crate::dialog::Dialog::anchor`],
-//! so [`crate::dialog::centred`] places the box
-//! itself and the framework keeps the one placement rule
-//! the design gave it. `ui.show_menubar`'s permanent bar is drawn
-//! by [`crate::ui::draw_menubar`] and is a different surface: this one is the
-//! bar that has focus, and it carries the same six titles from the same
-//! [`crate::ui::MENUBAR`] so the two cannot disagree.
+//! The dialog draws the six titles across the first row of its own interior and
+//! hangs the dropdown under the open one, so it asks for exactly the room those
+//! two use: the wider of the bar and the open dropdown across, and a row for
+//! the bar plus the open menu's rows down (see [`MenuDialog::size_hint`]). It
+//! is a bar, so it belongs where a bar lives - it declares
+//! [`crate::dialog::Dialog::top_left`] and the framework pins it to the
+//! screen's top-left rather than [`crate::dialog::centred`]. That is the whole
+//! reason it is not centred: the box's width and height track the open menu,
+//! and a centred box would shift on every `Left`/`Right`; pinned to the corner,
+//! only its far edges move and the titles stay put. It sits one row below where
+//! [`crate::ui::draw_menubar`] draws `ui.show_menubar`'s permanent bar, the row
+//! the box's own frame takes. That permanent bar is a different surface: this
+//! one is the bar that has focus, and both carry the same six titles from the
+//! same [`crate::ui::MENUBAR`] so the two cannot disagree.
 //!
 //! # Colour and glyphs
 //!
@@ -579,6 +584,25 @@ impl MenuDialog {
         out
     }
 
+    /// The width of the whole bar: the six title cells laid end to end, which
+    /// is the width [`Self::draw_bar`] fills.
+    fn bar_width(&self) -> usize {
+        self.cells().iter().map(|(_, cell)| text::width(cell)).sum()
+    }
+
+    /// How far to the right the open dropdown reaches: its title's column plus
+    /// the width it wants there, frame included - the same start and width
+    /// [`Self::dropdown_rect`] draws it at, so the box is wide enough that the
+    /// dropdown never has to slide left to fit.
+    fn open_span(&self) -> usize {
+        let start = self.cells().get(self.open).map_or(0, |(start, _)| *start);
+        // Two for the dropdown's frame, exactly as `dropdown_rect` adds.
+        let width = self
+            .menu()
+            .map_or(0, |menu| menu.natural_width().saturating_add(2));
+        start.saturating_add(width)
+    }
+
     /// The rows of `items` visible in a window of `rows`, keeping the cursor
     /// inside it.
     ///
@@ -741,23 +765,45 @@ impl Dialog for MenuDialog {
         "Menu".to_string()
     }
 
-    /// The full width, and a row for the bar plus the longest menu.
+    /// The room the bar and the open dropdown use, and no more.
     ///
-    /// The height is the **longest** menu's and not the open one's, so walking
-    /// the bar with `Left` and `Right` does not move the box up and down under
-    /// the reader: [`crate::dialog::centred`] places it from the size asked
-    /// for, and a size that changed per menu would make every `Right` a jump.
+    /// Width is the wider of the two things the interior draws: the six title
+    /// cells end to end (what [`Self::bar_width`] measures, the same cells
+    /// [`Self::draw_bar`] lays out) and the open dropdown, which hangs at its
+    /// title's column and wants its own width there (what [`Self::open_span`]
+    /// measures from the same [`Self::cells`] and [`Menu::natural_width`]
+    /// [`Self::dropdown_rect`] uses). Asking for that much means the dropdown
+    /// never has to slide left to fit, so it is never clipped and never scrolls
+    /// sideways. Both gain two for the frame the framework draws around the
+    /// interior.
+    ///
+    /// Height is one row for the bar plus the **open** menu's own rows, capped
+    /// at [`MAX_ROWS`] and scrolling past it, plus the frames: the dropdown's
+    /// own two and the box's own two. The open menu's and not the longest, so
+    /// the box is the size of what is on screen. The box is pinned to the
+    /// screen's top-left by [`Dialog::top_left`], so a taller or shorter open
+    /// menu grows the box downward without ever moving the bar.
     fn size_hint(&self) -> (u16, u16) {
-        let longest = self
-            .model
-            .menus
-            .iter()
-            .map(|menu| menu.items.len())
-            .max()
-            .unwrap_or(0)
-            .min(MAX_ROWS);
-        let height = u16::try_from(longest.saturating_add(5)).unwrap_or(u16::MAX);
-        (u16::MAX, height)
+        let width = self.bar_width().max(self.open_span()).saturating_add(2);
+        let rows = self.menu().map_or(0, |menu| menu.items.len()).min(MAX_ROWS);
+        // A row for the bar, the dropdown's own frame, and the box's own frame.
+        let height = rows.saturating_add(5);
+        (
+            u16::try_from(width).unwrap_or(u16::MAX),
+            u16::try_from(height).unwrap_or(u16::MAX),
+        )
+    }
+
+    /// The screen's own top-left, the natural home of a menu bar.
+    ///
+    /// Not [`crate::dialog::centred`]: a bar centred in the screen is a bar
+    /// nowhere a bar belongs, and a box whose width and height track the open
+    /// menu would jump on every `Left`/`Right` if it were centred. Pinned to
+    /// the corner instead, only the box's far edges move and the titles stay
+    /// put. It lands one row below where [`crate::ui::draw_menubar`] draws the
+    /// permanent bar, because the box's own frame takes that first row.
+    fn top_left(&self) -> bool {
+        true
     }
 
     /// The six title letters, always.
@@ -1284,6 +1330,54 @@ mod tests {
             !row.keys.contains(crate::config::keymap::NO_FALLBACK),
             "{}",
             row.keys
+        );
+    }
+
+    #[test]
+    fn the_box_asks_for_the_open_menus_rows_not_the_longest() {
+        // The height is the open menu's, so the box is the size of what is on
+        // screen: Net's one row is a shorter box than Files' fifteen.
+        let m = model(&app());
+        let net = MenuDialog::new(m.clone(), 3);
+        let files = MenuDialog::new(m, 0);
+        assert_eq!(net.open_menu(), 3, "Net is the one-item menu");
+        let (_, net_h) = net.size_hint();
+        let (_, files_h) = files.size_hint();
+        assert!(net_h < files_h, "Net {net_h} vs Files {files_h}");
+        // The bar row, Net's single item, the dropdown's frame and the box's.
+        assert_eq!(usize::from(net_h), 1 + 1 + 2 + 2);
+    }
+
+    #[test]
+    fn the_bar_does_not_move_when_the_open_menu_changes() {
+        // Pinned to the screen's top-left, the box may reach further right or
+        // further down as menus change, but its origin - where the titles are
+        // drawn - never moves, which is the whole reason for not centring it.
+        let mut d = dialog();
+        let area = Rect::new(0, 0, 120, 40);
+        let first = crate::dialog::dialog_rect(area, &d);
+        assert_eq!((first.x, first.y), (area.x, area.y), "top-left of the area");
+        for _ in 0..6 {
+            d.handle_key(&key(KeyCode::Right));
+            let rect = crate::dialog::dialog_rect(area, &d);
+            assert_eq!(
+                (rect.x, rect.y),
+                (first.x, first.y),
+                "the bar moved opening menu {}",
+                d.open_menu()
+            );
+        }
+        // And the box really does resize per menu - otherwise the pin above
+        // would be proving nothing.
+        let sizes: Vec<(u16, u16)> = (0..6)
+            .map(|open| {
+                let rect = crate::dialog::dialog_rect(area, &MenuDialog::new(model(&app()), open));
+                (rect.width, rect.height)
+            })
+            .collect();
+        assert!(
+            sizes.iter().any(|size| *size != sizes[0]),
+            "the box never changed size: {sizes:?}"
         );
     }
 

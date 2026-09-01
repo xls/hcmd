@@ -484,6 +484,22 @@ pub trait Dialog: Send {
         None
     }
 
+    /// Whether this dialog is laid against the top-left of the area it is
+    /// given rather than centred in it.
+    ///
+    /// [`Dialog::anchor`] is the same top-left placement narrowed to one
+    /// panel; this is the whole screen's own corner, for a dialog that *is* a
+    /// bar and belongs where a bar lives. `false` - the default, and the
+    /// answer for every dialog but the menu - leaves [`centred`] in charge,
+    /// which is what the design made the framework's job.
+    ///
+    /// A dialog that returns `true` here must not also declare an
+    /// [`Dialog::anchor`]: the two are the same corner reached two ways, and
+    /// [`dialog_rect`] reads the anchor's narrowed rectangle first.
+    fn top_left(&self) -> bool {
+        false
+    }
+
     /// Take the live job table, once per frame, before the dialog is drawn.
     ///
     /// The progress dialog and the queue view are **views of jobs**,
@@ -726,17 +742,18 @@ pub fn centred(area: Rect, want_w: u16, want_h: u16) -> Rect {
 /// cursor agree.
 ///
 /// [`centred`] for an ordinary dialog; **top-left within `area`** for one that
-/// declares a [`Dialog::anchor`], because `crate::ui::dialog_area` has already
-/// narrowed `area` to the rows under that panel's header and a centred box in
-/// that rectangle would float in the middle of the panel rather than hang from
-/// its top.
+/// hangs from a corner - a [`Dialog::anchor`] under a panel's header (where
+/// `crate::ui::dialog_area` has already narrowed `area` to the rows below that
+/// header, and a centred box would float in the middle of the panel rather
+/// than hang from its top), or a [`Dialog::top_left`] bar against the whole
+/// screen's own corner.
 pub fn dialog_rect(area: Rect, dialog: &dyn Dialog) -> Rect {
     let (w, h) = dialog.size_hint();
-    if dialog.anchor().is_none() {
+    if dialog.anchor().is_none() && !dialog.top_left() {
         return centred(area, w, h);
     }
-    // The same clamps [`centred`] applies, so an anchored dialog cannot be
-    // narrower than a legible box or wider than the panel it hangs under.
+    // The same clamps [`centred`] applies, so a hung dialog cannot be
+    // narrower than a legible box or wider than the rectangle it hangs in.
     let widest = area.width.saturating_sub(SIDE_MARGIN.saturating_mul(2));
     let w = w.max(MIN_DIALOG_WIDTH).min(widest.max(1)).min(area.width);
     let h = h.max(MIN_DIALOG_HEIGHT).min(area.height);
