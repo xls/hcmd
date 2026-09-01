@@ -38,21 +38,26 @@ use crate::dialog::{
 use crate::input::{DialogId, KeyCode};
 use crate::vfs::archive::format::{CompressionLevel, FormatId};
 
-/// The formats `Alt+F5` offers, in the order.
+/// The formats `Alt+F5` offers, in [`FormatId::ALL`]'s order.
 ///
-/// `.rar` is not among them and never will be: "RAR compression is
-/// patent-encumbered and `unrar` cannot write". A format that
-/// cannot be written is not a choice, and offering one that fails at `OK`
-/// would be the opposite of the "refused up front".
-pub const PACKABLE: &[FormatId] = &[
-    FormatId::Zip,
-    FormatId::Tar,
-    FormatId::TarGz,
-    FormatId::TarBz2,
-    FormatId::TarXz,
-    FormatId::TarZst,
-    FormatId::SevenZ,
-];
+/// Derived, not listed: a format is offered here exactly when it can be
+/// written, and each format already answers that through
+/// [`WriteModel::writable`](crate::vfs::archive::format::WriteModel::writable).
+/// A second hand-kept list would be one that could drift - offer a `.rar` that
+/// fails at `OK`, or forget a format added later - so the dialog reads the
+/// capability instead of restating it.
+///
+/// `.rar` is absent for that reason and never will be: "RAR compression is
+/// patent-encumbered and `unrar` cannot write", so its write model is `None`
+/// and the filter drops it. Offering a choice that fails at `OK` would be the
+/// opposite of the "refused up front".
+fn packable() -> Vec<FormatId> {
+    FormatId::ALL
+        .iter()
+        .copied()
+        .filter(|f| f.backend().write_model().writable())
+        .collect()
+}
 
 /// One focusable control, in `Tab` order.
 ///
@@ -163,7 +168,10 @@ impl PackDialog {
 
     /// The format currently chosen.
     pub fn format(&self) -> FormatId {
-        PACKABLE.get(self.format).copied().unwrap_or(FormatId::Zip)
+        packable()
+            .get(self.format)
+            .copied()
+            .unwrap_or(FormatId::Zip)
     }
 
     /// The compression level currently chosen.
@@ -183,7 +191,7 @@ impl PackDialog {
 
     /// Step the format selector and rewrite the field's extension to match.
     fn step_format(&mut self, forward: bool) {
-        let n = PACKABLE.len();
+        let n = packable().len();
         self.format = if forward {
             (self.format + 1) % n
         } else {
@@ -226,10 +234,10 @@ impl PackDialog {
     }
 }
 
-/// Which [`PACKABLE`] index `name`'s extension names, if any.
+/// Which [`packable`] index `name`'s extension names, if any.
 fn format_of(name: &str) -> Option<usize> {
     let found = FormatId::from_name(name)?;
-    PACKABLE.iter().position(|f| *f == found)
+    packable().iter().position(|f| *f == found)
 }
 
 /// `name` with whatever archive extension it has replaced by `format`'s.
@@ -622,8 +630,29 @@ mod tests {
     #[test]
     fn rar_is_not_offered_because_it_cannot_be_written() {
         // Offering a choice that fails at `OK` is the opposite
-        // of the "refused up front".
-        assert!(!PACKABLE.contains(&FormatId::Rar));
+        // of the "refused up front", and `.rar` is read only.
+        assert!(!packable().contains(&FormatId::Rar));
+    }
+
+    #[test]
+    fn the_offer_is_exactly_the_writable_formats() {
+        // The dialog and the capability cannot disagree: what `Alt+F5` offers
+        // is `FormatId::ALL` filtered by the same `writable()` each format
+        // answers for itself, in the same order. A hand-kept list here would
+        // be a second source of truth free to drift from the first.
+        let want: Vec<FormatId> = FormatId::ALL
+            .iter()
+            .copied()
+            .filter(|f| f.backend().write_model().writable())
+            .collect();
+        assert_eq!(packable(), want);
+        // Every format offered really accepts a write, and none that refuses
+        // one is offered.
+        assert!(
+            packable()
+                .iter()
+                .all(|f| f.backend().write_model().writable())
+        );
     }
 
     #[test]
