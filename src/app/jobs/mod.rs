@@ -1269,6 +1269,32 @@ mod tests {
             app.job(id).is_some_and(|j| !j.background),
             "the blocked task was brought to the foreground"
         );
+        // And the overwrite question is actually on screen: its progress dialog
+        // is opened and the conflict dialog raised on top, so the user answers
+        // it here rather than hunting for it in the queue.
+        let ids: Vec<DialogId> = app.dialogs().iter().map(|f| f.dialog.id()).collect();
+        assert!(
+            ids.contains(&DialogId::Progress),
+            "the task's progress dialog opened: {ids:?}"
+        );
+        assert!(
+            ids.contains(&DialogId::Conflict),
+            "the overwrite question is on screen: {ids:?}"
+        );
+
+        // Answering it clears the block, exactly as for a foreground job.
+        app.answer_job(
+            id,
+            crate::ops::Decision::Conflict {
+                choice: crate::ops::ConflictChoice::Overwrite,
+                rename_to: None,
+                apply_to_all: false,
+            },
+        );
+        assert!(
+            app.job(id).is_some_and(|j| !j.needs_attention()),
+            "the question is answered and the job is unblocked"
+        );
     }
 
     #[test]

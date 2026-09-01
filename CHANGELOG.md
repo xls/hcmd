@@ -2,6 +2,10 @@
 
 Notable changes per release, one line each. Newest first.
 
+## v0.9.10
+
+- A background copy or move now refreshes the destination panel the moment it finishes, instead of leaving a stale listing until the next Ctrl+R.
+
 ## v0.9.9
 
 - Alt+F9 opens a background jobs dialog: a progress bar per job, an overall bar, and a small activity indicator in the panel's bottom-right corner while any work is running.

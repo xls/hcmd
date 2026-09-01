@@ -436,14 +436,6 @@ pub async fn event_loop() -> Result<()> {
         // the disconnected state: the last listing stays on
         // screen, greyed, and the path is not lost.
         app.service_remote_liveness();
-        for request in app.take_pending_reads() {
-            let (side, tab) = (request.side, request.tab);
-            let task = tokio::spawn(stream_read(Arc::clone(&app.vfs), request, vfs_tx.clone()));
-            // The handle, so the *next* read of this tab can stop this walk
-            // instead of leaving it to fill a channel whose every batch the
-            // generation check then discards (`App::register_read`).
-            app.register_read(side, tab, task.abort_handle());
-        }
         // the gates, in front of the user and before anything is
         // touched: a write into a compressed tar over `rewrite_max_size` is
         // refused here, and one over `rewrite_warn_size` is asked about. Here
@@ -570,6 +562,25 @@ pub async fn event_loop() -> Result<()> {
         // that shows them: a progress dialog opens, a conflict is raised, a
         // finished job reports and the panels re-read.
         app.sync_job_dialogs();
+
+        // Serviced here, after everything that can queue a read - a keystroke's
+        // `dispatch` from the last iteration and, crucially, the re-read a
+        // finished job just queued in `sync_job_dialogs`. When a background job
+        // finishes there is no keystroke behind it and, once it is gone,
+        // nothing keeps the loop awake (`any_active` goes false, so the
+        // animation tick stops); spawning the read here rather than at the top
+        // of the loop puts its listing in flight before the loop blocks,
+        // instead of leaving it to wait for the next `Ctrl+R`. The walk's
+        // batches wake the loop through `vfs_rx`, which is what puts the copied
+        // file on screen.
+        for request in app.take_pending_reads() {
+            let (side, tab) = (request.side, request.tab);
+            let task = tokio::spawn(stream_read(Arc::clone(&app.vfs), request, vfs_tx.clone()));
+            // The handle, so the *next* read of this tab can stop this walk
+            // instead of leaving it to fill a channel whose every batch the
+            // generation check then discards (`App::register_read`).
+            app.register_read(side, tab, task.abort_handle());
+        }
 
         // the `Alt+F5`: the dialog answered, and this creates the
         // archive and queues the copy that fills it. Serviced here for the
