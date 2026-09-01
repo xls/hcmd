@@ -43,6 +43,7 @@
 //! whatever the file size - it decimates). There is no path through this module
 //! that accumulates the file.
 
+pub mod axml;
 pub mod copy;
 pub mod cursor;
 pub mod decode;
@@ -763,6 +764,31 @@ impl Drop for Viewer {
     }
 }
 
+/// The document a compiled Android manifest was built from, when that is what
+/// this file is.
+///
+/// The sniff is the file's own header: the magic, and a recorded length that
+/// must be the length the file actually has. Both halves are needed, and only
+/// the first is in the probe - so the length comes from the source.
+///
+/// Bounded, because this reads the whole file into memory to decode it. A
+/// manifest is tens of kilobytes; anything claiming to be one and running to
+/// megabytes is not worth trusting with the memory.
+fn axml_text(probe: &[u8], source: &Source, opener: &Opener) -> Option<String> {
+    /// Generous next to any real manifest, and small enough to read at once.
+    const MAX: u64 = 8 * 1024 * 1024;
+    let recorded = u64::from(axml::recorded_len(probe)?);
+    let len = source.len()?;
+    if recorded != len || len > MAX {
+        return None;
+    }
+    let mut whole = Source::open(Arc::clone(opener), Some(len)).ok()?;
+    let window = whole
+        .read_window(0, WindowLen::new(usize::try_from(len).ok()?))
+        .ok()?;
+    axml::decode(window.bytes())
+}
+
 impl Viewer {
     /// Open a viewer over an already-built [`Opener`].
     ///
@@ -779,10 +805,23 @@ impl Viewer {
         cfg: &ViewerConfig,
     ) -> Result<Self> {
         let mut source = Source::open(Arc::clone(&opener), len)?;
-        let probe = source.read_window(
+        let mut probe = source.read_window(
             0,
             WindowLen::new(decode::SNIFF_BYTES.max(decode::BINARY_PROBE_BYTES)),
         )?;
+        // A compiled Android manifest is a document, not a dump. Decoding it
+        // here rather than anywhere further in means everything downstream -
+        // the index, the search, the highlighter - sees the XML it turns back
+        // into and needs to know nothing about where it came from.
+        let mut opener = opener;
+        if let Some(text) = axml_text(probe.bytes(), &source, &opener) {
+            opener = source::memory_opener(Arc::new(text.into_bytes()));
+            source = Source::open(Arc::clone(&opener), None)?;
+            probe = source.read_window(
+                0,
+                WindowLen::new(decode::SNIFF_BYTES.max(decode::BINARY_PROBE_BYTES)),
+            )?;
+        }
         let complete = probe.hit_eof();
         let found = decode::resolve(&cfg.encoding, probe.bytes(), complete);
         let binary = decode::looks_binary(probe.bytes(), found.encoding);

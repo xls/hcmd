@@ -2863,3 +2863,37 @@ fn shift_right_from_the_second_character_still_reaches_the_first() {
         "the first character is selectable"
     );
 }
+
+#[test]
+fn a_compiled_android_manifest_opens_as_the_document_it_was() {
+    // End to end: the viewer, not the decoder. A `.xml` out of an APK is a
+    // dump until something turns it back into XML, and everything downstream -
+    // the mode it opens in, the lines it indexes, the highlighter - should see
+    // the document rather than the bytes.
+    let home = match std::env::var("HOME") {
+        Ok(home) => home,
+        Err(_) => return,
+    };
+    let path = std::path::Path::new(&home).join("TestData/AndroidManifest.xml");
+    let Ok(bytes) = std::fs::read(&path) else {
+        eprintln!("SKIPPING: no sample manifest at ~/TestData");
+        return;
+    };
+
+    let mut v = open_bytes(&bytes, &cfg());
+    assert_eq!(
+        v.mode(),
+        ViewerMode::Text,
+        "a document opens as text, not as a dump"
+    );
+    v.layout(4, 120).expect("layout");
+    let rows = texts(&v);
+    assert!(
+        rows.first().is_some_and(|r| r.starts_with("<?xml ")),
+        "its first line is the declaration: {rows:?}"
+    );
+    assert!(
+        rows.iter().any(|r| r.contains("<manifest")),
+        "and the tag it is: {rows:?}"
+    );
+}
