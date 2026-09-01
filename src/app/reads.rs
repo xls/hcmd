@@ -334,7 +334,13 @@ impl App {
             let touched = changed
                 .iter()
                 .any(|path| path == &dir || path.parent() == Some(dir.as_path()));
-            if touched {
+            // Not while one is already in flight for this panel. A directory
+            // big enough to take longer than the watch's throttle would
+            // otherwise start a fresh walk every 200 ms and never finish one,
+            // and the read already running sees the change anyway: it reads
+            // the directory as it is now, not as it was when it was asked for.
+            let busy = self.panel(side).active_tab().loading;
+            if touched && !busy {
                 self.reread(side);
             }
         }
@@ -371,9 +377,11 @@ impl App {
         // is about the listing that is coming; the cursor's current name is
         // about the one being replaced, and the two disagree precisely when
         // the caller knew better.
-        if tab.pending_select.is_none() {
-            tab.pending_select = tab.cursor_name();
-        }
+        // And only where the vector is replaced wholesale, below: a merge
+        // reconciles row by row and re-anchors against the row the cursor is
+        // on when it *completes*, so a name taken now would only be a stale
+        // answer waiting to drag the cursor backwards.
+        //
         // A rescan updates the listing in place instead of rebuilding it, so
         // nothing on screen blanks: the rows stay, their computed columns stay,
         // and the read reconciles into them when it completes. Only a plain
@@ -390,7 +398,12 @@ impl App {
             self.request_read_inner(side, tab_index, path, true);
         } else {
             // The old rows stay on screen until the replacement arrives;
-            // clearing here would flash bare background after every copy.
+            // clearing here would flash bare background after every copy. The
+            // vector is swapped whole here, so there is nothing to reconcile
+            // against and the cursor's name has to be carried across.
+            if tab.pending_select.is_none() {
+                tab.pending_select = tab.cursor_name();
+            }
             tab.replace_on_next_batch = true;
             self.request_read(side, tab_index, path);
         }
@@ -674,12 +687,30 @@ impl App {
                 // now, in place; an ordinary read has already built `entries`
                 // and only needs the final sort. Either way the order is the
                 // same as the incremental one the batches kept.
-                if tab.merging.is_some() {
+                // Where the cursor is now, taken before the rows move under
+                // it. A rescan of a large directory outlives the watch's
+                // throttle, and a user holding `Ins` walks down a row at a
+                // time while it runs; anchoring to the name the read was asked
+                // for would drag the cursor back to where they started, which
+                // re-toggles rows they had marked and skips the ones they had
+                // not reached yet.
+                let anchor = if tab.merging.is_some() {
+                    let here = tab.cursor_name();
                     tab.merge_listing(directories_first);
+                    here
                 } else {
                     tab.sort_entries(directories_first);
+                    None
+                };
+                // A caller that asked for a row wins: it knew which row the
+                // listing now arriving is about. Otherwise the cursor stays on
+                // the row it was on, wherever the sort has put it.
+                if !tab.resolve_pending_select()
+                    && let Some(name) = anchor
+                {
+                    tab.pending_select = Some(name);
+                    tab.resolve_pending_select();
                 }
-                tab.resolve_pending_select();
                 // The listing is complete, so a name that has not turned up is
                 // not going to. Drop the request rather than letting it fire
                 // against a later, unrelated read of the same tab.

@@ -1334,3 +1334,39 @@ async fn two_panels_in_the_same_archive_share_one_index() {
 }
 
 // ------------------------------------------ the clipboard ---
+
+#[tokio::test]
+async fn a_rescan_leaves_the_cursor_where_the_user_moved_it() {
+    // Holding `Ins` in a directory big enough that a rescan outlives the
+    // watch's throttle: the read is asked for while the cursor is at the top,
+    // and by the time it lands the user has walked several rows down. The
+    // cursor used to be dragged back to where it was when the read started,
+    // which re-toggles rows already marked and skips the ones not yet reached.
+    let tree = ArchiveTree::new("rescan-cursor");
+    for name in ["a.txt", "b.txt", "c.txt", "d.txt"] {
+        std::fs::write(tree.path(name), b"x").expect("write");
+    }
+    let mut app = app_at(&tree.root, &[]);
+    app.reread(Side::Left);
+    service_reads(&mut app).await;
+
+    // Start at `a.txt`, then a change lands and a rescan is asked for.
+    app.left.active_tab_mut().cursor = 1;
+    assert_eq!(
+        app.left.active_tab().current().map(|e| e.name.clone()),
+        Some("a.txt".to_string())
+    );
+    app.reread(Side::Left);
+
+    // The user keeps moving while it runs.
+    app.left.active_tab_mut().cursor = 3;
+    let moved_to = app.left.active_tab().current().map(|e| e.name.clone());
+    assert_eq!(moved_to, Some("c.txt".to_string()));
+
+    service_reads(&mut app).await;
+    assert_eq!(
+        app.left.active_tab().current().map(|e| e.name.clone()),
+        moved_to,
+        "the rescan left the cursor where the user put it"
+    );
+}
