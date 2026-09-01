@@ -192,6 +192,22 @@ answered ${FETCH_HTTP} for ${name}.tar.gz)" ;;
 
     say "installed $INSTALL_DIR/hcmd"
 
+    # An upgrade over an existing config will not show options added since the
+    # file was written. Offer to append commented examples of them; it never
+    # changes an existing setting. Default yes, but only when a config already
+    # exists and only on a real terminal - never modify files unprompted in a
+    # pipe or CI.
+    config="${XDG_CONFIG_HOME:-$HOME/.config}/holoscommander/config.toml"
+    if [ -f "$config" ] && [ -t 0 ]; then
+        say ""
+        printf '%s' "Add examples of new config options to your existing config? [Y/n] "
+        read -r reply || reply=""
+        case "$reply" in
+            [Nn]*) say "skipped; run 'hcmd --update-config' any time" ;;
+            *) "$INSTALL_DIR/hcmd" --update-config || true ;;
+        esac
+    fi
+
     case ":$PATH:" in
         *":$INSTALL_DIR:"*) ;;
         *)

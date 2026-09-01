@@ -458,6 +458,174 @@ fn version_is_older(have: &str, want: &str) -> bool {
     false
 }
 
+/// The key a declaration line names, from `key = ...` (a leading `#` already
+/// stripped by the caller). `None` for anything that is not a declaration.
+fn declaration_key(trimmed: &str) -> Option<String> {
+    let key: String = trimmed
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .collect();
+    if !key.is_empty() && trimmed[key.len()..].trim_start().starts_with('=') {
+        Some(key)
+    } else {
+        None
+    }
+}
+
+/// Every key a settings file mentions, commented or not, so a patch can tell
+/// which options the file already knows about.
+fn declared_keys(text: &str) -> std::collections::HashSet<String> {
+    text.lines()
+        .filter_map(|line| {
+            let trimmed = line.trim_start().trim_start_matches('#').trim_start();
+            declaration_key(trimmed)
+        })
+        .collect()
+}
+
+/// One documented option from a shipped reference: which `[section]` it lives
+/// under, its key, and the lines that document it (its comments, then the
+/// example line, commented).
+struct RefOption {
+    section: String,
+    key: String,
+    block: Vec<String>,
+}
+
+/// Parse a shipped reference into its documented options, in file order.
+fn reference_options(text: &str) -> Vec<RefOption> {
+    let mut out = Vec::new();
+    let mut section = String::new();
+    let mut comments: Vec<String> = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with('[') {
+            section = trimmed.trim_matches(|c| c == '[' || c == ']').to_string();
+            comments.clear();
+        } else if trimmed.is_empty() {
+            comments.clear();
+        } else if trimmed.starts_with('#') {
+            comments.push(line.to_string());
+        } else if let Some(key) = declaration_key(trimmed) {
+            let mut block = comments.clone();
+            block.push(format!("# {}", line.trim_end()));
+            out.push(RefOption {
+                section: section.clone(),
+                key,
+                block,
+            });
+            comments.clear();
+        } else {
+            comments.clear();
+        }
+    }
+    out
+}
+
+/// Bump the `written by version X` stamp in a generated file's header to the
+/// current version, so it stops reading as stale after a patch.
+fn bump_stamp(text: &str, current: &str) -> String {
+    match stamped_version(text) {
+        Some(old) => text.replacen(
+            &format!("written by version {old}"),
+            &format!("written by version {current}"),
+            1,
+        ),
+        None => text.to_string(),
+    }
+}
+
+/// Append commented examples of the options a settings file does not yet
+/// mention, and bump its version stamp. Returns the new contents and the keys
+/// added, or `None` when the file already knows every option.
+///
+/// Additive and reversible: nothing existing is touched, and everything added
+/// is a comment, so no setting changes until a line is moved under its section
+/// and uncommented.
+fn patch_reference(
+    user_text: &str,
+    example_text: &str,
+    current: &str,
+) -> Option<(String, Vec<String>)> {
+    let known = declared_keys(user_text);
+    let options = reference_options(example_text);
+    let missing: Vec<&RefOption> = options
+        .iter()
+        .filter(|opt| !known.contains(&opt.key))
+        .collect();
+    if missing.is_empty() {
+        return None;
+    }
+
+    let mut body = String::new();
+    body.push_str(&format!(
+        "\n# --- Options added since this file was written (hcmd {current}). ---\n\
+         # Commented examples only; nothing here changes a setting. Move a line\n\
+         # under its own [section] and uncomment it to use it.\n"
+    ));
+    let mut last_section = String::new();
+    let mut added = Vec::new();
+    for opt in &missing {
+        if opt.section != last_section {
+            body.push_str(&format!("\n# [{}]\n", opt.section));
+            last_section.clone_from(&opt.section);
+        }
+        for line in &opt.block {
+            body.push_str(line);
+            body.push('\n');
+        }
+        added.push(opt.key.clone());
+    }
+
+    let mut content = bump_stamp(user_text, current);
+    if !content.ends_with('\n') {
+        content.push('\n');
+    }
+    content.push_str(&body);
+    Some((content, added))
+}
+
+/// `--update-config`: append commented examples of new options to the user's
+/// `config.toml` and `keymap.toml` without changing anything they already have.
+///
+/// Returns the process exit code, and prints a line per file saying what it
+/// added or that it was already current. Safe to run repeatedly: a file that
+/// already mentions every option is left untouched.
+pub fn update_config() -> i32 {
+    let dir = match config_dir() {
+        Ok(dir) => dir,
+        Err(err) => {
+            println!("configuration directory: unavailable ({err})");
+            return 1;
+        }
+    };
+    println!("configuration directory: {}", dir.display());
+    let current = env!("CARGO_PKG_VERSION");
+    let files = [
+        ("config.toml", EXAMPLE_CONFIG),
+        ("keymap.toml", EXAMPLE_KEYMAP),
+    ];
+    for (name, example) in files {
+        let path = dir.join(name);
+        let Ok(user_text) = fs::read_to_string(&path) else {
+            println!("  {name}: not present, nothing to update");
+            continue;
+        };
+        match patch_reference(&user_text, example, current) {
+            Some((content, added)) => match fs::write(&path, content) {
+                Ok(()) => println!(
+                    "  {name}: added {} example(s): {}",
+                    added.len(),
+                    added.join(", ")
+                ),
+                Err(err) => println!("  {name}: could not write: {err}"),
+            },
+            None => println!("  {name}: already up to date"),
+        }
+    }
+    0
+}
+
 /// Deprecated values that still load, reported so they can be fixed.
 fn deprecated_values(text: &str, file_label: &str) -> Vec<String> {
     let mut out = Vec::new();
@@ -908,6 +1076,38 @@ mod tests {
         assert!(
             stale_keymap_warning(&text).is_none(),
             "a current file must not warn"
+        );
+    }
+
+    #[test]
+    fn update_config_adds_only_missing_options_and_leaves_the_rest_untouched() {
+        let user = "# Holos Commander settings, written by version 0.9.4.\n#\n[panel]\ngit_status = false\n";
+        let example = "# shipped, written by version 0.9.8.\n[panel]\n# whether the git column shows\ngit_status = true\n# the walk animation\nsize_walk_style = \"dots\"\n";
+        let (out, added) = patch_reference(user, example, "0.9.8").expect("a new option to add");
+        assert!(
+            added.contains(&"size_walk_style".to_string()),
+            "the new key"
+        );
+        assert!(
+            !added.contains(&"git_status".to_string()),
+            "a key the file already mentions is not re-added"
+        );
+        assert!(
+            out.contains("git_status = false"),
+            "the user's own setting is untouched"
+        );
+        assert!(
+            out.contains("# size_walk_style = \"dots\""),
+            "the new option is appended, commented: {out}"
+        );
+        assert!(
+            out.contains("written by version 0.9.8"),
+            "the stamp is bumped"
+        );
+        // Idempotent: a second pass over the patched file finds nothing new.
+        assert!(
+            patch_reference(&out, example, "0.9.8").is_none(),
+            "running it again adds nothing"
         );
     }
 

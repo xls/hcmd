@@ -19,6 +19,7 @@ enum Mode {
     Run,
     KeyTest,
     CheckConfig,
+    UpdateConfig,
     Version,
     Help,
     Unknown(String),
@@ -42,6 +43,7 @@ where
         let found = match arg {
             "--keytest" => Mode::KeyTest,
             "--check-config" => Mode::CheckConfig,
+            "--update-config" => Mode::UpdateConfig,
             "--version" | "-V" => Mode::Version,
             "--help" | "-h" => Mode::Help,
             other => return Mode::Unknown(other.to_string()),
@@ -62,6 +64,7 @@ fn usage() -> String {
          options:\n  \
          --keytest        show how this terminal encodes each key\n  \
          --check-config   validate the configuration files and exit\n  \
+         --update-config  add examples of new options to config.toml/keymap.toml\n  \
          -V, --version    print the version\n  \
          -h, --help       print this message\n\
          \n\
@@ -90,6 +93,10 @@ fn main() -> ExitCode {
         }
         Mode::CheckConfig => {
             let code = config::check_config();
+            ExitCode::from(u8::try_from(code).unwrap_or(1))
+        }
+        Mode::UpdateConfig => {
+            let code = config::update_config();
             ExitCode::from(u8::try_from(code).unwrap_or(1))
         }
         Mode::KeyTest => {
@@ -214,8 +221,8 @@ mod tests {
             .collect();
         assert_eq!(
             options.len(),
-            4,
-            "expected four option lines, got {options:?}"
+            5,
+            "expected five option lines, got {options:?}"
         );
         for line in &options {
             assert!(line.starts_with("  -"), "not indented by two: {line:?}");
