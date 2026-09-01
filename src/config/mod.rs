@@ -34,9 +34,9 @@ pub use config::{
     DevicesConfig, DigitKeys, EditorConfig, Endian, ExecuteIn, ExecutePolicy, FiletypeRule,
     HexConfig, HexFormat, HexGroup, HighlightEngine, KeyboardProtocol, Matcher, ModeMatch,
     NameTruncate, OpenConfig, OpenHandler, OpsConfig, PanelConfig, QuickSearchCase,
-    QuickSearchMode, RemoteConfig, SearchConfig, SearchEngine, SwitchOnRun, TabBar, TerminalConfig,
-    UiConfig, ViewerConfig, ViewerEncodingConfig, ViewerHighlightConfig, ViewerMode,
-    ViewerRenderConfig,
+    QuickSearchMode, RemoteConfig, SearchConfig, SearchEngine, SizeWalkStyle, SwitchOnRun, TabBar,
+    TerminalConfig, UiConfig, ViewerConfig, ViewerEncodingConfig, ViewerHighlightConfig,
+    ViewerMode, ViewerRenderConfig,
 };
 pub use keymap::{KeyContext, Keymap, Resolution};
 pub use paths::{config_dir, start_dir, state_dir};
@@ -691,6 +691,7 @@ static CONFIG_SCHEMA: std::sync::LazyLock<Schema> = std::sync::LazyLock::new(|| 
             "quick_search",
             "quick_search_case",
             "quick_search_filter",
+            "size_walk_style",
             "digit_keys",
             "max_tabs",
             "show_tab_bar",

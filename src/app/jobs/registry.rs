@@ -95,6 +95,32 @@ impl Jobs {
         self.specs.get(&id)
     }
 
+    /// True while any size walk is running, so the loop knows to keep waking to
+    /// advance the size-column animation even when the walk is quiet.
+    pub fn any_walking(&self) -> bool {
+        self.rows
+            .iter()
+            .any(|status| status.finished.is_none() && status.kind == crate::ops::JobKind::Size)
+    }
+
+    /// True while a size walk covering `path` is still running.
+    ///
+    /// `Space` or `Ctrl+L` on a directory queues a [`JobKind::Size`] over it;
+    /// until that job finishes the figure is unknown, and the panel shows an
+    /// animation in place of `<DIR>` for exactly these directories. Derived
+    /// from the live jobs and their specs, so nothing has to be kept in step by
+    /// hand and a cancelled walk stops animating the moment its row is gone.
+    pub fn is_walking(&self, path: &crate::vfs::VfsPath) -> bool {
+        self.rows.iter().any(|status| {
+            status.finished.is_none()
+                && status.kind == crate::ops::JobKind::Size
+                && self
+                    .specs
+                    .get(&status.id)
+                    .is_some_and(|spec| spec.sources.iter().any(|source| source == path))
+        })
+    }
+
     /// The first job that has not finished, which is the one a progress dialog
     /// shows.
     pub fn active(&self) -> Option<&JobStatus> {

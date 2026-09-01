@@ -832,6 +832,10 @@ pub struct App {
     /// running, so the config is re-read when it exits. Only the menu's
     /// `edit_config` sets it; `F4` on an arbitrary file does not.
     pub reload_config_after_editor: bool,
+    /// A monotonic clock started at launch, for animations that advance with
+    /// wall time rather than with how often the screen happens to redraw - the
+    /// size-column walk indicator reads its phase from here.
+    pub animation: std::time::Instant,
     /// The file `F4` is about to edit, held while the large-file warning is
     /// on screen. Taken when the warning is answered yes.
     pub editor_size_pending: Option<VfsPath>,
@@ -972,6 +976,7 @@ impl App {
             pending_host_secret: None,
             pending_new_host: false,
             reload_config_after_editor: false,
+            animation: std::time::Instant::now(),
             editor_size_pending: None,
             editor_size_confirmed: false,
         }

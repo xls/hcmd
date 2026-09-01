@@ -527,15 +527,29 @@ fn draw_entries(
         };
         // a directory that has been walked shows its byte count
         // in the `size` column instead of `<DIR>`.
+        let entry_path = tab.path.join(&entry.name);
         let sized = if entry.is_dir() && !entry.is_parent {
-            app.jobs
-                .sizes
-                .get(&tab.path.join(&entry.name))
-                .map(|s| s.bytes)
+            app.jobs.sizes.get(&entry_path).map(|s| s.bytes)
         } else {
             None
         };
-        let body = entry_line(entry, allocated, &row_format, sized);
+        // A directory whose size is being walked right now animates in the size
+        // cell, unless the style is turned off.
+        let walk = if entry.is_dir()
+            && !entry.is_parent
+            && sized.is_none()
+            && app.config.panel.size_walk_style != crate::config::SizeWalkStyle::Off
+            && app.jobs.is_walking(&entry_path)
+        {
+            Some(walk_indicator(
+                app.config.panel.size_walk_style,
+                app.animation.elapsed(),
+                g.is_ascii(),
+            ))
+        } else {
+            None
+        };
+        let body = entry_line(entry, allocated, &row_format, sized, walk.as_deref());
         let body = text::fit_left(&body, usize::from(area.width), Crop::End, g.ellipsis());
         f.render_widget(
             Paragraph::new(Line::from(Span::styled(body, style))),
@@ -625,12 +639,70 @@ fn contrast_ratio(a: Rgb, b: Rgb) -> f64 {
     (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
 }
 
+/// The five-column animation shown in the size cell while a directory is being
+/// walked, in place of `<DIR>`.
+///
+/// Width five to match `<DIR>` exactly, every glyph one cell wide. The default
+/// styles use only characters common to nearly every monospace font, so it
+/// renders without a Nerd Font and over SSH where the client's font is unknown;
+/// an ASCII terminal gets a plain block snake whatever the style. Phase comes
+/// from wall time, so it advances smoothly however often the screen redraws.
+pub(crate) fn walk_indicator(
+    style: crate::config::SizeWalkStyle,
+    elapsed: std::time::Duration,
+    ascii: bool,
+) -> String {
+    use crate::config::SizeWalkStyle;
+    const WIDTH: usize = 5;
+    let tick = usize::try_from(elapsed.as_millis() / 110).unwrap_or(0);
+    if ascii || style == SizeWalkStyle::Snake {
+        // A two-cell block sweeping across and wrapping.
+        let (fill, gap) = if ascii {
+            ('#', '.')
+        } else {
+            ('\u{25B0}', '\u{25B1}')
+        };
+        let head = tick % WIDTH;
+        return (0..WIDTH)
+            .map(|i| {
+                if i == head || i == (head + WIDTH - 1) % WIDTH {
+                    fill
+                } else {
+                    gap
+                }
+            })
+            .collect();
+    }
+    match style {
+        SizeWalkStyle::Dots => {
+            // A dot travelling to the far cell and back.
+            let path = [0, 1, 2, 3, 4, 3, 2, 1];
+            let at = path[tick % path.len()];
+            (0..WIDTH)
+                .map(|i| if i == at { '\u{25CF}' } else { '\u{00B7}' })
+                .collect()
+        }
+        SizeWalkStyle::Braille => {
+            // A wave of rising and falling braille, offset per cell so it flows.
+            const WAVE: [char; 8] = [
+                '\u{2840}', '\u{2844}', '\u{2846}', '\u{2847}', '\u{28C7}', '\u{2847}', '\u{2846}',
+                '\u{2844}',
+            ];
+            (0..WIDTH).map(|i| WAVE[(tick + i) % WAVE.len()]).collect()
+        }
+        // Snake is handled above; Off never reaches here (the caller keeps
+        // `<DIR>`), and this arm keeps the match total.
+        SizeWalkStyle::Snake | SizeWalkStyle::Off => "<DIR>".to_string(),
+    }
+}
+
 /// The formatted, padded cells of one entry, joined by single spaces.
 fn entry_line(
     entry: &Entry,
     allocated: &[Allocated],
     row: &RowFormat<'_>,
     sized: Option<u64>,
+    size_override: Option<&str>,
 ) -> String {
     let mut out = String::new();
     for (i, col) in allocated.iter().enumerate() {
@@ -640,9 +712,13 @@ fn entry_line(
         // The size cell is the one that is formatted against its own width:
         // an exact count that does not fit is cropped into a wrong number,
         // so it steps down to `1.0 G` instead. Every other cell is formatted
-        // once and cropped if it must be.
+        // once and cropped if it must be. A walk animation, when one is owed,
+        // takes the cell whole - it is already sized to fit.
         let body = if col.id == crate::panel::ColumnId::Size {
-            crate::panel::format::size_text_fitting(entry, row.cfg, sized, col.width)
+            match size_override {
+                Some(anim) => anim.to_string(),
+                None => crate::panel::format::size_text_fitting(entry, row.cfg, sized, col.width),
+            }
         } else {
             columns::cell_text_with(
                 entry,
@@ -914,6 +990,31 @@ pub fn counts_text(
 
 #[cfg(test)]
 mod tests {
+    use super::walk_indicator;
+    use crate::config::SizeWalkStyle;
+    use crate::ui::text::width as display_width;
+    use std::time::Duration;
+
+    #[test]
+    fn the_walk_indicator_is_five_cells_animates_and_falls_back_to_ascii() {
+        for style in [
+            SizeWalkStyle::Dots,
+            SizeWalkStyle::Braille,
+            SizeWalkStyle::Snake,
+        ] {
+            let a = walk_indicator(style, Duration::from_millis(0), false);
+            let b = walk_indicator(style, Duration::from_millis(330), false);
+            assert_eq!(display_width(&a), 5, "{style:?}: exactly <DIR>'s width");
+            assert_eq!(display_width(&b), 5, "{style:?}");
+            assert_ne!(a, b, "{style:?}: the frame advances with time");
+            // ASCII mode is ascii whatever the style, for terminals with no
+            // box-drawing/braille glyphs.
+            let ascii = walk_indicator(style, Duration::from_millis(0), true);
+            assert!(ascii.is_ascii(), "{style:?}: ascii fallback: {ascii:?}");
+            assert_eq!(display_width(&ascii), 5, "{style:?}: ascii width");
+        }
+    }
+
     #[test]
     fn a_listing_still_arriving_says_so_rather_than_counting_to_zero() {
         // A total is a statement about a whole directory, so a partial one is

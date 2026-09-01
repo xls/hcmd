@@ -197,6 +197,27 @@ pub enum QuickSearchCase {
     Smart,
 }
 
+/// The animation shown in the size column while a directory's size is being
+/// walked, in place of `<DIR>`.
+///
+/// The default set uses only glyphs common to nearly every monospace font, so
+/// it renders without a Nerd Font and over an SSH session where the client's
+/// font is unknown; a pure-ASCII terminal (`ui.ascii_borders`) falls back to
+/// ASCII automatically whatever the choice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SizeWalkStyle {
+    /// A dot travelling back and forth. Font-safe.
+    #[default]
+    Dots,
+    /// A braille wave. Font-safe, a touch fancier.
+    Braille,
+    /// A little block snake. Font-safe, and the closest to the ASCII fallback.
+    Snake,
+    /// No animation - keep the static `<DIR>` while it walks.
+    Off,
+}
+
 /// What bare digits do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -278,6 +299,8 @@ pub struct PanelConfig {
     /// Whether typing filters the listing to matches instead of only jumping
     /// to the first one. Off by default: the classic type-to-jump.
     pub quick_search_filter: bool,
+    /// The animation shown in the size column while a directory is walked.
+    pub size_walk_style: SizeWalkStyle,
     /// What bare digits do.
     pub digit_keys: DigitKeys,
     /// Nine, which is what makes single-key switching sufficient.
@@ -312,6 +335,7 @@ impl Default for PanelConfig {
             quick_search: QuickSearchMode::Prefix,
             quick_search_case: QuickSearchCase::Smart,
             quick_search_filter: false,
+            size_walk_style: SizeWalkStyle::Dots,
             digit_keys: DigitKeys::QuickSearch,
             max_tabs: 9,
             show_tab_bar: TabBar::Auto,

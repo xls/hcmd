@@ -42,6 +42,11 @@ quick_search_case  = "smart"         # insensitive | sensitive | smart
 # and the arrow keys walk what is left; Esc or clearing the search brings the
 # whole listing back with the cursor on the file you had reached.
 quick_search_filter = false          # true | false
+# While a folder's size is being calculated (Space / Ctrl+L), the size column
+# shows a small animation in place of <DIR>. All choices use glyphs common to
+# nearly every font (so it works over SSH and without a Nerd Font); an ASCII
+# terminal falls back automatically.
+size_walk_style     = "dots"         # dots | braille | snake | off
 # Bare digits feed quick search; tabs are on alt+1..alt+9. Set to "tabs" to
 # swap that round (digits switch tabs, ctrl+s starts a search).
 digit_keys         = "quick_search"  # quick_search | tabs
