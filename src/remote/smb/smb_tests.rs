@@ -234,8 +234,11 @@ async fn a_connected_share_is_an_ordinary_vfs_and_its_listing_leads_with_the_par
     );
     fs.adopt(RemoteId(5));
 
-    let mut rx = fs.read_dir(&RemoteId(5).path("/Media"));
-    let mut rows = Vec::new();
+    let path = RemoteId(5).path("/Media");
+    // The `..` comes from the read path, which prepends it for every backend
+    // alike; a share is an ordinary Vfs and answers for it the same way.
+    let mut rows: Vec<Entry> = fs.parent_row(&path).into_iter().collect();
+    let mut rx = fs.read_dir(&path);
     while let Some(item) = rx.recv().await {
         rows.push(item.expect("a row"));
     }

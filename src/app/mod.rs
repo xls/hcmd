@@ -286,8 +286,17 @@ pub async fn stream_read(vfs: Arc<dyn Vfs>, request: ReadRequest, tx: mpsc::Send
         generation,
         path,
     } = request;
+    // The `..` row, once, for every backend. It is navigation rather than
+    // content - the row that gets you out - so it belongs to the read path and
+    // not to each backend's memory of it. Five of them used to send their own
+    // and a sixth forgot, which is the whole reason this is here: a listing
+    // with no way out is a state a person cannot leave.
+    let parent = vfs.parent_row(&path);
     let mut rx = vfs.read_dir(&path);
     let mut batch = Vec::with_capacity(READ_DIR_BATCH);
+    if let Some(parent) = parent {
+        batch.push(parent);
+    }
 
     loop {
         // An empty batch waits with no timer at all, so a panel sitting on a

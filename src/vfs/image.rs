@@ -573,7 +573,6 @@ impl Vfs for ImageFs {
     /// have the row that gets the user out.
     fn read_dir(&self, path: &VfsPath) -> mpsc::Receiver<Result<Entry>> {
         let (tx, rx) = mpsc::channel(READ_DIR_CHANNEL_DEPTH);
-        let has_parent = path.parent().is_some();
 
         if let Some(table) = self.inner.table.as_ref() {
             let at_root = safety::member_key(path.tail()).map(|k| k.is_empty());
@@ -590,9 +589,6 @@ impl Vfs for ImageFs {
                 Err(err) => err,
             };
             tokio::spawn(async move {
-                if has_parent && tx.send(Ok(Entry::parent_entry())).await.is_err() {
-                    return;
-                }
                 match at_root {
                     Ok(true) => {}
                     // A partition row is not a directory in the table's own
@@ -627,18 +623,10 @@ impl Vfs for ImageFs {
 
         let key = safety::member_key(path.tail());
         let Some(idx) = self.inner.index.as_ref().map(Arc::clone) else {
-            tokio::spawn(async move {
-                if has_parent {
-                    let _ = tx.send(Ok(Entry::parent_entry())).await;
-                }
-            });
             return rx;
         };
 
         tokio::spawn(async move {
-            if has_parent && tx.send(Ok(Entry::parent_entry())).await.is_err() {
-                return;
-            }
             let key = match key {
                 Ok(key) => key,
                 Err(err) => {

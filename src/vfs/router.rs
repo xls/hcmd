@@ -694,6 +694,20 @@ impl Vfs for VfsRouter {
         self.resolve_capabilities(path)
     }
 
+    /// Straight through to whichever backend owns the path. Without this the
+    /// router answered with the trait's own default and a backend that
+    /// overrides it was never asked - which is how a flat listing, whose rows
+    /// can share a name and which has nowhere "up" to go, would have been given
+    /// a `..` anyway.
+    fn parent_row(&self, path: &VfsPath) -> Option<Entry> {
+        match self.backend_for(path) {
+            Ok(backend) => backend.parent_row(path),
+            // Nothing could be opened, so nothing can say. The default is the
+            // honest answer: a path with a parent has a way back to it.
+            Err(_) => path.parent().is_some().then(Entry::parent_entry),
+        }
+    }
+
     /// Straight through to whichever backend owns the path: composing the
     /// columns is the listing's business and the router has no view of its own.
     /// The answer is remembered so that walking back into a listing draws its

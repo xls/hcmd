@@ -232,17 +232,7 @@ impl Vfs for GitFs {
         let (tx, rx) = mpsc::channel(READ_DIR_CHANNEL_DEPTH);
         let this = self.clone();
         let tail = Self::tail_of(path).unwrap_or_default();
-        // The `..` row, the way every directory-shaped backend gives one and
-        // this one used not to: navigation out of the revision - up to the
-        // commit list from inside a subfolder, and out of git history entirely
-        // at the root - decided by the shared `Vfs::parent_row`.
-        let parent = self.parent_row(path);
         tokio::spawn(async move {
-            if let Some(parent) = parent
-                && tx.send(Ok(parent)).await.is_err()
-            {
-                return;
-            }
             let rows = match GitFs::locate(&tail) {
                 Location::Commits => this.list_commits(),
                 // A directory in the tree lists; a file lists empty, the way a

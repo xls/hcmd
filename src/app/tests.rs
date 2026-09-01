@@ -710,8 +710,12 @@ async fn service_reads(app: &mut App) {
             generation,
             path,
         } = request;
+        // The same `..` the real read path prepends. This harness is a
+        // stand-in for `stream_read`, and a stand-in that skips a step tests
+        // something the program does not do.
+        let parent = vfs.parent_row(&path);
         let mut rx = vfs.read_dir(&path);
-        let mut batch = Vec::new();
+        let mut batch: Vec<Entry> = parent.into_iter().collect();
         let mut failure = None;
         while let Some(item) = rx.recv().await {
             match item {

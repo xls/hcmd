@@ -604,11 +604,11 @@ impl App {
                     // it back on the row it was on.
                     tab.cursor = 0;
                 }
-                // The `..` row arrives from the backend, which is the only
-                // thing that knows where its own namespace ends - `LocalFs`
-                // sends it first and omits it at the root, and a flat `ListFs`
-                // listing has none at all. It is never synthesised here; doing
-                // both is how a directory ends up with two of them.
+                // The `..` row is already at the head of the first batch:
+                // `stream_read` asked `Vfs::parent_row` for it before the
+                // listing began. Nothing is synthesised here, and no backend
+                // sends one of its own - doing both is how a directory ends up
+                // with two of them.
                 tab.entries
                     .extend(batch.into_iter().filter(|e| show_hidden || !e.is_hidden));
                 // Not `sort_entries`: sorting the whole vector on every 128-row

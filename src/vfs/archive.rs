@@ -481,13 +481,9 @@ impl Vfs for ArchiveFs {
     fn read_dir(&self, path: &VfsPath) -> mpsc::Receiver<Result<Entry>> {
         let (tx, rx) = mpsc::channel(READ_DIR_CHANNEL_DEPTH);
         let key = member_key(path.tail());
-        let has_parent = path.parent().is_some();
         let idx = Arc::clone(&self.inner.index);
 
         tokio::spawn(async move {
-            if has_parent && tx.send(Ok(Entry::parent_entry())).await.is_err() {
-                return;
-            }
             let key = match key {
                 Ok(key) => key,
                 Err(err) => {

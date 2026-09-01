@@ -73,8 +73,8 @@ macro_rules! repo_or_skip {
     };
 }
 
-/// Drain a `read_dir` receiver to its content rows, dropping the leading `..`
-/// (asserted on its own in `a_git_listing_leads_with_the_parent_row`).
+/// Drain a `read_dir` receiver to its content rows. There is no `..` among
+/// them: the read path prepends it, and this asks the backend directly.
 async fn rows(fs: &GitFs, path: &VfsPath) -> Vec<Entry> {
     let mut rx = fs.read_dir(path);
     let mut out = Vec::new();
@@ -89,29 +89,37 @@ async fn rows(fs: &GitFs, path: &VfsPath) -> Vec<Entry> {
 }
 
 #[tokio::test]
-async fn a_git_listing_leads_with_the_parent_row() {
+async fn a_git_listing_has_a_way_out_at_every_level() {
     // The revision browser used to be the one directory-shaped backend with no
-    // `..` row; now it gives one at every level, so a subfolder inside a commit
-    // has a visible way back up.
+    // `..` row, and it got one by remembering to send its own. It no longer
+    // sends anything: the read path prepends the row for every backend alike,
+    // and what this asks is whether the seam answers - which is the thing that
+    // actually keeps a listing from being somewhere you cannot leave.
     let repo = repo_or_skip!("parentrow");
     let base = VfsPath::local(&repo.root).with_segment(BackendKind::Git, "/");
     let fs = GitFs::open(base.clone()).expect("open");
 
-    let mut rx = fs.read_dir(&base);
-    let first = rx.recv().await.expect("a row").expect("not an error");
-    assert!(
-        first.is_parent,
-        "the `..` row comes first at the commit list"
-    );
-    assert_eq!(first.name, "..");
+    let out = fs.parent_row(&base).expect("a way out of the commit list");
+    assert!(out.is_parent && out.name == "..");
 
     // And inside a commit, too.
     let commits = rows(&fs, &base).await;
     let sha = commits[0].name.split_whitespace().next().expect("a sha");
     let commit_path = VfsPath::local(&repo.root).with_segment(BackendKind::Git, format!("/{sha}"));
-    let mut rx = fs.read_dir(&commit_path);
-    let first = rx.recv().await.expect("a row").expect("not an error");
-    assert!(first.is_parent, "and inside a revision");
+    assert!(
+        fs.parent_row(&commit_path).is_some(),
+        "and out of a revision"
+    );
+
+    // The backend itself sends content and nothing else.
+    let mut rx = fs.read_dir(&base);
+    let mut saw_parent = false;
+    while let Some(item) = rx.recv().await {
+        if let Ok(entry) = item {
+            saw_parent |= entry.is_parent;
+        }
+    }
+    assert!(!saw_parent, "the backend does not send one of its own");
 }
 
 #[tokio::test]

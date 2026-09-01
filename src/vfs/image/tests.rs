@@ -672,8 +672,9 @@ async fn the_table_listing_sends_the_parent_row_first() {
     assert!(fs.filesystem().is_none());
     assert!(fs.table().is_some());
 
+    // The `..` belongs to the read path now, so it is asked for, not awaited.
+    let mut names: Vec<String> = fs.parent_row(&root).map(|p| p.name).into_iter().collect();
     let mut rx = fs.read_dir(&root);
-    let mut names = Vec::new();
     let mut errors = Vec::new();
     while let Some(item) = rx.recv().await {
         match item {
@@ -953,8 +954,8 @@ async fn an_unpartitioned_image_is_browsed_with_one_segment() {
     assert_eq!(fs.container(), path.as_path());
     assert!(!fs.is_cached(), "a local image is read where it lies");
 
+    let mut names: Vec<String> = fs.parent_row(&root).map(|p| p.name).into_iter().collect();
     let mut rx = fs.read_dir(&root);
-    let mut names = Vec::new();
     while let Some(item) = rx.recv().await {
         if let Ok(entry) = item {
             names.push(entry.name);

@@ -268,7 +268,6 @@ impl Vfs for RemoteFs {
     fn read_dir(&self, path: &VfsPath) -> tokio::sync::mpsc::Receiver<Result<Entry>> {
         let (tx, rx) = tokio::sync::mpsc::channel(crate::vfs::READ_DIR_CHANNEL_DEPTH);
         let resolved = self.remote_path(path);
-        let has_parent = path.parent().is_some();
         let transport = Arc::clone(&self.transport);
         let cache = Arc::clone(&self.cache);
         let lost = Arc::clone(&self.lost);
@@ -279,9 +278,6 @@ impl Vfs for RemoteFs {
             // for the reason `LocalFs::read_dir` gives: it is navigation, not
             // content, and a directory that cannot be read must still have a
             // row to escape by.
-            if has_parent && tx.blocking_send(Ok(Entry::parent_entry())).is_err() {
-                return;
-            }
             let dir = match resolved {
                 Ok(dir) => dir,
                 Err(err) => {
@@ -509,9 +505,11 @@ mod tests {
             .with_file("/srv/notes.txt", b"hello remote")
     }
 
+    /// Led by the `..` the read path prepends, so what these tests see is what
+    /// a panel sees.
     async fn drain(fs: &Arc<RemoteFs>, path: &VfsPath) -> Vec<Result<Entry>> {
         let mut rx = fs.read_dir(path);
-        let mut out = Vec::new();
+        let mut out: Vec<Result<Entry>> = fs.parent_row(path).map(Ok).into_iter().collect();
         while let Some(item) = rx.recv().await {
             out.push(item);
         }

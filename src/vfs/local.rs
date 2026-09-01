@@ -210,9 +210,6 @@ impl Vfs for LocalFs {
             // root, which has nowhere to go.
             // `VfsPath::parent` rather than `Path::parent`, so the row appears
             // exactly when there is somewhere for it to go.
-            if dir_path.parent().is_some() && tx.blocking_send(Ok(Entry::parent_entry())).is_err() {
-                return;
-            }
 
             // Only now attempt the read. The `..` row above is deliberately
             // sent *first*, so it survives this failing: it is navigation, not
@@ -441,10 +438,11 @@ mod tests {
         }
     }
 
-    /// Drain a listing to completion. Panics only in test code.
+    /// Drain a listing to completion, led by the `..` the read path prepends,
+    /// so what these tests see is what a panel sees. Panics only in test code.
     async fn collect(fs_impl: &LocalFs, path: &VfsPath) -> Vec<Result<Entry>> {
         let mut rx = fs_impl.read_dir(path);
-        let mut out = Vec::new();
+        let mut out: Vec<Result<Entry>> = fs_impl.parent_row(path).map(Ok).into_iter().collect();
         while let Some(item) = rx.recv().await {
             out.push(item);
         }
@@ -467,12 +465,14 @@ mod tests {
         t.dir("beta");
         let fs_impl = LocalFs::new();
 
-        let mut rx = fs_impl.read_dir(&t.vfs_path());
-        let first = rx.recv().await.expect("something").expect("not an error");
-        assert!(first.is_parent, "the `..` row comes first");
-        assert_eq!(first.name, "..");
-        assert!(first.is_dir());
+        // The backend answers with its content. The `..` is navigation and
+        // belongs to the read path, which prepends it for every backend alike -
+        // this one no longer has a copy of that rule to get wrong.
+        let parent = fs_impl.parent_row(&t.vfs_path()).expect("a way out");
+        assert!(parent.is_parent && parent.is_dir());
+        assert_eq!(parent.name, "..");
 
+        let mut rx = fs_impl.read_dir(&t.vfs_path());
         let mut rest = HashMap::new();
         while let Some(item) = rx.recv().await {
             let e = item.expect("no error");
@@ -605,22 +605,31 @@ mod tests {
             out.iter().any(std::result::Result::is_err),
             "an unreadable directory must not look like an empty one"
         );
-        // ...and it must still offer the way out. The `..` row is navigation,
-        // not content: where the parent is does not depend on being allowed to
-        // read the child, so it is sent before the read is even attempted.
-        // Without it a panel on `/boot` (`drwx------`) has no row to select and
-        // no way back except a key the user has to already know.
+        // ...and it must still offer the way out. Where the parent is does not
+        // depend on being allowed to read the child, and the read path asks
+        // for it before the read is even attempted - so the answer here cannot
+        // depend on the listing having worked. Without it a panel on `/boot`
+        // (`drwx------`) has no row to select and no way back except a key the
+        // user has to already know.
         assert!(
-            out.iter()
-                .any(|r| matches!(r, Ok(e) if e.is_parent && e.name == "..")),
-            "an unreadable directory still lists `..`: {out:?}"
+            LocalFs::new()
+                .parent_row(&VfsPath::local(&locked))
+                .is_some(),
+            "an unreadable directory still has a way out"
         );
     }
 
     #[tokio::test]
     async fn a_path_that_is_not_local_is_refused() {
+        // Straight at the backend: what it refuses is its own business, and
+        // the `..` the read path adds would only be noise here.
         let nested = VfsPath::local("/a.tar").with_segment(BackendKind::List, "/x");
-        let out = collect(&LocalFs::new(), &nested).await;
+        let fs_impl = LocalFs::new();
+        let mut rx = fs_impl.read_dir(&nested);
+        let mut out = Vec::new();
+        while let Some(item) = rx.recv().await {
+            out.push(item);
+        }
         assert_eq!(out.len(), 1);
         assert!(matches!(out.first(), Some(Err(Error::InvalidPath(_)))));
     }
@@ -666,7 +675,7 @@ mod tests {
             .await
             .expect("the cancelled walk released the blocking thread");
 
-            assert_eq!(second, count + 1, "`..` plus every file");
+            assert_eq!(second, count, "every file the first walk saw");
         });
     }
 

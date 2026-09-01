@@ -78,9 +78,12 @@ fn write_tar_gz(path: &Path, members: &[(&str, &[u8])]) {
     builder.into_inner().expect("finish").finish().expect("gz");
 }
 
+/// Led by the `..` the read path prepends, so what these tests see is what a
+/// panel sees.
 async fn listing(fs: &dyn Vfs, path: &VfsPath) -> (Vec<Entry>, Vec<String>) {
     let mut rx = fs.read_dir(path);
-    let (mut rows, mut errors) = (Vec::new(), Vec::new());
+    let mut rows: Vec<Entry> = fs.parent_row(path).into_iter().collect();
+    let mut errors: Vec<String> = Vec::new();
     while let Some(item) = rx.recv().await {
         match item {
             Ok(entry) => rows.push(entry),
@@ -469,18 +472,18 @@ async fn the_listing_streams_rather_than_waiting_for_the_index() {
     // Deliberately *not* waiting for the index: the first rows must arrive
     // while it is still being built.
     let mut rx = fs.read_dir(&inside(&container, "/"));
+    // Content arrives while the index is still being built. The `..` is not
+    // part of that race: the read path has it before the backend is asked.
     let first = rx.recv().await.expect("a row").expect("not an error");
-    assert!(first.is_parent, "`..` before anything has been read");
-    let second = rx.recv().await.expect("a row").expect("not an error");
-    assert!(second.name.starts_with('f'));
+    assert!(first.name.starts_with('f'));
 
-    let mut count = 2;
+    let mut count = 1;
     while let Some(item) = rx.recv().await {
         if item.is_ok() {
             count += 1;
         }
     }
-    assert_eq!(count, 2001, "every member and the `..` row");
+    assert_eq!(count, 2000, "every member; the `..` is the read path's");
 }
 
 #[tokio::test]

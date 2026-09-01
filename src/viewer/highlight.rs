@@ -758,7 +758,15 @@ mod tests {
         let set = syntaxes();
         // "fills syntect's default gaps (TOML, Rust, Dockerfile,
         // Nix, …)".
-        for name in ["a.rs", "a.toml", "Dockerfile", "a.nix", "a.md", "a.py"] {
+        for name in [
+            "a.rs",
+            "a.toml",
+            "Dockerfile",
+            "a.nix",
+            "a.md",
+            "a.py",
+            "a.xml",
+        ] {
             assert!(syntax_for(set, name, "").is_some(), "no syntax for {name}");
         }
     }
