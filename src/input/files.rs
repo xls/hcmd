@@ -119,8 +119,11 @@ pub(super) fn copy_move_accepted(app: &mut App, answer: &crate::dialog::CopyMove
 ///
 /// It resolves the target exactly as the copy dialog resolves its own - against
 /// **the panel**, not against the process's working directory - and then queues
-/// the request. Nothing is created here: `dispatch` may not touch the
-/// filesystem, and creating the container is
+/// the request. Forcing the result local is honest rather than convenient:
+/// the container is created on a real filesystem ([`crate::ops::pack`]
+/// refuses anything else), and [`open_pack`] only opens the dialog with a
+/// local directory to prefill. Nothing is created here: `dispatch` may not
+/// touch the filesystem, and creating the container is
 /// precisely that.
 pub(super) fn pack_accepted(app: &mut App, answer: &crate::dialog::PackAnswer) {
     let sources = app.draft.take_sources();
@@ -627,7 +630,26 @@ pub(super) fn open_pack(app: &mut App) {
             .unwrap_or_else(|| "archive".to_string()),
     };
     let default = crate::vfs::archive::format::FormatId::Zip;
-    let target_dir = app.panel(app.active_side.other()).active_tab().path.clone();
+    // The archive lands on the local filesystem - `ops::pack` writes the
+    // container with the format's own `create` and refuses any other
+    // target - so the prefill must name a local directory. The other
+    // panel's, as `F5`'s does, when it is one; the sources' own directory
+    // when the other panel is inside an archive or on a connection; and when
+    // neither panel is local, refused here, where the reason still exists.
+    // Stringified into the field, a remote directory and a local one spelled
+    // the same are the same characters, and `OK` would create a file named
+    // after the remote rather than say why it cannot.
+    let other = app.panel(app.active_side.other()).active_tab().path.clone();
+    let target_dir = if other.local_path().is_some() {
+        other
+    } else if base.local_path().is_some() {
+        base.clone()
+    } else {
+        app.message = Some(
+            "packing writes a local archive, and neither panel is on a local directory".to_string(),
+        );
+        return;
+    };
     let target = target_dir
         .join(format!("{stem}{}", default.extension()))
         .to_string();
@@ -1211,5 +1233,60 @@ mod tests {
             "a search over a disk image is not a source anything can be moved out of"
         );
         drop(sink);
+    }
+
+    /// A headless app whose left, active panel stands at `active` with one
+    /// file row under the cursor, and whose right panel stands at `other`.
+    fn app_for_pack(active: VfsPath, other: VfsPath) -> App {
+        let mut app = App::headless(Config::default(), Keymap::builtin(), Theme::blue());
+        let tab = app.panel_mut(Side::Left).active_tab_mut();
+        tab.path = active;
+        tab.entries = vec![Entry::file("notes.txt")];
+        tab.cursor = 0;
+        app.panel_mut(Side::Right).active_tab_mut().path = other;
+        app
+    }
+
+    /// What the open pack dialog's field holds, read back off the stack.
+    fn pack_target(app: &App) -> Option<String> {
+        app.top_dialog()
+            .and_then(crate::dialog::Dialog::as_any)
+            .and_then(|any| any.downcast_ref::<crate::ui::dialog::pack::PackDialog>())
+            .map(|dialog| dialog.target().to_string())
+    }
+
+    /// `Alt+F5` prefills from the other panel only when an archive can land
+    /// there. A directory inside an archive would reach the field as a
+    /// string, and `OK` resolves the field as a local path - so the prefill
+    /// falls back to the sources' own directory, which really is one.
+    #[test]
+    fn pack_prefills_the_sources_directory_when_the_other_panel_is_not_local() {
+        let inside =
+            VfsPath::local("/srv/b.tar").with_segment(crate::vfs::BackendKind::Archive, "/");
+        let mut app = app_for_pack(VfsPath::local("/srv/files"), inside);
+
+        open_pack(&mut app);
+
+        assert!(app.dialog_is_open(), "{:?}", app.message);
+        assert_eq!(pack_target(&app).as_deref(), Some("/srv/files/notes.zip"));
+    }
+
+    /// And when neither panel names a local directory there is nothing honest
+    /// to prefill: refused with the reason, before the dialog can collect a
+    /// target that could only be misread.
+    #[test]
+    fn pack_is_refused_when_neither_panel_is_local() {
+        let inside =
+            VfsPath::local("/srv/b.tar").with_segment(crate::vfs::BackendKind::Archive, "/");
+        let mut app = app_for_pack(inside.clone(), inside);
+
+        open_pack(&mut app);
+
+        assert!(!app.dialog_is_open());
+        assert!(
+            app.message.as_deref().is_some_and(|m| m.contains("local")),
+            "{:?}",
+            app.message
+        );
     }
 }
