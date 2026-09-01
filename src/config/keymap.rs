@@ -31,6 +31,8 @@
 //! nothing else", which is what someone hand-editing a keymap expects. Actions
 //! the file does not mention keep their defaults, so a partial file is useful.
 
+pub mod emit;
+
 use std::collections::HashMap;
 
 use crossterm::event::{KeyCode, KeyModifiers};
