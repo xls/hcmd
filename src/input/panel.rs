@@ -92,12 +92,14 @@ pub(super) fn type_into_quick_search(app: &mut App, c: char) {
 fn filter_type(app: &mut App, c: char) {
     app.active_panel_mut().quick.push(c);
     refilter(app);
+    // Asked of the shown rows: the filter is a view, so the listing itself
+    // never empties - what "nothing matched" means is that nothing but `..`
+    // is left on screen.
     let nothing_left = app
         .active_panel()
         .active_tab()
-        .entries
-        .iter()
-        .all(|e| e.is_parent);
+        .shown_entries()
+        .all(|(_, e)| e.is_parent);
     if nothing_left {
         let candidate = app.active_panel().quick.buffer.clone();
         app.active_panel_mut().quick.pop();
@@ -120,7 +122,13 @@ pub(super) fn refilter(app: &mut App) {
     if query.is_empty() {
         tab.clear_filter();
     } else {
-        tab.set_quick_filter(query, mode, case);
+        // The matcher is handed over as a closure: the tab re-applies it to
+        // every row after a rescan, but how a name matches - the mode, the
+        // smart-case rule - is this layer's business, not the panel model's.
+        let needle = query.clone();
+        tab.set_quick_filter(query, move |name| {
+            quicksearch::quick_match(name, &needle, mode, case)
+        });
     }
     let rows = app.active_panel().view_rows;
     app.active_panel_mut()

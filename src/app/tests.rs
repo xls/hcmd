@@ -237,15 +237,12 @@ fn a_rescan_keeps_the_quick_search_filter_and_the_whole_listing() {
     // The filter is now a view over the untouched listing, so a re-read of the
     // same directory has the whole thing to reconcile against and the filter
     // rides through it.
-    use crate::config::{QuickSearchCase, QuickSearchMode};
     let mut app = App::headless(Config::default(), Keymap::builtin(), Theme::blue());
     app.navigate(Side::Left, VfsPath::local("/x"));
     deliver(&mut app, Side::Left, &["alpha", "beta", "album"]);
-    app.left.active_tab_mut().set_quick_filter(
-        "al".to_string(),
-        QuickSearchMode::Prefix,
-        QuickSearchCase::Smart,
-    );
+    app.left
+        .active_tab_mut()
+        .set_quick_filter("al".to_string(), |name: &str| name.starts_with("al"));
     assert!(app.left.active_tab().is_quick_filtered());
 
     // A background rescan re-reads the same directory; a new file has appeared.
@@ -271,6 +268,41 @@ fn a_rescan_keeps_the_quick_search_filter_and_the_whole_listing() {
         names.contains(&"delta"),
         "and the newly-arrived file is there: {names:?}"
     );
+}
+
+#[test]
+fn a_rescan_that_deletes_the_cursors_file_lands_it_on_a_shown_row() {
+    // Filter to `al`, cursor on `alpha`, delete `alpha` outside the app: the
+    // watch fires a rescan, the merge drops the row, and the cursor index
+    // survives the clamp pointing at a row the filter hides. The renderer
+    // draws only shown rows, so there is no visible cursor at all - and
+    // `Enter` and `F8` still act on the invisible entry. The merge path must
+    // land the cursor on a shown row, the same way a key-driven move would.
+    let mut app = App::headless(Config::default(), Keymap::builtin(), Theme::blue());
+    app.navigate(Side::Left, VfsPath::local("/x"));
+    deliver(&mut app, Side::Left, &["albatross", "ale", "amber"]);
+    app.left
+        .active_tab_mut()
+        .set_quick_filter("al".to_string(), |name: &str| name.starts_with("al"));
+    // Walk to the second match, so that what slides into the cursor's index
+    // when its file goes is `amber` - a row the filter hides.
+    app.left.active_tab_mut().move_by(1, 10);
+    assert_eq!(
+        app.left.active_tab().current().map(|e| e.name.as_str()),
+        Some("ale")
+    );
+
+    app.reread(Side::Left);
+    deliver(&mut app, Side::Left, &["albatross", "amber"]);
+
+    let tab = app.left.active_tab();
+    let entry = tab.current().expect("a row under the cursor");
+    assert!(
+        tab.shows(entry),
+        "the cursor rests on a drawn row, not on {}",
+        entry.name
+    );
+    assert_eq!(entry.name, "albatross", "the nearest shown match");
 }
 
 #[test]

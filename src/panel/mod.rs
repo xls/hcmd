@@ -436,18 +436,32 @@ pub struct RemoteView {
     pub disconnected: bool,
 }
 
-/// A quick-search filter: what the user typed, and how names are matched
-/// against it. Held so the visibility of a row can be recomputed at any time -
-/// after a rescan, a sort, or a widened query - from the listing as it stands,
-/// rather than from a narrowed copy taken when the filter began.
-#[derive(Debug, Clone)]
+/// A quick-search filter: what the user typed, and the predicate that decides
+/// which names it shows. Held so the visibility of a row can be recomputed at
+/// any time - after a rescan, a sort, or a widened query - from the listing as
+/// it stands, rather than from a narrowed copy taken when the filter began.
+///
+/// The predicate arrives from whoever set the filter, so this model knows
+/// *that* rows are hidden but never *how* names are matched - the matching
+/// rule belongs to the input layer, the way the old `filter_to` took a plain
+/// closure. What the model keeps is the ability to re-ask the question of
+/// every row, which is what lets a rescan re-filter the fresh listing.
+#[derive(Clone)]
 pub struct QuickFilter {
-    /// The typed query.
+    /// The typed query, kept so the filter can be inspected and re-set;
+    /// matching itself goes through `matches`.
     pub query: String,
-    /// Prefix / substring / fuzzy.
-    pub mode: crate::config::QuickSearchMode,
-    /// How case is handled.
-    pub case: crate::config::QuickSearchCase,
+    /// Whether a name is shown. Captures the query and however the setter
+    /// chose to interpret it.
+    matches: std::sync::Arc<dyn Fn(&str) -> bool + Send + Sync>,
+}
+
+impl fmt::Debug for QuickFilter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("QuickFilter")
+            .field("query", &self.query)
+            .finish_non_exhaustive()
+    }
 }
 
 /// One tab: a working folder and nothing more.
@@ -661,16 +675,27 @@ impl Tab {
     pub fn shows(&self, entry: &Entry) -> bool {
         match &self.quick_filter {
             None => true,
-            Some(filter) => {
-                entry.is_parent
-                    || crate::input::quicksearch::quick_match(
-                        &entry.name,
-                        &filter.query,
-                        filter.mode,
-                        filter.case,
-                    )
-            }
+            Some(filter) => entry.is_parent || (filter.matches)(&entry.name),
         }
+    }
+
+    /// The rows the filter shows, as `(index, entry)` pairs in listing order -
+    /// every row when no filter is set.
+    ///
+    /// **The one way to walk the visible rows.** Anything that operates on,
+    /// counts, or marks "the entries" iterates this rather than
+    /// [`Tab::entries`] directly, so an active filter narrows every consumer
+    /// at once instead of being a check each of them has to remember: an
+    /// operation that read the raw vector would act on rows the user cannot
+    /// see, which for `Ctrl+A` followed by `F8` is a deletion of files that
+    /// were never on screen. The raw vector stays for the consumers that
+    /// genuinely mean the whole directory - collision checks, the git
+    /// overlay, pruning marks against what still exists.
+    pub fn shown_entries(&self) -> impl Iterator<Item = (usize, &Entry)> {
+        self.entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| self.shows(entry))
     }
 
     /// Whether the row at `index` is shown.
@@ -688,14 +713,27 @@ impl Tab {
         (0..from).rev().find(|&i| self.shows_index(i))
     }
 
+    /// `target` itself when it is shown, else the nearest shown row after it,
+    /// else the nearest before it, else `target` unchanged (nothing is
+    /// shown). The one snap rule, shared by [`Tab::move_to`] and
+    /// [`Tab::clamp_cursor`], so a key-driven move and a rescan land the
+    /// cursor by the same logic.
+    fn nearest_shown(&self, target: usize) -> usize {
+        if self.shows_index(target) {
+            return target;
+        }
+        self.next_shown(target)
+            .or_else(|| self.prev_shown(target))
+            .unwrap_or(target)
+    }
+
     /// The first shown *real* row - the match the cursor lands on when a filter
     /// is applied. Falls back to the first shown row (the `..`) and then to 0.
     fn first_match(&self) -> usize {
-        self.entries
-            .iter()
-            .position(|e| !e.is_parent && self.shows(e))
-            .or_else(|| self.entries.iter().position(|e| self.shows(e)))
-            .unwrap_or(0)
+        self.shown_entries()
+            .find(|(_, entry)| !entry.is_parent)
+            .or_else(|| self.shown_entries().next())
+            .map_or(0, |(index, _)| index)
     }
 
     /// The last shown row, for `End` under a filter.
@@ -723,14 +761,19 @@ impl Tab {
 
     /// Set (or replace) the quick-search filter and land the cursor on the
     /// first match, the way type-navigation does. The listing itself is never
-    /// touched - only which of its rows are drawn.
+    /// touched - only which of its rows are drawn. `matches` decides, per
+    /// name, what is shown: the caller owns the matching rule, and this model
+    /// only re-applies it - to the listing as it stands now and to whatever a
+    /// rescan later makes of it.
     pub fn set_quick_filter(
         &mut self,
         query: String,
-        mode: crate::config::QuickSearchMode,
-        case: crate::config::QuickSearchCase,
+        matches: impl Fn(&str) -> bool + Send + Sync + 'static,
     ) {
-        self.quick_filter = Some(QuickFilter { query, mode, case });
+        self.quick_filter = Some(QuickFilter {
+            query,
+            matches: std::sync::Arc::new(matches),
+        });
         self.cursor = self.first_match();
         self.scroll = 0;
     }
@@ -850,13 +893,22 @@ impl Tab {
         if self.loading {
             return;
         }
+        if self.entries.is_empty() {
+            self.cursor = 0;
+            self.scroll = 0;
+            return;
+        }
         let last = self.entries.len().saturating_sub(1);
         if self.cursor > last {
             self.cursor = last;
         }
-        if self.entries.is_empty() {
-            self.cursor = 0;
-            self.scroll = 0;
+        // In bounds is not enough under a filter: a rescan can delete the
+        // cursor's file and leave the index on a row the filter hides, which
+        // the renderer never draws - a cursor that exists but is nowhere,
+        // with `Enter` and `F8` still acting on it. Snap to a shown row, by
+        // the same next/prev rule a key-driven move applies.
+        if self.is_quick_filtered() {
+            self.cursor = self.nearest_shown(self.cursor);
         }
     }
 
@@ -964,10 +1016,8 @@ impl Tab {
         }
         let last = self.entries.len().saturating_sub(1);
         let target = index.min(last);
-        self.cursor = if self.is_quick_filtered() && !self.shows_index(target) {
-            self.next_shown(target)
-                .or_else(|| self.prev_shown(target))
-                .unwrap_or(target)
+        self.cursor = if self.is_quick_filtered() {
+            self.nearest_shown(target)
         } else {
             target
         };
@@ -1066,17 +1116,18 @@ impl Tab {
     /// `..` is never one of them.
     pub fn operand_rows(&self) -> Vec<usize> {
         if !self.marks.is_empty() {
+            // Through the shown rows: a mark set before a filter narrowed the
+            // view can sit on a hidden row, and an operand nobody can see is
+            // how `F8` deletes a file that was never on screen.
             return self
-                .entries
-                .iter()
-                .enumerate()
+                .shown_entries()
                 .filter(|(_, e)| self.is_marked(e))
                 .map(|(i, _)| i)
                 .collect();
         }
         self.entries
             .get(self.cursor)
-            .filter(|e| !e.is_parent)
+            .filter(|e| !e.is_parent && self.shows(e))
             .map(|_| vec![self.cursor])
             .unwrap_or_default()
     }
@@ -1101,9 +1152,10 @@ impl Tab {
         if !self.marks.is_empty() {
             return self.operand_rows();
         }
-        self.entries
-            .iter()
-            .enumerate()
+        // "The whole directory" is the whole *shown* directory: under a
+        // quick-search filter the tool renames the matches, exactly as it did
+        // when the filter physically narrowed the listing.
+        self.shown_entries()
             .filter(|(_, e)| !e.is_parent)
             .map(|(i, _)| i)
             .collect()
@@ -1139,23 +1191,24 @@ impl Tab {
         true
     }
 
-    /// `Ctrl+A`: mark everything but `..`.
+    /// `Ctrl+A`: mark everything shown, but never `..`. "Everything" is what
+    /// the user can see: under a quick-search filter that is the matches,
+    /// exactly as when the filter physically narrowed the listing.
     pub fn mark_all(&mut self) {
         self.marks = self
-            .entries
-            .iter()
-            .filter(|e| !e.is_parent)
-            .map(|e| e.mark_key().into_owned())
+            .shown_entries()
+            .filter(|(_, e)| !e.is_parent)
+            .map(|(_, e)| e.mark_key().into_owned())
             .collect();
     }
 
-    /// `*`: invert the marks.
+    /// `*`: invert the marks - of the shown rows. A mark the filter hides is
+    /// left exactly as it is rather than silently toggled off screen.
     pub fn invert_marks(&mut self) {
         let keys: Vec<String> = self
-            .entries
-            .iter()
-            .filter(|e| !e.is_parent)
-            .map(|e| e.mark_key().into_owned())
+            .shown_entries()
+            .filter(|(_, e)| !e.is_parent)
+            .map(|(_, e)| e.mark_key().into_owned())
             .collect();
         for key in keys {
             if !self.marks.remove(&key) {
@@ -1206,7 +1259,10 @@ impl Tab {
     /// line. `..` never counts, in either form.
     pub fn counts_with(&self, sizes: &SizeCache) -> Counts {
         let mut counts = Counts::default();
-        for entry in &self.entries {
+        // Over the shown rows, so the figures describe the listing on screen:
+        // a status line reporting two hundred files beside a three-row
+        // filtered listing is describing something the user cannot see.
+        for (_, entry) in self.shown_entries() {
             if entry.is_parent {
                 continue;
             }
@@ -1817,16 +1873,18 @@ mod tests {
             .collect()
     }
 
+    /// A prefix filter, standing in for whatever matcher the input layer
+    /// hands the panel.
+    fn filter_prefix(tab: &mut Tab, query: &str) {
+        let needle = query.to_string();
+        tab.set_quick_filter(query.to_string(), move |name| name.starts_with(&needle));
+    }
+
     #[test]
     fn a_filter_shows_the_matches_and_leaves_the_listing_whole() {
-        use crate::config::{QuickSearchCase, QuickSearchMode};
         let mut tab = listed(&["alpha", "beta", "album", "gamma"]);
         tab.cursor = 4;
-        tab.set_quick_filter(
-            "al".to_string(),
-            QuickSearchMode::Prefix,
-            QuickSearchCase::Smart,
-        );
+        filter_prefix(&mut tab, "al");
         // The listing is untouched - the filter only decides what is drawn.
         let all: Vec<&str> = tab.entries.iter().map(|e| e.name.as_str()).collect();
         assert_eq!(
@@ -1849,34 +1907,20 @@ mod tests {
 
     #[test]
     fn widening_a_filter_shows_more_of_the_same_listing() {
-        use crate::config::{QuickSearchCase, QuickSearchMode};
         let mut tab = listed(&["alpha", "beta", "album"]);
-        tab.set_quick_filter(
-            "alp".to_string(),
-            QuickSearchMode::Prefix,
-            QuickSearchCase::Smart,
-        );
+        filter_prefix(&mut tab, "alp");
         assert_eq!(shown_names(&tab), ["..", "alpha"]);
         // A shorter query shows more - from the full listing, which never went
         // anywhere.
-        tab.set_quick_filter(
-            "al".to_string(),
-            QuickSearchMode::Prefix,
-            QuickSearchCase::Smart,
-        );
+        filter_prefix(&mut tab, "al");
         assert_eq!(shown_names(&tab), ["..", "alpha", "album"]);
         assert_eq!(tab.entries.len(), 4, "'..' and the three files, throughout");
     }
 
     #[test]
     fn clearing_a_filter_keeps_the_cursor_on_the_reached_file() {
-        use crate::config::{QuickSearchCase, QuickSearchMode};
         let mut tab = listed(&["alpha", "beta", "album", "gamma"]);
-        tab.set_quick_filter(
-            "al".to_string(),
-            QuickSearchMode::Prefix,
-            QuickSearchCase::Smart,
-        );
+        filter_prefix(&mut tab, "al");
         // Reach "album" - a real index into the whole listing.
         tab.cursor = tab
             .entries
@@ -1895,6 +1939,122 @@ mod tests {
             ["..", "alpha", "beta", "album", "gamma"],
             "and every row is shown again"
         );
+    }
+
+    #[test]
+    fn the_filter_matches_by_whatever_rule_the_caller_hands_in() {
+        // The model stores a predicate, not a matching algorithm: a rule no
+        // quick-search mode implements still filters, because deciding *how*
+        // a name matches belongs to whoever set the filter.
+        let mut tab = listed(&["main.rs", "notes.txt", "lib.rs"]);
+        tab.set_quick_filter("rs".to_string(), |name: &str| name.ends_with(".rs"));
+        assert_eq!(shown_names(&tab), ["..", "main.rs", "lib.rs"]);
+    }
+
+    #[test]
+    fn marking_everything_under_a_filter_marks_only_the_shown_rows() {
+        // Filter to `al` in a directory of two hundred files, `Ctrl+A`, `F8`:
+        // if the marks ignore the filter, that deletes the hundred and
+        // ninety-seven files that were never on screen. What is shown is what
+        // is marked, exactly as when the filter narrowed the listing itself.
+        let mut tab = listed(&["alpha", "beta", "album", "gamma"]);
+        filter_prefix(&mut tab, "al");
+        tab.mark_all();
+        let marked: Vec<&str> = tab
+            .entries
+            .iter()
+            .filter(|e| tab.is_marked(e))
+            .map(|e| e.name.as_str())
+            .collect();
+        assert_eq!(marked, ["alpha", "album"], "Ctrl+A marks what is shown");
+    }
+
+    #[test]
+    fn inverting_marks_under_a_filter_leaves_the_hidden_rows_alone() {
+        let mut tab = listed(&["alpha", "beta", "album"]);
+        // "beta" is marked, then hidden by the filter.
+        tab.cursor = tab
+            .entries
+            .iter()
+            .position(|e| e.name == "beta")
+            .expect("beta");
+        tab.toggle_mark();
+        filter_prefix(&mut tab, "al");
+        tab.invert_marks();
+        let marked: Vec<&str> = tab
+            .entries
+            .iter()
+            .filter(|e| tab.is_marked(e))
+            .map(|e| e.name.as_str())
+            .collect();
+        assert_eq!(
+            marked,
+            ["alpha", "beta", "album"],
+            "the shown rows toggled on; the hidden mark was not touched"
+        );
+    }
+
+    #[test]
+    fn a_mark_hidden_by_the_filter_is_not_an_operand() {
+        // Mark everything, then narrow the view: `F5` and `F8` operate on
+        // what the panel shows, not on marks the user can no longer see.
+        let mut tab = listed(&["alpha", "beta", "album"]);
+        tab.mark_all();
+        filter_prefix(&mut tab, "al");
+        let names: Vec<&str> = tab
+            .operand_rows()
+            .into_iter()
+            .filter_map(|i| tab.entries.get(i).map(|e| e.name.as_str()))
+            .collect();
+        assert_eq!(names, ["alpha", "album"], "beta is marked but off screen");
+    }
+
+    #[test]
+    fn rename_rows_under_a_filter_are_the_shown_rows() {
+        let mut tab = listed(&["alpha", "beta", "album"]);
+        filter_prefix(&mut tab, "al");
+        let names: Vec<&str> = tab
+            .rename_rows()
+            .into_iter()
+            .filter_map(|i| tab.entries.get(i).map(|e| e.name.as_str()))
+            .collect();
+        assert_eq!(
+            names,
+            ["alpha", "album"],
+            "the whole directory means the whole shown directory"
+        );
+    }
+
+    #[test]
+    fn the_counts_under_a_filter_describe_the_shown_rows() {
+        // The status line sits under the listing; totals for two hundred
+        // files beside three rendered rows would describe something else.
+        let mut tab = listed(&["alpha", "beta", "album", "gamma"]);
+        filter_prefix(&mut tab, "al");
+        assert_eq!(tab.counts().total_files, 2);
+        tab.clear_filter();
+        assert_eq!(tab.counts().total_files, 4);
+    }
+
+    #[test]
+    fn a_merge_that_deletes_the_cursors_file_snaps_it_to_a_shown_row() {
+        // A watch-driven rescan removes the file the cursor was on. The merge
+        // re-anchors by name and by index, neither of which asks the filter,
+        // so without the snap the cursor lands on a hidden row: drawn
+        // nowhere, yet still what `Enter` and `F8` act on.
+        let mut tab = listed(&["alpha", "beta", "album"]);
+        filter_prefix(&mut tab, "al");
+        assert_eq!(tab.current().map(|e| e.name.as_str()), Some("alpha"));
+        // The rescan's buffered listing no longer holds "alpha".
+        tab.merging = Some(vec![
+            Entry::parent_entry(),
+            Entry::file("beta"),
+            Entry::file("album"),
+        ]);
+        tab.merge_listing(true);
+        let entry = tab.current().expect("a row under the cursor");
+        assert!(tab.shows(entry), "the cursor rests on a row that is drawn");
+        assert_eq!(entry.name, "album", "the nearest shown match");
     }
 
     /// the design leaves the case tiebreak unstated. It matters because quick

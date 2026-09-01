@@ -20,14 +20,15 @@ use std::collections::HashSet;
 use crate::panel::Tab;
 use crate::vfs::Entry;
 
-/// Replace a tab's marks with every row whose **name** is in `names`.
-///
+/// Replace a tab's marks with every **shown** row whose **name** is in
+/// `names`. Through [`Tab::shown_entries`], like every other mark operation:
+/// a mark landing on a row a quick-search filter hides would be one the user
+/// cannot see and cannot unmark.
 pub fn replace_marks(tab: &mut Tab, names: &HashSet<String>) {
     tab.marks = tab
-        .entries
-        .iter()
-        .filter(|e| !e.is_parent && names.contains(&e.name))
-        .map(|e| e.mark_key().into_owned())
+        .shown_entries()
+        .filter(|(_, e)| !e.is_parent && names.contains(&e.name))
+        .map(|(_, e)| e.mark_key().into_owned())
         .collect();
 }
 
@@ -36,10 +37,9 @@ pub fn replace_marks(tab: &mut Tab, names: &HashSet<String>) {
 pub fn add_marks(tab: &mut Tab, names: &[String]) {
     let wanted: HashSet<&str> = names.iter().map(String::as_str).collect();
     let more: Vec<String> = tab
-        .entries
-        .iter()
-        .filter(|e| !e.is_parent && wanted.contains(e.name.as_str()))
-        .map(|e| e.mark_key().into_owned())
+        .shown_entries()
+        .filter(|(_, e)| !e.is_parent && wanted.contains(e.name.as_str()))
+        .map(|(_, e)| e.mark_key().into_owned())
         .collect();
     tab.marks.extend(more);
 }
@@ -113,6 +113,26 @@ mod tests {
         let left = [Entry::file("a"), Entry::file("b")];
         let right = [Entry::file("b"), Entry::file("c")];
         assert_eq!(compared_count(&left, &right), 3);
+    }
+
+    #[test]
+    fn a_comparison_marks_only_the_rows_the_filter_shows() {
+        // Compare while a quick-search filter is up: a mark on a hidden row
+        // would be one the user cannot see, cannot unmark, and would once
+        // have fed `F8` an invisible operand.
+        let mut tab = tab_with(&["alpha", "beta", "album"]);
+        tab.set_quick_filter("al".to_string(), |name: &str| name.starts_with("al"));
+        let names: HashSet<String> = ["alpha", "beta"].iter().map(|s| (*s).to_string()).collect();
+        replace_marks(&mut tab, &names);
+        assert!(tab.marks.contains("alpha"));
+        assert!(!tab.marks.contains("beta"), "hidden rows take no marks");
+
+        add_marks(&mut tab, &["beta".to_string(), "album".to_string()]);
+        assert!(tab.marks.contains("album"));
+        assert!(
+            !tab.marks.contains("beta"),
+            "not by the late verdict either"
+        );
     }
 
     #[test]

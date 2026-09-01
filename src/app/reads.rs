@@ -636,6 +636,13 @@ impl App {
                 // exists, and only then. The listing is complete here, so this
                 // is the one point at which "still exists" can be decided.
                 tab.prune_marks();
+                // The merge and `resolve_pending_select` both place the cursor
+                // by index and by name, and neither asks the filter: a rescan
+                // that deleted the cursor's file can leave the index on a row
+                // the filter hides - drawn nowhere, yet still what `Enter` and
+                // `F8` act on. The clamp snaps it onto a shown row, by the
+                // same rule a key-driven move uses.
+                tab.clamp_cursor();
             }
             VfsEvent::Failed { message, .. } => {
                 // A re-read that failed outright - a rescan or an ordinary one -

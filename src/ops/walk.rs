@@ -618,10 +618,12 @@ pub fn selection_stats(tab: &Tab, sizes: &SizeCache) -> SelectionStats {
     // `Entry::mark_key`, which on a virtual listing is the row's real address
     // rather than its name. Asking each row whether it
     // is marked is the only form of the question that is true in both.
+    //
+    // The *shown* rows: a mark a quick-search filter hides is not an operand
+    // (`Tab::operand_rows` reads the same view), and this figure exists to
+    // describe what is about to be operated on.
     let rows: Vec<usize> = tab
-        .entries
-        .iter()
-        .enumerate()
+        .shown_entries()
         .filter(|(_, entry)| tab.is_marked(entry))
         .map(|(index, _)| index)
         .collect();

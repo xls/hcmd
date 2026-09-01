@@ -206,22 +206,26 @@ pub fn apply(
     }
     let compiled = compile(mask, mode).map_err(|e| e.to_string())?;
     let mut out = MaskOutcome::default();
-    // Split the borrow: the marks are mutated while the entries are read, and
-    // they are two fields of the same `Tab`.
-    let Tab { entries, marks, .. } = tab;
-    for entry in entries.iter() {
-        if entry.is_parent || (exclude_dirs && entry.is_dir()) || !compiled.matches(&entry.name) {
-            continue;
-        }
-        out.matched = out.matched.saturating_add(1);
+    // The keys are collected before the marks are touched: the mask reads the
+    // **shown** rows - a quick-search filter narrows what `+` and `-` act on,
+    // exactly as it narrows `Ctrl+A` - and asking the tab what it shows
+    // borrows it whole, so the match pass and the mark pass are two passes.
+    let matched: Vec<String> = tab
+        .shown_entries()
+        .filter(|(_, entry)| {
+            !entry.is_parent && !(exclude_dirs && entry.is_dir()) && compiled.matches(&entry.name)
+        })
         // Keyed on `Entry::mark_key`, like every other mark operation: on a
         // virtual listing two rows can share a name, and a mask that matched
         // one of them must not mark the other.
-        let key = entry.mark_key();
+        .map(|(_, entry)| entry.mark_key().into_owned())
+        .collect();
+    for key in matched {
+        out.matched = out.matched.saturating_add(1);
         let changed = if mark {
-            marks.insert(key.into_owned())
+            tab.marks.insert(key)
         } else {
-            marks.remove(key.as_ref())
+            tab.marks.remove(key.as_str())
         };
         if changed {
             out.changed = out.changed.saturating_add(1);
@@ -1003,6 +1007,19 @@ mod tests {
         let out = apply(&mut t, "*.zip", MaskMode::Wildcard, true, false).expect("wildcard");
         assert_eq!(out.matched, 0);
         assert_eq!(out.message("*.zip", true), "*.zip: nothing matched");
+    }
+
+    #[test]
+    fn a_mask_marks_only_what_the_filter_shows() {
+        // `+` while a quick-search filter is up marks the matches among the
+        // shown rows - the same view every other mark operation reads.
+        let mut t = tab();
+        t.set_quick_filter("ma".to_string(), |name: &str| {
+            name.to_lowercase().starts_with("ma")
+        });
+        let out = apply(&mut t, "*", MaskMode::Wildcard, true, false).expect("wildcard");
+        assert_eq!(marks(&t), vec!["Makefile", "main.rs"]);
+        assert_eq!((out.matched, out.changed), (2, 2));
     }
 
     #[test]
