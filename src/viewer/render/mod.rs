@@ -63,6 +63,12 @@ pub enum RenderKind {
     /// Produced by [`diff::render`] and never by [`render`], which has one
     /// text and a diff needs two.
     Diff,
+    /// A compiled Android manifest, as the XML it was built from.
+    ///
+    /// Recognised by what the bytes are and not by the name, which says
+    /// `.xml` for a compiled manifest and a written one alike - so it is
+    /// never reached through [`RenderKind::of_name`].
+    Axml,
     /// Not a renderer at all: a binary whose format a template recognised,
     /// shown as what that template says it is. See [`summary_document`].
     Summary,
@@ -77,6 +83,7 @@ impl RenderKind {
             Self::Json => "json",
             Self::Html => "html",
             Self::Markdown => "markdown",
+            Self::Axml => "android xml",
             Self::Summary => "summary",
         }
     }
@@ -301,8 +308,9 @@ pub fn render(kind: RenderKind, text: &str) -> Option<Rendered> {
         // file's head, by `summary_document`, which is the only thing that
         // can produce this kind.
         // Neither is produced from one text: a summary comes from a template
-        // and the file's head, and a diff needs a second side.
-        RenderKind::Summary | RenderKind::Diff => return None,
+        // and the file's head, a diff needs a second side, and Android binary
+        // XML is decoded from bytes rather than read as text.
+        RenderKind::Summary | RenderKind::Diff | RenderKind::Axml => return None,
     };
     Some(Rendered {
         kind,

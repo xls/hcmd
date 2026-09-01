@@ -2865,11 +2865,12 @@ fn shift_right_from_the_second_character_still_reaches_the_first() {
 }
 
 #[test]
-fn a_compiled_android_manifest_opens_as_the_document_it_was() {
-    // End to end: the viewer, not the decoder. A `.xml` out of an APK is a
-    // dump until something turns it back into XML, and everything downstream -
-    // the mode it opens in, the lines it indexes, the highlighter - should see
-    // the document rather than the bytes.
+fn a_compiled_android_manifest_renders_as_xml_without_hiding_its_bytes() {
+    // The file is binary, so it opens as the dump it is and `2` inspects the
+    // real bytes at their real offsets. `3` is the content renderer, and that
+    // is where the document it was compiled from belongs - decoding it into
+    // modes 1 and 2 would have shown a reader the bytes of a rendering and
+    // called them the file's.
     let home = match std::env::var("HOME") {
         Ok(home) => home,
         Err(_) => return,
@@ -2881,19 +2882,27 @@ fn a_compiled_android_manifest_opens_as_the_document_it_was() {
     };
 
     let mut v = open_bytes(&bytes, &cfg());
+    assert_eq!(v.mode(), ViewerMode::Hex, "a binary opens as a dump");
+
+    v.set_mode(ViewerMode::Render).expect("mode 3");
+    let doc = v.rendered().expect("mode 3 built a document");
+    assert_eq!(doc.kind, crate::viewer::render::RenderKind::Axml);
+    let text: Vec<&str> = doc.lines.iter().map(|l| l.text.as_str()).collect();
+    assert!(
+        text.first().is_some_and(|l| l.starts_with("<?xml ")),
+        "it opens as a document: {:?}",
+        text.first()
+    );
+    assert!(
+        text.iter().any(|l| l.contains("android:versionName=")),
+        "with its attributes prefixed"
+    );
+
+    // And the bytes are still the file's: mode 2 reads what is on disk.
+    v.set_mode(ViewerMode::Hex).expect("mode 2");
     assert_eq!(
-        v.mode(),
-        ViewerMode::Text,
-        "a document opens as text, not as a dump"
-    );
-    v.layout(4, 120).expect("layout");
-    let rows = texts(&v);
-    assert!(
-        rows.first().is_some_and(|r| r.starts_with("<?xml ")),
-        "its first line is the declaration: {rows:?}"
-    );
-    assert!(
-        rows.iter().any(|r| r.contains("<manifest")),
-        "and the tag it is: {rows:?}"
+        v.len(),
+        Some(bytes.len() as u64),
+        "the dump is over the whole real file"
     );
 }

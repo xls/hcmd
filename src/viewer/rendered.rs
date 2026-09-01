@@ -143,6 +143,19 @@ impl Viewer {
         };
         let bytes = self.read_all(want).map_err(|_| RenderRefusal::NoRenderer)?;
 
+        // Before anything that reads the bytes as text: a compiled Android
+        // manifest is not text and would decode to nothing legible. It is
+        // recognised by its own header, so a `.xml` that is really one is
+        // caught and a `.xml` that is written by hand is not.
+        if let Some(document) = super::axml::decode(&bytes).map(|text| Rendered {
+            kind: RenderKind::Axml,
+            label: RenderKind::Axml.label().to_string(),
+            lines: text.lines().map(super::render::RenderLine::plain).collect(),
+        }) {
+            self.install_render(document);
+            return Ok(());
+        }
+
         // First: what the file is made of, where a renderer can read it.
         let refusal = match kind {
             None => RenderRefusal::NoRenderer,
