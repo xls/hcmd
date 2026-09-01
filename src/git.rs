@@ -431,6 +431,22 @@ impl FileState {
     }
 }
 
+/// The branch `dir`'s repository is on, or the short commit id when HEAD is
+/// detached. `None` when `dir` is not in a repository.
+///
+/// A repository is a fact about where you are standing, not about the files
+/// in front of you, so this answers at any depth: a panel three directories
+/// down still says which branch its work is on.
+pub fn branch_name(dir: &Path) -> Option<String> {
+    let repo = repo_at(dir)?;
+    if let Ok(Some(name)) = repo.head_name() {
+        return Some(name.shorten().to_string());
+    }
+    // Detached: there is no branch to name, and the commit is the honest
+    // answer rather than a blank.
+    repo.head_id().ok().map(|id| id.shorten_or_id().to_string())
+}
+
 /// The git state of the files **directly in** `dir`, keyed by file name.
 ///
 /// One index read and one HEAD tree, then a stat-and-maybe-hash per file - the

@@ -1725,6 +1725,49 @@ mod tests {
     }
 
     #[test]
+    fn the_branch_sits_at_the_right_of_the_panel_status_line() {
+        let mut a = app();
+        a.active_panel_mut().active_tab_mut().git_branch = Some("master".to_string());
+        let out = dump(&render(&a, 60, 15));
+        let status = out
+            .lines()
+            .find(|l| l.contains(" in 2 files, 1 dir"))
+            .unwrap_or_default();
+        assert!(status.contains("[master]"), "the branch is named: {status}");
+        let counts = status.find(" in 2 files").unwrap_or(usize::MAX);
+        let branch = status.find("[master]").unwrap_or(0);
+        assert!(branch > counts, "and it sits after the counts: {status}");
+    }
+
+    #[test]
+    fn a_long_branch_name_is_cut_rather_than_eating_the_counts() {
+        let mut a = app();
+        a.active_panel_mut().active_tab_mut().git_branch =
+            Some("feature/a-very-long-branch-name-indeed".to_string());
+        let out = dump(&render(&a, 60, 15));
+        let status = out
+            .lines()
+            .find(|l| l.contains(" in 2 files, 1 dir"))
+            .unwrap_or_default();
+        assert!(
+            status.contains(" in 2 files, 1 dir"),
+            "the counts survive it: {status}"
+        );
+        assert!(
+            !status.contains("branch-name-indeed"),
+            "the name is cut: {status}"
+        );
+        // Cut, not padded: a short branch must not reserve the full width.
+        let mut b = app();
+        b.active_panel_mut().active_tab_mut().git_branch = Some("main".to_string());
+        let short = dump(&render(&b, 60, 15));
+        assert!(
+            short.contains("[main]"),
+            "a short branch takes only its own room: {short}"
+        );
+    }
+
+    #[test]
     fn a_cropped_name_does_not_displace_the_panel_counts() {
         let mut a = app();
         a.move_cursor_to(3);
@@ -1736,7 +1779,7 @@ mod tests {
         // `panel::text`'s business, not this test's.
         let row = lines
             .iter()
-            .find(|l| l.starts_with("\u{2502}a-really-quite"))
+            .find(|l| l.starts_with("\u{2502}a-really"))
             .copied()
             .unwrap_or_default();
         assert!(row.contains('\u{2026}'), "the row is cropped: {row}");

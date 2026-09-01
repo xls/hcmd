@@ -94,6 +94,33 @@ pub struct GitStatusRequest {
     pub generation: u64,
     /// The directory to read git's state of.
     pub dir: std::path::PathBuf,
+    /// Whether the rows want per-file flags, or only the branch.
+    ///
+    /// A commit's listing already knows what it did to each file and says so
+    /// on the rows themselves; the working tree's flags describe a different
+    /// moment entirely and would overwrite them with nothing. It still wants
+    /// the branch, which is a fact about the repository rather than about any
+    /// listing of it.
+    pub wants_flags: bool,
+}
+
+/// What the git probe should look at for `path`, and whether the rows want
+/// per-file flags.
+///
+/// A real local directory wants both: the flags describe the very files on
+/// screen. A listing that merely *hangs off* one - a commit and its changed
+/// files, which live in the object store rather than the working tree - wants
+/// only the branch, because it is still that repository's history and saying
+/// so is the point. Anything with no local directory under it at all, a remote
+/// or a search result, has no repository to speak of.
+fn git_probe_target(path: &crate::vfs::VfsPath) -> Option<(std::path::PathBuf, bool)> {
+    if let Some(dir) = path.local_path() {
+        return Some((dir.to_path_buf(), true));
+    }
+    match path.segments().first() {
+        Some((crate::vfs::BackendKind::Local, root)) => Some((root.clone(), false)),
+        _ => None,
+    }
 }
 
 /// The answer: each file's git state, by name.
@@ -105,8 +132,10 @@ pub struct GitStatusEvent {
     pub tab: usize,
     /// The listing this is for.
     pub generation: u64,
-    /// The flags, by file name.
-    pub flags: std::collections::HashMap<String, crate::git::FileState>,
+    /// The flags, by file name, or `None` when the listing did not want them.
+    pub flags: Option<std::collections::HashMap<String, crate::git::FileState>>,
+    /// The branch this directory's repository is on, for the status line.
+    pub branch: Option<String>,
 }
 
 /// Ask [`Vfs::capabilities_for`] on the blocking pool and deliver the answer
@@ -175,6 +204,12 @@ impl App {
         // directory drops it. A re-read of the *same* directory keeps it, which
         // is why this lives here and not in `clear_entries`.
         tab.clear_filter();
+        // The same rule, for the same reason: whether this is a repository is a
+        // fact about the directory, and it is answered by a probe that lands
+        // after the listing does. Clearing it on every finished read instead
+        // meant the column blinked out and back on each rescan - and the watch
+        // rescans often.
+        tab.git_branch = None;
         // A different directory has nothing to reconcile against, so any rescan
         // that was mid-flight is abandoned rather than merged into the new one.
         tab.merging = None;
@@ -609,18 +644,15 @@ impl App {
                     .panel(side)
                     .tab(tab_index)
                     .filter(|_| self.config.panel.git_status)
-                    .and_then(|tab| tab.path.local_path().map(std::path::Path::to_path_buf))
-                    .map(|dir| GitStatusRequest {
+                    .and_then(|tab| git_probe_target(&tab.path))
+                    .map(|(dir, wants_flags)| GitStatusRequest {
                         side,
                         tab: tab_index,
                         generation,
                         dir,
+                        wants_flags,
                     });
                 let tab = self.panel_mut(side).tab_mut(tab_index)?;
-                // Until the probe answers, nothing is known about a repository
-                // here; a stale `true` would draw the column over a listing
-                // that has left the repository behind.
-                tab.git_repo = false;
                 tab.loading = false;
                 // A rescan reconciles its buffered rows into the visible ones
                 // now, in place; an ordinary read has already built `entries`
@@ -727,12 +759,15 @@ impl App {
         let Some(tab) = self.panel_mut(event.side).tab_mut(event.tab) else {
             return;
         };
-        tab.git_repo = true;
         if tab.generation != event.generation {
             return;
         }
+        tab.git_branch = event.branch;
+        let Some(flags) = event.flags else {
+            return;
+        };
         for entry in &mut tab.entries {
-            entry.git_state = event.flags.get(&entry.name).copied();
+            entry.git_state = flags.get(&entry.name).copied();
         }
     }
 
@@ -778,6 +813,28 @@ mod tests {
     use tokio::sync::mpsc;
 
     use super::*;
+
+    #[test]
+    fn a_commit_listing_asks_for_the_branch_but_not_the_working_trees_flags() {
+        use crate::vfs::{BackendKind, VfsPath};
+        // A real directory wants both: the flags are about the files on screen.
+        let here = VfsPath::local("/repo/src");
+        assert_eq!(
+            git_probe_target(&here),
+            Some((std::path::PathBuf::from("/repo/src"), true))
+        );
+        // History hangs off the repository. It is still that repository, so it
+        // is named - but the working tree's flags describe another moment and
+        // would wipe what the commit itself said about each file.
+        let history = VfsPath::local("/repo").with_segment(BackendKind::Git, "/abc123");
+        assert_eq!(
+            git_probe_target(&history),
+            Some((std::path::PathBuf::from("/repo"), false))
+        );
+        // Nothing local underneath: no repository to speak of.
+        let listing = VfsPath::new(BackendKind::List, "/results");
+        assert_eq!(git_probe_target(&listing), None);
+    }
     use crate::app::{VfsEvent, stream_read};
     use crate::config::{Config, Keymap, Theme};
     use crate::error::Result as VfsResult;

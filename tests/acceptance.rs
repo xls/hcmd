@@ -1216,8 +1216,11 @@ fn criterion_7_columns_drop_by_priority_and_a_hidden_sort_says_so() {
     }
 
     // `hide_priority` is attr, ext, size, date - so they go in that order and
-    // date outlives all of them.
-    s.resize(104, 30);
+    // date outlives all of them. The widths below are two columns wider per
+    // panel than they once were: the git column is drawn whenever the setting
+    // is on, so it holds a cell of its own and every other column meets its
+    // limit that much sooner. The order under test is unchanged.
+    s.resize(108, 30);
     let no_attr = s.header();
     assert!(!no_attr.contains("Attr"), "attr goes first:\n{no_attr}");
     assert!(
@@ -1225,7 +1228,7 @@ fn criterion_7_columns_drop_by_priority_and_a_hidden_sort_says_so() {
         "and nothing else went with it:\n{no_attr}"
     );
 
-    s.resize(88, 30);
+    s.resize(92, 30);
     let no_ext = s.header();
     assert!(
         !no_ext.contains("Ext") && !no_ext.contains("Attr"),
@@ -1236,7 +1239,7 @@ fn criterion_7_columns_drop_by_priority_and_a_hidden_sort_says_so() {
         "size and date are still there:\n{no_ext}"
     );
 
-    s.resize(80, 30);
+    s.resize(84, 30);
     let no_size = s.header();
     assert!(!no_size.contains("Size"), "size goes third:\n{no_size}");
     assert!(no_size.contains("Date"), "date is kept longest:\n{no_size}");

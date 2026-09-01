@@ -232,12 +232,12 @@ pub fn draw(f: &mut Frame, app: &App, side: Side, area: Rect) {
     let show_tabs = panel.tab_bar_visible(app.config.panel.show_tab_bar);
     let r = rows(area, show_tabs);
 
-    // The git column belongs to a repository, not to a change: inside one it
-    // is always drawn, and an empty cell says the file is clean. It used to
-    // appear only once some row had a state, which meant it was missing from
-    // the root of every project whose work lives a directory down - and a
-    // column that comes and goes is read as a bug, not as information.
-    let show_git = tab.git_repo;
+    // The setting decides, and nothing else. Drawn on a directory with no
+    // repository in sight as well: a column that appears and disappears as you
+    // walk around is read as a fault, and the layout shifting under the eye
+    // costs more than one blank cell. Whether there *is* a repository here is
+    // said once, on the status line, where a change of place is expected.
+    let show_git = app.config.panel.git_status;
     let allocated = columns::allocate(&app.config.panel, usize::from(r.entries.width), show_git);
     let crop = columns::name_crop(&app.config.panel, &allocated);
 
@@ -830,6 +830,9 @@ fn draw_rule(f: &mut Frame, app: &App, area: Rect, g: Glyphs, border_rgb: Rgb) {
 
 /// The panel status line, with the sort indicator at its right end.
 ///
+/// How much of a branch name the status line will show.
+const BRANCH_MAX: usize = 15;
+
 fn draw_status(
     f: &mut Frame,
     app: &App,
@@ -868,6 +871,21 @@ fn draw_status(
             }
         }
         _ => tag,
+    };
+    // The branch, right-aligned and last: it is the slowest-changing thing on
+    // the line and the one the eye goes looking for rather than reads in
+    // passing. Capped, because a branch name can be a sentence and the counts
+    // are what the line is for.
+    let tag = match tab.git_branch.as_deref() {
+        Some(branch) => {
+            let short = text::take_front(branch, BRANCH_MAX);
+            if tag.is_empty() {
+                format!("[{short}]")
+            } else {
+                format!("{tag} [{short}]")
+            }
+        }
+        None => tag,
     };
     let tag_w = text::width(&tag).min(usize::from(area.width));
     let left_w = usize::from(area.width).saturating_sub(tag_w);

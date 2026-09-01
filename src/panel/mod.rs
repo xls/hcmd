@@ -477,16 +477,13 @@ pub struct Tab {
     pub cursor: usize,
     /// Index of the first rendered row.
     pub scroll: usize,
-    /// Is this listing inside a git repository?
+    /// The branch this directory's repository is on, `None` outside one.
     ///
-    /// Set by the git-status probe, which answers for a directory in a
-    /// repository and says nothing for one outside. It decides whether the
-    /// column is drawn at all: in a repository it always is, and a blank cell
-    /// then *means* something - clean, nothing staged - rather than meaning
-    /// the column went away. A column that came and went with the first dirty
-    /// file was invisible at the root of every real project, where all the
-    /// work is a directory down.
-    pub git_repo: bool,
+    /// Answered by the git-status probe, which lands after the listing does,
+    /// and cleared on a *change* of directory rather than on every read - a
+    /// rescan of the same place keeps it, or the status line would blink on
+    /// every watch event.
+    pub git_branch: Option<String>,
     /// Marked entries, by [`Entry::mark_key`].
     ///
     /// v0.1 keyed this on the name, on the reasoning that the set is cleared
@@ -623,7 +620,7 @@ impl Tab {
             cursor: 0,
             scroll: 0,
             marks: HashSet::new(),
-            git_repo: false,
+            git_branch: None,
             sort: SortState::default(),
             quick_filter: None,
             loading: false,
@@ -1886,6 +1883,23 @@ fn git_sort_key(entry: &Entry) -> u8 {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_rescan_of_the_same_directory_keeps_the_git_flag_on_a_row() {
+        // The probe answers after the listing, so a rescan that dropped what
+        // it had already said would blink the column out on every watch event.
+        let mut tab = Tab::new(VfsPath::local("/repo"));
+        let mut had = Entry::file("a.rs".to_string());
+        had.git_state = Some(crate::git::FileState::Modified);
+        tab.entries = vec![had];
+        tab.merging = Some(vec![Entry::file("a.rs".to_string())]);
+        tab.merge_listing(true);
+        assert_eq!(
+            tab.entries[0].git_state,
+            Some(crate::git::FileState::Modified),
+            "the row kept its flag across the rescan"
+        );
+    }
 
     #[test]
     fn coming_back_up_lands_on_the_row_whose_home_it_left() {

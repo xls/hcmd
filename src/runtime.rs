@@ -1526,18 +1526,22 @@ pub fn service_git_status(app: &mut App, tx: &mpsc::Sender<crate::app::reads::Gi
     };
     let tx = tx.clone();
     tokio::task::spawn_blocking(move || {
-        // `None` is "not in a repository" and is the only silence. An empty
-        // map is an answer: this *is* a repository and nothing in it has
-        // changed, which is what keeps the column drawn and blank rather than
-        // making it vanish.
-        let Some(flags) = crate::git::dir_status(&request.dir) else {
+        // The branch is the whole answer for a listing that only hangs off a
+        // repository, and `None` there means there is no repository to name.
+        let branch = crate::git::branch_name(&request.dir);
+        if branch.is_none() {
             return;
-        };
+        }
+        let flags = request
+            .wants_flags
+            .then(|| crate::git::dir_status(&request.dir))
+            .flatten();
         let _ = tx.blocking_send(crate::app::reads::GitStatusEvent {
             side: request.side,
             tab: request.tab,
             generation: request.generation,
             flags,
+            branch,
         });
     });
 }

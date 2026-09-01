@@ -755,8 +755,9 @@ fn columns_drop_by_priority_as_the_panel_narrows() {
     );
 
     // Narrow: `hide_priority` is attr, ext, size, date - so attr and ext go
-    // first and date outlives size.
-    let (parser, _) = run_in_pty(Run::new(72, 30).cwd(fix.path()));
+    // first and date outlives size. Two columns wider per panel than it once
+    // was, because the git column holds a cell whenever the setting is on.
+    let (parser, _) = run_in_pty(Run::new(76, 30).cwd(fix.path()));
     let narrow = header_line(&parser);
     assert!(
         !narrow.contains("Attr"),
