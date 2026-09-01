@@ -55,7 +55,7 @@ fn live_bindings(user_text: &str) -> HashMap<(String, String), Vec<String>> {
 /// [`crate::config::EXAMPLE_KEYMAP`]; a test asserts the two stay byte-identical
 /// so the generator cannot drift from the file it regenerates against.
 pub fn generate() -> String {
-    render(&live_bindings(crate::config::EXAMPLE_KEYMAP), None)
+    render(&live_bindings(crate::config::EXAMPLE_KEYMAP), None).text
 }
 
 /// Regenerate a user's `keymap.toml`: the actions they set live are written
@@ -65,17 +65,28 @@ pub fn generate() -> String {
 /// `user_text` is parsed tolerantly; a file that will not parse is treated as
 /// having set nothing, so the fresh canonical layout is written and the old
 /// file is what the caller has already moved aside.
-pub fn generate_preserving(user_text: &str, version: &str) -> String {
+pub fn generate_preserving(user_text: &str, version: &str) -> Regenerated {
     render(&live_bindings(user_text), Some(version))
+}
+
+/// A regenerated `keymap.toml`, and what could not be placed in it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Regenerated {
+    /// The file to write.
+    pub text: String,
+    /// `section.action` for every binding the user wrote that the layout never
+    /// asked about, so the caller can say so instead of dropping it in silence.
+    pub unplaced: Vec<String>,
 }
 
 /// Walk the canonical layout and emit the file, live where the user spoke and
 /// commented everywhere else, injecting the version stamp into the header.
-fn render(live: &HashMap<(String, String), Vec<String>>, version: Option<&str>) -> String {
+fn render(live: &HashMap<(String, String), Vec<String>>, version: Option<&str>) -> Regenerated {
     let template = crate::config::EXAMPLE_KEYMAP;
     let mut lines: Vec<String> = Vec::new();
     let mut section = String::new();
     let mut injected = false;
+    let mut used: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
 
     for line in template.lines() {
         let trimmed = line.trim_start();
@@ -123,7 +134,20 @@ fn render(live: &HashMap<(String, String), Vec<String>>, version: Option<&str>) 
             continue;
         };
         let action = line[..eq].trim().to_string();
-        match live.get(&(section.clone(), action)) {
+        // The user's section first, then the action wherever they put it. The
+        // loader takes an action in any context it is valid for - the file
+        // itself shows `[global] hotlist` - so a binding written somewhere
+        // other than where this layout happens to declare it is a binding, not
+        // a mistake, and keying only on the pair silently threw it away.
+        let key = if live.contains_key(&(section.clone(), action.clone())) {
+            Some((section.clone(), action.clone()))
+        } else {
+            live.keys().find(|(_, other)| *other == action).cloned()
+        };
+        if let Some(key) = &key {
+            used.insert(key.clone());
+        }
+        match key.and_then(|key| live.get(&key)) {
             Some(user_list) => {
                 // The user set this action. Keep the line verbatim - alignment
                 // and inline comment intact - when their bindings are the
@@ -145,7 +169,19 @@ fn render(live: &HashMap<(String, String), Vec<String>>, version: Option<&str>) 
     if template.ends_with('\n') {
         out.push('\n');
     }
-    out
+    // Anything the walk never asked about: an action this layout does not
+    // name at all. It is not in the new file, and the only honest thing left
+    // is to say so.
+    let mut unplaced: Vec<String> = live
+        .keys()
+        .filter(|key| !used.contains(*key))
+        .map(|(section, action)| format!("{section}.{action}"))
+        .collect();
+    unplaced.sort();
+    Regenerated {
+        text: out,
+        unplaced,
+    }
 }
 
 /// The binding strings inside the first `[ ... ]` on the value side of a line.
@@ -205,7 +241,7 @@ mod tests {
         // the built-in.
         let version = env!("CARGO_PKG_VERSION");
         let user = "[global]\ncopy = [\"ctrl+c\"]\n";
-        let out = generate_preserving(user, version);
+        let out = generate_preserving(user, version).text;
         assert!(
             out.contains("\ncopy              = [\"ctrl+c\"]\n"),
             "the user's binding is live and keeps the layout's alignment: {out}"
@@ -229,7 +265,7 @@ mod tests {
         // the user's file never named it.
         let version = env!("CARGO_PKG_VERSION");
         let user = "[global]\ncopy = [\"ctrl+c\"]\n";
-        let out = generate_preserving(user, version);
+        let out = generate_preserving(user, version).text;
         assert!(
             out.contains("theme_picker"),
             "an action the user file omits is present after regeneration: {out}"
@@ -242,8 +278,8 @@ mod tests {
         // second `--update-config` is a no-op and makes no backup.
         let version = env!("CARGO_PKG_VERSION");
         let user = "[global]\ncopy = [\"ctrl+c\"]\n[panel]\nparent = [\"ctrl+pgup\"]\n";
-        let once = generate_preserving(user, version);
-        let twice = generate_preserving(&once, version);
+        let once = generate_preserving(user, version).text;
+        let twice = generate_preserving(&once, version).text;
         assert_eq!(once, twice, "a second regeneration changes nothing");
     }
 
@@ -254,7 +290,7 @@ mod tests {
         // the broken file up dated. No binding survives, which is the honest
         // outcome when the file cannot be read.
         let version = env!("CARGO_PKG_VERSION");
-        let out = generate_preserving("this is = = not toml", version);
+        let out = generate_preserving("this is = = not toml", version).text;
         assert!(
             out.contains("\n# copy              = [\"f5\"]"),
             "every action is commented at its default: {out}"

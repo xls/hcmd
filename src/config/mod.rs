@@ -587,10 +587,12 @@ pub fn update_config() -> i32 {
     println!("configuration directory: {}", dir.display());
     let current = env!("CARGO_PKG_VERSION");
 
-    let (config_line, status) = regenerate_config(&dir.join("config.toml"), current);
+    let (config_line, config_status) = regenerate_config(&dir.join("config.toml"), current);
     println!("{config_line}");
-    println!("{}", regenerate_keymap(&dir.join("keymap.toml"), current));
-    status
+    let (keymap_line, keymap_status) = regenerate_keymap(&dir.join("keymap.toml"), current);
+    println!("{keymap_line}");
+    // Either file refusing is a run that did not do what was asked.
+    config_status.max(keymap_status)
 }
 
 /// Regenerate one `config.toml` in place: keep the options the user set live at
@@ -651,29 +653,52 @@ fn regenerate_config(config_path: &Path, current: &str) -> (String, i32) {
 /// new one lands - the same shape [`update_config`] gives `config.toml`.
 /// Returns the human line to print, so the file work and its reporting stay in
 /// one place a test can drive against a temporary directory.
-fn regenerate_keymap(keymap_path: &Path, current: &str) -> String {
-    let user_text = match fs::read_to_string(keymap_path) {
-        Ok(text) => text,
-        Err(_) => return "  keymap.toml: not present, nothing to update".to_string(),
+fn regenerate_keymap(keymap_path: &Path, current: &str) -> (String, i32) {
+    let Ok(user_text) = fs::read_to_string(keymap_path) else {
+        return (
+            "  keymap.toml: not present, nothing to update".to_string(),
+            0,
+        );
     };
-    let regenerated = keymap::emit::generate_preserving(&user_text, current);
-    if regenerated == user_text {
-        return "  keymap.toml: already up to date".to_string();
+    // A file the parser cannot read says nothing about what the user bound, so
+    // regenerating from it would write every action back commented at its
+    // default - every binding in the file gone, and the only thing printed
+    // "regenerated". `config.toml` refuses in the same position and for the
+    // same reason.
+    if let Err(err) = toml::from_str::<toml::Table>(&user_text) {
+        return (
+            format!(
+                "  keymap.toml: {err}\n  keymap.toml: left as it is - fix the line above, then run this again"
+            ),
+            1,
+        );
     }
-    match backup_aside(keymap_path) {
-        Ok(backup) => match fs::write(keymap_path, &regenerated) {
-            Ok(()) => match backup {
-                Some(b) => {
-                    format!(
-                        "  keymap.toml: regenerated (old file kept at {})",
-                        b.display()
-                    )
-                }
-                None => "  keymap.toml: written".to_string(),
-            },
-            Err(err) => format!("  keymap.toml: could not write: {err}"),
-        },
-        Err(err) => format!("  keymap.toml: could not back up the old file: {err}"),
+    let regenerated = keymap::emit::generate_preserving(&user_text, current);
+    if regenerated.text == user_text {
+        return ("  keymap.toml: already up to date".to_string(), 0);
+    }
+    // An action this layout does not name cannot be written into it. Saying so
+    // is the difference between a file that changed and a binding that vanished.
+    let mut note = String::new();
+    if !regenerated.unplaced.is_empty() {
+        note = format!(
+            "\n  keymap.toml: not carried over, no such action: {}",
+            regenerated.unplaced.join(", ")
+        );
+    }
+    match replace_with_backup(keymap_path, &regenerated.text) {
+        Ok(Some(b)) => (
+            format!(
+                "  keymap.toml: regenerated (old file kept at {}){note}",
+                b.display()
+            ),
+            0,
+        ),
+        Ok(None) => (format!("  keymap.toml: written{note}"), 0),
+        Err(err) => (
+            format!("  keymap.toml: could not replace the old file: {err}"),
+            1,
+        ),
     }
 }
 
@@ -682,7 +707,7 @@ fn regenerate_keymap(keymap_path: &Path, current: &str) -> String {
 /// nothing. The same computation [`update_config`] acts on, so `--check-config`
 /// and `--update-config` never disagree about whether the file is current.
 fn keymap_is_current(user_text: &str, current: &str) -> bool {
-    keymap::emit::generate_preserving(user_text, current) == user_text
+    keymap::emit::generate_preserving(user_text, current).text == user_text
 }
 
 /// Whether the user's `config.toml` text is what the current schema would
@@ -910,7 +935,7 @@ fn warn_at(text: &str, file_label: &str, key: &str, message: &str) -> String {
 /// Tables whose keys the user invents, so no struct field can enumerate them:
 /// a column name, a language name, a key name, a glob. Everything else the
 /// validator knows comes from the structs themselves.
-const OPEN_TABLES: &[&str] = &[
+pub(crate) const OPEN_TABLES: &[&str] = &[
     "panel.columns.width",
     "panel.columns.min_chars",
     "open.handlers.match",
@@ -1328,7 +1353,7 @@ mod tests {
         let path = dir.join("keymap.toml");
         fs::write(&path, "[global]\ncopy = [\"ctrl+c\"]\n").expect("write");
 
-        let line = regenerate_keymap(&path, current);
+        let (line, _status) = regenerate_keymap(&path, current);
         assert!(line.contains("regenerated"), "{line}");
 
         let written = fs::read_to_string(&path).expect("read regenerated");
@@ -1354,7 +1379,7 @@ mod tests {
 
         // A second run is a no-op: the file is current, so nothing is written
         // and no second backup is made.
-        let again = regenerate_keymap(&path, current);
+        let (again, _) = regenerate_keymap(&path, current);
         assert!(again.contains("already up to date"), "{again}");
         let backups_after = fs::read_dir(&dir)
             .expect("read dir")
@@ -1371,44 +1396,101 @@ mod tests {
     }
 
     #[test]
-    fn an_unparsable_keymap_is_replaced_and_backed_up() {
-        // The fallback the loader already uses, applied to regeneration: a file
-        // that will not parse cannot tell us what the user set, so a fresh
-        // canonical keymap is written and the broken file is kept aside dated
-        // rather than thrown away.
+    fn a_keymap_the_parser_cannot_read_is_left_alone() {
+        // A file that will not parse cannot say what the user bound, and
+        // regenerating from it wrote every action back commented at its
+        // default - every binding in the file gone, and the run said only
+        // "regenerated". `config.toml` refuses here for the same reason.
         let current = env!("CARGO_PKG_VERSION");
         let dir = std::env::temp_dir().join(format!("hcmd-keymap-broken-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).expect("temp dir");
         let path = dir.join("keymap.toml");
-        fs::write(&path, "this is = = not toml").expect("write");
+        let broken = "[global]\ncopy = [\"ctrl+c\"]\n[panel]\n[global]\nmkdir = [\"f7\"]\n";
+        fs::write(&path, broken).expect("write");
 
-        let line = regenerate_keymap(&path, current);
-        assert!(line.contains("regenerated"), "{line}");
-
-        let written = fs::read_to_string(&path).expect("read regenerated");
-        assert!(
-            keymap_is_current(&written, current),
-            "the fresh file reads as current"
-        );
-        assert!(Keymap::load(&written, "keymap.toml").warnings.is_empty());
-
-        let backup = fs::read_dir(&dir)
-            .expect("read dir")
-            .flatten()
-            .find(|e| {
-                e.file_name()
-                    .to_str()
-                    .is_some_and(|n| n.starts_with("keymap.toml.") && n.ends_with(".bak"))
-            })
-            .expect("a dated backup of the broken file");
+        let (line, status) = regenerate_keymap(&path, current);
+        assert_eq!(status, 1, "the run reports the fault: {line}");
+        assert!(line.contains("left as it is"), "{line}");
         assert_eq!(
-            fs::read_to_string(backup.path()).expect("read backup"),
-            "this is = = not toml",
-            "the broken file is kept verbatim"
+            fs::read_to_string(&path).expect("still there"),
+            broken,
+            "not one byte of the user's file was touched"
+        );
+        assert!(
+            fs::read_dir(&dir)
+                .expect("read dir")
+                .flatten()
+                .all(|e| e.file_name() == "keymap.toml"),
+            "and nothing was left beside it"
         );
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_open_table_the_user_filled_in_survives_regeneration() {
+        // `[terminal.sequences]` and the lsp map are left out of the schema
+        // because their keys are the user's own and no field can name them
+        // ahead of time. Left out of the file as well, they were deleted by the
+        // run meant to bring it up to date - and `terminal.sequences` is the
+        // way out of a terminal that eats a key.
+        let current = env!("CARGO_PKG_VERSION");
+        let user = concat!(
+            "[viewer.highlight.lsp]\n",
+            "zig = \"zls\"\n\n",
+            "[terminal.sequences]\n",
+            "\"ctrl+f9\" = \"my-escape-seq\"\n"
+        );
+        let cfg: Config = toml::from_str(user).expect("it parses");
+        let live = live_keys(user);
+        let is_live =
+            |section: &str, key: &str| live.contains(&(section.to_string(), key.to_string()));
+        let out = emit::generate_preserving(&cfg, &is_live, current);
+        assert!(out.contains("zig = \"zls\""), "the lsp entry stays:\n{out}");
+        assert!(
+            out.contains("\"ctrl+f9\" = \"my-escape-seq\""),
+            "and the sequence, with the key quoted as TOML needs it:\n{out}"
+        );
+        // And it reads back as what was written, which is the whole point.
+        let back: Config = toml::from_str(&out).expect("the regenerated file parses");
+        assert_eq!(
+            back.terminal.sequences.get("ctrl+f9").map(String::as_str),
+            Some("my-escape-seq")
+        );
+    }
+
+    #[test]
+    fn a_binding_written_in_another_section_is_carried_over() {
+        // The loader takes an action in any context it is valid for, so a
+        // binding written somewhere other than where the shipped layout
+        // declares it is a binding. Keying on the pair alone dropped it in
+        // silence: `parent` is declared under `[panel]`, and a user who wrote
+        // it under `[global]` lost it on the next regeneration.
+        let current = env!("CARGO_PKG_VERSION");
+        let out = keymap::emit::generate_preserving("[global]\nparent = [\"ctrl+up\"]\n", current);
+        assert!(
+            out.text.contains("[\"ctrl+up\"]"),
+            "the binding survives:\n{}",
+            out.text
+        );
+        assert!(
+            out.unplaced.is_empty(),
+            "and it was placed, not reported as lost: {:?}",
+            out.unplaced
+        );
+    }
+
+    #[test]
+    fn an_action_the_layout_does_not_know_is_reported_not_dropped() {
+        let current = env!("CARGO_PKG_VERSION");
+        let out =
+            keymap::emit::generate_preserving("[global]\nno_such_action = [\"f4\"]\n", current);
+        assert_eq!(
+            out.unplaced,
+            vec!["global.no_such_action".to_string()],
+            "it cannot be written into a layout that never names it, so it is said out loud"
+        );
     }
 
     #[test]

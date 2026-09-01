@@ -184,6 +184,9 @@ fn render(config: &Config, is_live: &dyn Fn(&str, &str) -> bool, version: Option
         }
     }
 
+    // What the program would hold with nothing configured, so an open table
+    // still at its defaults can be told from one the user has written in.
+    let defaults = toml::Value::try_from(Config::default()).ok();
     let mut out = file_header(version);
     for block in &blocks {
         out.push('\n');
@@ -198,7 +201,11 @@ fn render(config: &Config, is_live: &dyn Fn(&str, &str) -> bool, version: Option
                 render_option(&mut out, &block.path, key, comment, &root, is_live);
             }
         }
-        if let Some(example) = curated_example(&block.path) {
+        // An open table the user has filled in stands in for the commented
+        // example of one: the example is there to show the shape, and their own
+        // entries show it better.
+        let filled = render_open_tables(&mut out, &block.path, &root, &defaults);
+        if !filled && let Some(example) = curated_example(&block.path) {
             out.push('\n');
             out.push_str(example);
             if !example.ends_with('\n') {
@@ -207,6 +214,65 @@ fn render(config: &Config, is_live: &dyn Fn(&str, &str) -> bool, version: Option
         }
     }
     out
+}
+
+/// Write out any open table belonging to `parent` that the user has put
+/// something in. Answers whether it wrote anything.
+///
+/// These tables are left out of the schema because their keys are the user's
+/// own - a terminal's escape sequence, a language's server - and no struct
+/// field can name them ahead of time. Left out of the *file* as well, though,
+/// they were deleted by the very run meant to bring the file up to date:
+/// `[terminal.sequences]` is the way out of a terminal that eats a key, and a
+/// regeneration silently took it away.
+fn render_open_tables(
+    out: &mut String,
+    parent: &str,
+    root: &toml::Value,
+    defaults: &Option<toml::Value>,
+) -> bool {
+    let mut wrote = false;
+    for path in crate::config::OPEN_TABLES {
+        if join_section(parent, path.rsplit('.').next().unwrap_or(path)) != *path {
+            continue;
+        }
+        let Some(toml::Value::Table(table)) = get_path(root, path) else {
+            continue;
+        };
+        // Only what the user actually put there. A table still holding the
+        // built-in entries is what the commented example already shows, and
+        // writing it out live would pin those defaults - the same trap as
+        // writing a key the user never set without its comment.
+        let untouched = defaults
+            .as_ref()
+            .and_then(|d| get_path(d, path))
+            .is_some_and(|d| d == &toml::Value::Table(table.clone()));
+        if table.is_empty() || untouched {
+            continue;
+        }
+        out.push('\n');
+        out.push('[');
+        out.push_str(path);
+        out.push_str("]\n");
+        for (key, value) in ordered_entries(table) {
+            out.push_str(&format!("{} = {}\n", render_key(key), render_value(value)));
+        }
+        wrote = true;
+    }
+    wrote
+}
+
+/// A table key as TOML will read it back: bare where it can be, quoted where
+/// it cannot. `ctrl+f9` is a key a person writes and not a bare TOML one.
+fn render_key(key: &str) -> String {
+    if !key.is_empty()
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return key.to_string();
+    }
+    quote_string(key)
 }
 
 /// One option line, preceded by its comment. An option whose value is absent
