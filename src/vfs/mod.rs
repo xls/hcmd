@@ -870,7 +870,25 @@ pub trait Vfs: Send + Sync {
     ///
     /// Implementations must not block the caller: spawn, and return the
     /// receiver immediately. Callers must be inside a tokio runtime.
+    ///
+    /// The `..` row is **not** sent here - [`crate::app::stream_read`] prepends
+    /// [`Vfs::parent_row`] before the first entry, so every backend gets it on
+    /// the same terms and none can forget it. A backend's `read_dir` returns
+    /// its content and nothing else.
     fn read_dir(&self, path: &VfsPath) -> tokio::sync::mpsc::Receiver<Result<Entry>>;
+
+    /// The `..` row for a listing of `path`, or `None` at a backend's own root.
+    ///
+    /// Navigation, not content: it is the row that gets the user out, so it is
+    /// prepended to every listing by the read path rather than left for each
+    /// backend to remember. The default is right for every real directory,
+    /// archive member and remote path - a `..` appears exactly when the path
+    /// has a parent to go to. A **flat** listing (a search result, where two
+    /// rows can share a name and there is nowhere "up" to go) overrides this to
+    /// `None`.
+    fn parent_row(&self, path: &VfsPath) -> Option<Entry> {
+        path.parent().is_some().then(Entry::parent_entry)
+    }
 
     /// Metadata for a single path.
     ///

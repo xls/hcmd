@@ -539,6 +539,12 @@ impl Vfs for ListFs {
         BackendKind::List
     }
 
+    /// **No `..` row.** A flat listing is not a tree, and the design makes
+    /// `Ctrl+R` and `Esc` the way out rather than navigation.
+    fn parent_row(&self, _path: &VfsPath) -> Option<Entry> {
+        None
+    }
+
     /// Stream the rows, and keep streaming while they are still arriving.
     ///
     ///

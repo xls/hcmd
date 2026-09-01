@@ -38,10 +38,6 @@ pub struct GitFs {
     /// The directory the `#git/` segment was opened from, which is what git is
     /// discovered from. Held so every read finds the same repository.
     dir: PathBuf,
-    /// The display path, `…/repo#git`, kept for the panel title once the UI
-    /// wants it.
-    #[allow(dead_code, reason = "held for the panel title; not read yet")]
-    display: VfsPath,
 }
 
 /// How a `#git/` segment's tail splits into a commit and a path within it.
@@ -80,7 +76,10 @@ impl GitFs {
                 dir.display()
             )));
         }
-        Ok(Self { dir, display })
+        // `display` is consumed only to find the repository directory above;
+        // the panel title is derived from the live path when it is drawn.
+        let _ = display;
+        Ok(Self { dir })
     }
 
     /// Split a path's `#git` tail into a commit and a path within it.
@@ -134,6 +133,15 @@ impl GitFs {
                 let mut entry = Entry::dir(name);
                 entry.kind = EntryKind::Dir;
                 entry.mtime = commit.time;
+                // The row's *path* is the sha alone - the subject stays in the
+                // name for the eye but never reaches the path, which otherwise
+                // read `…#git/abc123  Fix the bug/src/lib.rs`. Set here rather
+                // than left to `current_path`'s name-join, exactly as a virtual
+                // listing sets a row's real home.
+                entry.location = Some(
+                    VfsPath::local(&self.dir)
+                        .with_segment(BackendKind::Git, format!("/{}", commit.short)),
+                );
                 entry
             })
             .collect())
@@ -175,7 +183,17 @@ impl Vfs for GitFs {
         let (tx, rx) = mpsc::channel(READ_DIR_CHANNEL_DEPTH);
         let this = self.clone();
         let tail = Self::tail_of(path).unwrap_or_default();
+        // The `..` row, the way every directory-shaped backend gives one and
+        // this one used not to: navigation out of the revision - up to the
+        // commit list from inside a subfolder, and out of git history entirely
+        // at the root - decided by the shared `Vfs::parent_row`.
+        let parent = self.parent_row(path);
         tokio::spawn(async move {
+            if let Some(parent) = parent
+                && tx.send(Ok(parent)).await.is_err()
+            {
+                return;
+            }
             let rows = match GitFs::locate(&tail) {
                 Location::Commits => this.list_commits(),
                 // A directory in the tree lists; a file lists empty, the way a

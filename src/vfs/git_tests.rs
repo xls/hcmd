@@ -62,16 +62,45 @@ macro_rules! repo_or_skip {
     };
 }
 
-/// Drain a `read_dir` receiver to its rows.
+/// Drain a `read_dir` receiver to its content rows, dropping the leading `..`
+/// (asserted on its own in `a_git_listing_leads_with_the_parent_row`).
 async fn rows(fs: &GitFs, path: &VfsPath) -> Vec<Entry> {
     let mut rx = fs.read_dir(path);
     let mut out = Vec::new();
     while let Some(item) = rx.recv().await {
-        if let Ok(entry) = item {
+        if let Ok(entry) = item
+            && !entry.is_parent
+        {
             out.push(entry);
         }
     }
     out
+}
+
+#[tokio::test]
+async fn a_git_listing_leads_with_the_parent_row() {
+    // The revision browser used to be the one directory-shaped backend with no
+    // `..` row; now it gives one at every level, so a subfolder inside a commit
+    // has a visible way back up.
+    let repo = repo_or_skip!("parentrow");
+    let base = VfsPath::local(&repo.root).with_segment(BackendKind::Git, "/");
+    let fs = GitFs::open(base.clone()).expect("open");
+
+    let mut rx = fs.read_dir(&base);
+    let first = rx.recv().await.expect("a row").expect("not an error");
+    assert!(
+        first.is_parent,
+        "the `..` row comes first at the commit list"
+    );
+    assert_eq!(first.name, "..");
+
+    // And inside a commit, too.
+    let commits = rows(&fs, &base).await;
+    let sha = commits[0].name.split_whitespace().next().expect("a sha");
+    let commit_path = VfsPath::local(&repo.root).with_segment(BackendKind::Git, format!("/{sha}"));
+    let mut rx = fs.read_dir(&commit_path);
+    let first = rx.recv().await.expect("a row").expect("not an error");
+    assert!(first.is_parent, "and inside a revision");
 }
 
 #[tokio::test]
