@@ -24,7 +24,7 @@
 //! keeps for a delete.
 //!
 //! The four choices travel out through [`crate::dialog::DialogResult::Text`],
-//! carrying an [`ExecuteChoice`], exactly as [`super::JobAction`] already does:
+//! carrying an [`ExecuteChoice`], exactly as [`crate::ops::JobAction`] already does:
 //! `DialogResult` is fixed by the design and four buttons do not
 //! earn a variant of their own.
 
@@ -61,7 +61,7 @@ pub const MNEMONICS: &[(usize, char)] =
 /// Which of the four the user pressed.
 ///
 /// Travels in [`crate::dialog::DialogResult::Text`] through
-/// [`ExecuteChoice::encode`], the way [`super::JobAction`] already does, so no
+/// [`ExecuteChoice::encode`], the way [`crate::ops::JobAction`] already does, so no
 /// `DialogResult` variant is added for four buttons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExecuteChoice {

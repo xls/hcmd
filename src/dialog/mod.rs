@@ -59,7 +59,7 @@ use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph};
 
 use crate::config::{ColorDepth, Theme};
 use crate::input::{Action, DialogId, KeyCode, KeyModifiers, KeyPress};
-use crate::ops::{ConflictChoice, Decision, JobId, JobStatus};
+use crate::ops::{ConflictChoice, Decision, JobAction, JobId, JobStatus};
 
 pub use confirm::ConfirmDialog;
 pub use input::InputDialog;
@@ -187,7 +187,7 @@ pub enum DialogResult {
     /// cancel, foreground, forget or retry. A typed value rather than a
     /// [`JobAction`] spelled into `Text` and parsed back, which could fail at
     /// runtime for a value the program itself produced.
-    Job(crate::ui::dialog::JobAction),
+    Job(JobAction),
     /// Everything the copy/move dialog collects.
     CopyMove(Box<CopyMoveAnswer>),
     /// Everything the `Alt+F5` pack dialog collects.

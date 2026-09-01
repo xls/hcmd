@@ -115,7 +115,7 @@ impl ContextItem {
 /// [`crate::dialog::DialogResult`] has no context-shaped variant and gains
 /// none for four kinds of row, so the answer travels in
 /// [`crate::dialog::DialogResult::Text`] and comes back through
-/// [`ContextChoice::parse`] - exactly as [`crate::ui::dialog::JobAction`]
+/// [`ContextChoice::parse`] - exactly as [`crate::ops::JobAction`]
 /// already does. The encoding is deliberately boring, a word and an argument,
 /// so a test can assert on it and a log line reads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

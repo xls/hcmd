@@ -15,8 +15,8 @@ use crate::app::App;
 use crate::dialog::{ConfirmDialog, InputDialog};
 use crate::input::DialogId;
 use crate::ops::mask::is_match_all;
-use crate::ops::{JobId, JobKind, JobOptions, JobSpec};
-use crate::ui::dialog::{CopyMoveDialog, JobAction, QueueDialog};
+use crate::ops::{JobAction, JobId, JobKind, JobOptions, JobSpec};
+use crate::ui::dialog::{CopyMoveDialog, QueueDialog};
 use crate::vfs::VfsPath;
 
 /// The mask half of the pre-filled target (the `/srv/media/*.*`).

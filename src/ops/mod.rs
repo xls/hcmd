@@ -105,6 +105,44 @@ impl fmt::Display for JobId {
     }
 }
 
+/// What a job dialog asks be done to its job.
+///
+/// Five verbs on a [`JobId`], each naming the `App` method that performs it.
+/// Defined here beside [`JobId`] and [`Decision`] rather than among the
+/// dialogs that answer with one: [`crate::dialog::DialogResult::Job`] carries
+/// this value, and the framework hands a dialog a key and nothing else - it
+/// may name what `ops` defines, and nothing any particular dialog does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum JobAction {
+    /// `F2` on the progress dialog: send it to the background queue, keep it
+    /// running. [`crate::app::App::background_job`].
+    Background(JobId),
+    /// `Esc` on the progress dialog: stop it.
+    /// [`crate::app::App::cancel_job`].
+    Cancel(JobId),
+    /// `Enter` in the queue view: bring it back "exactly as it was".
+    /// [`crate::app::App::foreground_job`].
+    Foreground(JobId),
+    /// Drop a finished job from the queue view.
+    /// [`crate::app::App::forget_job`].
+    Forget(JobId),
+    /// the "option to retry" the failures of a finished job.
+    Retry(JobId),
+}
+
+impl JobAction {
+    /// Which job it is about.
+    pub const fn id(&self) -> JobId {
+        match self {
+            Self::Background(id)
+            | Self::Cancel(id)
+            | Self::Foreground(id)
+            | Self::Forget(id)
+            | Self::Retry(id) => *id,
+        }
+    }
+}
+
 /// What a job does.
 ///
 /// `Pack` and `Unpack` join this enum in v0.5; adding a variant

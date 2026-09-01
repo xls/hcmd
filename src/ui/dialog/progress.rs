@@ -30,7 +30,7 @@
 //! **All three go through [`crate::dialog::Accelerated::press`]**, which is the
 //! one place either button acts, so "neither route is the real one" is true by
 //! construction rather than by three copies staying in step. Each answers with
-//! a typed [`super::JobAction`] in a [`crate::dialog::DialogResult::Job`] -
+//! a typed [`crate::ops::JobAction`] in a [`crate::dialog::DialogResult::Job`] -
 //! including `Esc`, which must **answer** rather than merely close: a dialog
 //! that pops without cancelling leaves a worker running with nothing watching
 //! it.
@@ -52,15 +52,13 @@ use ratatui::layout::Rect;
 use ratatui::style::Style;
 use std::time::Duration;
 
-use super::{
-    JobAction, MIN_BAR_WIDTH, clock_text, crop_left, draw_bar, draw_split, rate_text, row,
-};
+use super::{MIN_BAR_WIDTH, clock_text, crop_left, draw_bar, draw_split, rate_text, row};
 use crate::dialog::{
     Accel, Accelerated, Dialog, DialogKey, DialogOutcome, DialogResult, DialogStyle, FocusRing,
     draw_mnemonic_buttons, draw_text,
 };
 use crate::input::{DialogId, KeyCode};
-use crate::ops::{JobId, JobKind, JobStatus};
+use crate::ops::{JobAction, JobId, JobKind, JobStatus};
 use crate::panel::format::human_size;
 use crate::ui::text;
 

@@ -1940,7 +1940,7 @@ fn retrying_a_summary_starts_the_same_job_over_the_paths_that_failed() {
     holoscommander::input::dialog_accepted(
         &mut app,
         holoscommander::input::DialogId::JobSummary,
-        holoscommander::dialog::DialogResult::Job(holoscommander::ui::dialog::JobAction::Retry(id)),
+        holoscommander::dialog::DialogResult::Job(holoscommander::ops::JobAction::Retry(id)),
     );
 
     let retried = app.take_pending_jobs();

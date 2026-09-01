@@ -25,7 +25,8 @@
 //! # How a job dialog answers
 //!
 //! The three dialogs that act on a *running job* answer with
-//! [`crate::dialog::DialogResult::Job`] carrying a typed [`JobAction`], so the
+//! [`crate::dialog::DialogResult::Job`] carrying a typed
+//! [`crate::ops::JobAction`], so the
 //! arm in `input::dialog_accepted` matches the value directly - no spelling it
 //! into text and parsing it back, which could fail at runtime for a value the
 //! program itself produced.
@@ -74,7 +75,6 @@ use ratatui::widgets::Paragraph;
 
 use crate::config::PanelConfig;
 use crate::dialog::DialogStyle;
-use crate::ops::JobId;
 use crate::panel::format::{human_size, thousands};
 use crate::ui::text;
 
@@ -392,46 +392,6 @@ pub fn row(area: Rect, index: u16) -> Option<Rect> {
     ))
 }
 
-// ------------------------------------------------------------ job actions ---
-
-/// What a dialog asks be done to a *job*.
-///
-/// [`crate::dialog::DialogResult`] is fixed by the design and has
-/// no job-shaped variant, so these travel as
-/// [`crate::dialog::DialogResult::Text`] and come back through [`Self::parse`].
-/// The encoding is deliberately boring - a verb, a space, the id - so a test
-/// can assert on it and a log line reads.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum JobAction {
-    /// `F2` on the progress dialog: send it to the background queue, keep it
-    /// running. [`crate::app::App::background_job`].
-    Background(JobId),
-    /// `Esc` on the progress dialog: stop it.
-    /// [`crate::app::App::cancel_job`].
-    Cancel(JobId),
-    /// `Enter` in the queue view: bring it back "exactly as it was".
-    /// [`crate::app::App::foreground_job`].
-    Foreground(JobId),
-    /// Drop a finished job from the queue view.
-    /// [`crate::app::App::forget_job`].
-    Forget(JobId),
-    /// the "option to retry" the failures of a finished job.
-    Retry(JobId),
-}
-
-impl JobAction {
-    /// Which job it is about.
-    pub const fn id(&self) -> JobId {
-        match self {
-            Self::Background(id)
-            | Self::Cancel(id)
-            | Self::Foreground(id)
-            | Self::Forget(id)
-            | Self::Retry(id) => *id,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -540,7 +500,8 @@ mod tests {
         use crate::config::{ColorDepth, PanelConfig, Theme};
         use crate::dialog::Dialog;
         use crate::ops::{
-            ConflictRequest, JobEvent, JobFailure, JobKind, JobStatus, JobSummary, SelectionStats,
+            ConflictRequest, JobEvent, JobFailure, JobId, JobKind, JobStatus, JobSummary,
+            SelectionStats,
         };
         use crate::vfs::VfsPath;
         use ratatui::Terminal;

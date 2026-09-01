@@ -29,13 +29,13 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 
-use super::{JobAction, crop_left, row};
+use super::{crop_left, row};
 use crate::dialog::{
     Accel, Accelerated, Dialog, DialogKey, DialogOutcome, DialogResult, DialogStyle, FocusRing,
     draw_mnemonic_buttons, draw_text,
 };
 use crate::input::{DialogId, KeyCode};
-use crate::ops::{JobId, JobSummary};
+use crate::ops::{JobAction, JobId, JobSummary};
 
 /// The `Retry failures` button.
 const RETRY: usize = 0;

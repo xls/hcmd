@@ -38,12 +38,12 @@ use ratatui::layout::Rect;
 use ratatui::style::Style;
 
 use super::summary::SummaryDialog;
-use super::{JobAction, ellipsis, row};
+use super::{ellipsis, row};
 use crate::dialog::{
     Dialog, DialogKey, DialogOutcome, DialogResult, DialogStyle, MessageDialog, draw_text,
 };
 use crate::input::{DialogId, KeyCode};
-use crate::ops::{JobStatus, Outcome};
+use crate::ops::{JobAction, JobStatus, Outcome};
 use crate::ui::text;
 
 /// The footer's hint line. Not controls to focus - the queue view has no focus
