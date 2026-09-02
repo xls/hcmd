@@ -9,16 +9,26 @@ is stated rather than glossed over.
 - Columns: name, extension, size, date, attributes, and a one-character git
   state. Order and widths are configurable, and columns are dropped in a
   configured priority as the panel narrows. Name is never dropped.
-- Git state in the listing: inside a repository each file carries a flag -
-  modified, staged, newly added or untracked - and the column appears only
-  where there is a repository to describe. On by default, and off turns the
-  whole check off so an ordinary directory read never touches git.
+- Git state in the listing: each file carries a flag in the letters git itself
+  uses - `M` modified, `S` staged, `A` added, `U` untracked - and a directory
+  shows the state of what is under it, so `src` reads as modified when
+  something inside it is. The column is drawn wherever the setting is on rather
+  than appearing and disappearing as you walk between repositories; a blank
+  cell means clean. On by default, and off turns the whole check off so an
+  ordinary directory read never touches git.
+- The panel's status line names the branch, right-aligned: `[master]`, at any
+  depth inside the repository.
 - Sort by any column, ascending or descending, with a secondary sort. Positional
   binding: `Ctrl+<n>` sorts by the n-th column as *you* have ordered them.
 - Quick search by typing. Matching is incremental and the status line says when
   nothing matched.
 - Marking: by key, by `*.rs`-style mask, by inverting, and by comparing the two
-  panels.
+  panels. `Shift` with a movement key sweeps - `Shift+Up`/`Down`, `PgUp`/`PgDn`,
+  `Home`/`End` - and the row the sweep starts on decides whether it marks or
+  clears, so a second sweep gives the selection back. A partial page at either
+  edge sweeps to the edge.
+- `Ctrl+E` brings the other panel to this panel's directory; `Ctrl+P` puts the
+  current path on the command line.
 - Directory sizes on demand (`Space`), reported exactly.
 - Hidden files toggle, brief and full views, and a hotlist of bookmarked
   directories (`Ctrl+D`).
@@ -180,14 +190,27 @@ Read-only is the feature, not a stage of one: there is no write path to disable.
   hex, and a document mode that renders JSON, HTML and Markdown as a document
   rather than as source. A binary the templates recognise is rendered there
   too, as its fields; one they do not still shows what can be read of it.
+- An APK's `AndroidManifest.xml` is compiled binary XML, not text, and opens as
+  the XML it was built from. Recognised by its own header rather than its name,
+  which a compiled manifest and a written one share. `1` and `2` still read the
+  file's real bytes at their real offsets.
+- A UTF-16 file with no byte order mark opens as text rather than as a hex
+  dump. Recognised by its shape - one ASCII byte and one NUL per character -
+  which `chardetng` does not answer.
 - In hex mode a template paints the regions it knows, and stepping the cursor
   into one reads it out in the status bar: what the field is, and its value.
 - **Git history as a directory.** `Alt+V` opens the repository's history:
-  commits are folders named by their short id and subject, each browsable as
-  the tree at that commit - real directories you enter, files you view with
-  `F3`, diff with `Alt+D` against the previous commit, or copy out with `F5`.
-  Read-only. `Alt+V` again leaves it. It reads the object store directly, no
-  `git` process.
+  commits are folders named by their short id and subject. Entering one lists
+  the files that commit changed, each flagged with what it did to them - added,
+  modified, deleted or renamed - rather than the whole tree as it stood, which
+  buried the handful of rows the commit was about. Files open with `F3`, diff
+  with `Alt+D` against the previous commit, or copy out with `F5`. Read-only.
+  `Alt+V` again leaves it, and `Backspace` from the commit list puts you back
+  in the folder you started from. It reads the object store directly, no `git`
+  process.
+- A commit's listing asks for its own columns - the name, the size, the date
+  and the state - so no cell is spent on an extension already in the path or on
+  permissions a commit does not have.
 - **Diffs.** `Alt+D` shows the file's diff against `HEAD`, and `Alt+Shift+F2`
   diffs the file under each panel's cursor. Unified format, `+` and `-`
   coloured, unchanged runs collapsed behind `... 27 unchanged lines` and
@@ -249,6 +272,10 @@ contents were not recognised, which is most files and is not a failure.
 
 - `Ctrl+O` gives a persistent shell the whole screen and takes it back, with
   scrollback preserved across the switch.
+- A command typed on the command line that keeps the terminal takes the screen
+  while it runs and gives the panels back when it finishes - a `git clone`
+  shows its progress and hands them over. A console opened with `Ctrl+O` was
+  asked for and stays until it is dismissed the same way.
 - The shell's directory and the active panel stay in step, both ways, using
   OSC 7 and OSC 133 prompt hooks installed for bash and zsh.
 - Before a shell starts (or where one cannot), a built-in command line with its
@@ -299,6 +326,19 @@ TOML in `~/.config/holoscommander/`, written commented-out on first run so the
 file documents itself and every default is visible. An unknown key is a warning
 with a line number, never a refusal to start. `hcmd --check-config` validates
 without starting.
+
+`hcmd --update-config` brings an older file up to date: the options you set stay
+live at your own values, everything you have not touched is rewritten commented
+so it keeps tracking the default, and options added since your file was written
+appear. The old file is kept beside it, dated. `keymap.toml` gets the same
+treatment against the shipped layout, and a binding written under a different
+section than the shipped file happens to declare it in is carried over rather
+than dropped. A file the parser cannot read is left alone and the fault
+reported, rather than rewritten at the defaults.
+
+The reference file and the validator are generated from the same walk of the
+configuration structs, so an option cannot reach the file without the validator
+knowing it.
 
 ## Deliberately not included
 

@@ -41,12 +41,21 @@ a 40 GB file as fast as a 4 KB one. Everything runs in process: no `rg`, no
   Markdown as documents rather than as source - and renders a recognised binary
   as its fields. Syntax highlighting, streaming so that size does not matter,
   find and find-next, and an encoding ring. Find searches whatever the mode is
-  showing: the file in text and hex, the rendered text in document mode.
+  showing: the file in text and hex, the rendered text in document mode. An
+  APK's `AndroidManifest.xml` opens as the XML it was compiled from, and a
+  UTF-16 file with no byte order mark opens as text rather than as a dump -
+  both recognised by what the bytes are, not by what the file is called.
 - **It tells you what a file is.** `Shift+F9` reads the file's own header
   through 109 built-in binary templates and reports facts rather than fields: a
   PNG says `1920 x 1080 px`, `RGBA`, `deflate`; an ELF says `x86-64`, `shared
   object`. In hex mode the same templates paint the regions they know, and
   stepping the cursor into one reads it out in the status bar.
+- **Git, where the files are.** A one-character state column - modified,
+  staged, added, untracked - with a directory answering for what is under it,
+  and the branch on each panel's status line. `Alt+V` turns the repository's
+  history into folders: entering a commit lists the files it changed and what
+  it did to each, and they open, diff and copy out like any other file. Read
+  straight from the object store; no `git` process is started.
 - **Diffs where you already are.** `Alt+D` in the viewer shows a file's diff
   against `HEAD`, unchanged runs folded away; `Alt+Shift+F2` diffs the two
   files under the panel cursors. A source file you have edited since committing
@@ -58,7 +67,9 @@ a 40 GB file as fast as a 4 KB one. Everything runs in process: no `rg`, no
   `Shift+R` resizes and converts images, keeping the source's own channel count
   rather than promoting it.
 - **A shell that stays put.** `Ctrl+O` hands the terminal to a persistent shell
-  and takes it back, keeping the directory in step with the panel.
+  and takes it back, keeping the directory in step with the panel. A command
+  that keeps the terminal takes the screen while it runs and gives the panels
+  back when it is done.
 - **Configuration in TOML**, with 21 themes, and every key rebindable. `Alt+T`
   opens a narrow theme picker that applies each theme as you move through the
   list, so you judge it against the program rather than a swatch. `Enter`
