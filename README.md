@@ -14,71 +14,58 @@ Two panels, function keys where they have always been, and a viewer that opens
 a 40 GB file as fast as a 4 KB one. Everything runs in process: no `rg`, no
 `fd`, no `unzip`, no `ssh` binary. It does not shell out to do its own work.
 
+Linux and macOS, on x86_64 and arm64; glibc and musl are both built. There is
+no Windows build.
+
 ![Two panels, Pictures beside Downloads](docs/sample1.png)
 
 ## What it does
 
-- **Two panels, tabs, and the classic key map.** `F1`-`F10` where Total
-  Commander puts them, with an `Alt`+letter fallback for every key a legacy
-  terminal cannot deliver.
-- **Archives are directories.** Browse into `.zip`, `.7z`, `.rar`, `.tar` and
-  every common compression of it (`.gz`, `.bz2`, `.xz`, `.zst`), and copy files
-  straight back out. Archives nest. The format is decided by the file's
-  **content**, so an archive under a name no table knows opens like any other.
-  A singly compressed file is a container holding one member: `disk.img.xz`
-  holds `disk.img`, which can be viewed, copied out, or stepped into.
-- **Disk images are directories too.** Read-only browsing of `.iso` and `.img`:
-  ISO 9660 with Joliet and Rock Ridge, FAT12/16/32, ext2/3/4, SquashFS, and GPT
-  or MBR partition tables, so a partition is a step in the path.
-- **SFTP, FTP and SMB.** Connect a panel to a host and it behaves like any
-  other panel: copy, view, search, and browse an archive that lives on the far
-  end. `smb://user:pass@nas` and `//nas/Media` both work, and a share is just
-  the first component of the path.
-- **Search that finds things.** Names and content, in process, over local trees,
-  remote connections and inside archives. Results are a panel you can act on
-  while the walk is still running.
-- **A real viewer.** Text, hex, and a document mode that renders JSON, HTML and
-  Markdown as documents rather than as source - and renders a recognised binary
-  as its fields. Syntax highlighting, streaming so that size does not matter,
-  find and find-next, and an encoding ring. Find searches whatever the mode is
-  showing: the file in text and hex, the rendered text in document mode. An
-  APK's `AndroidManifest.xml` opens as the XML it was compiled from, and a
-  UTF-16 file with no byte order mark opens as text rather than as a dump -
-  both recognised by what the bytes are, not by what the file is called.
-- **It tells you what a file is.** `Shift+F9` reads the file's own header
-  through 109 built-in binary templates and reports facts rather than fields: a
-  PNG says `1920 x 1080 px`, `RGBA`, `deflate`; an ELF says `x86-64`, `shared
-  object`. In hex mode the same templates paint the regions they know, and
-  stepping the cursor into one reads it out in the status bar.
-- **Git, where the files are.** A one-character state column - modified,
-  staged, added, untracked - with a directory answering for what is under it,
-  and the branch on each panel's status line. `Alt+V` turns the repository's
-  history into folders: entering a commit lists the files it changed and what
-  it did to each, and they open, diff and copy out like any other file. Read
-  straight from the object store; no `git` process is started.
-- **Diffs where you already are.** `Alt+D` in the viewer shows a file's diff
-  against `HEAD`, unchanged runs folded away; `Alt+Shift+F2` diffs the two
-  files under the panel cursors. A source file you have edited since committing
-  opens on its diff straight away, while a `.md` opens as markdown and keeps
-  the diff one key off. It reads git's object store itself rather than running
-  `git`.
-- **Compare, and convert.** `Shift+F2` marks what differs between the two
-  listings; `Ctrl+F2` compares two files byte for byte and says where they part.
-  `Shift+R` resizes and converts images, keeping the source's own channel count
-  rather than promoting it.
-- **A shell that stays put.** `Ctrl+O` hands the terminal to a persistent shell
-  and takes it back, keeping the directory in step with the panel. A command
-  that keeps the terminal takes the screen while it runs and gives the panels
-  back when it is done.
-- **Configuration in TOML**, with 21 themes, and every key rebindable. `Alt+T`
-  opens a narrow theme picker that applies each theme as you move through the
-  list, so you judge it against the program rather than a swatch. `Enter`
-  saves it to your config, `Esc` puts back the one you started with. The
-  picker also asks the project's repository what themes it has: a name this
-  machine does not have yet is listed with a `+` after it, and choosing it
-  downloads it into `~/.config/holoscommander/themes/`. The list opens
-  instantly either way - no network, no wait, and no complaint beyond a line in
-  the status bar if GitHub cannot be reached.
+**Panels**
+
+- Two panels, up to nine tabs each, and the classic function-key layout.
+- Columns you can reorder and sort by; they drop in a priority you choose as the panel narrows.
+- Quick search, marking by mask, inverting, and marking what differs between the two sides.
+- Directory sizes on demand, a flat recursive view of a whole tree, and bookmarked directories.
+- A quick view that turns the opposite panel into a live preview of the file under the cursor.
+
+**Files and archives**
+
+- Copy, move, rename and delete, queued and running in the background.
+- Archives are directories: zip, 7z, rar, tar and the usual compressions, nested, decided by content rather than by name.
+- Disk images too: ISO 9660, FAT, ext2/3/4, SquashFS, and GPT or MBR partition tables.
+- Multi-rename with a preview, checksums, splitting and merging, symlinks and permissions.
+
+**Remote**
+
+- SFTP, FTP and FTPS, SMB2/3, S3 and WebDAV, each a panel that behaves like a local one.
+- All in process: no `ssh`, no `libsmbclient`, no FFI.
+- Passwords live in the system keyring, never in a file.
+
+**Viewer**
+
+- Text, hex, and a document mode that renders JSON, HTML and Markdown as documents.
+- Syntax highlighting, and streaming, so a 40 GB file opens as fast as a 4 KB one.
+- Finds in whatever the mode is showing, with an encoding ring for a mis-detected file.
+- Reads a file's own header and says what it is: a PNG's dimensions and colour type, an ELF's architecture. 109 formats, and hex mode paints the regions they describe.
+- Opens a compiled Android manifest as the XML it was built from, and UTF-16 without a byte order mark as text.
+
+**Git**
+
+- Each file's state in the listing, with a directory answering for what is under it, and the branch on the status line.
+- History browses as folders; entering a commit lists the files it changed and what it did to each.
+- Diffs against `HEAD`, or between the two panels, with unchanged runs folded away.
+- Read straight from the object store. No `git` process is started.
+
+**Search**
+
+- Names and content, over local trees, remote connections and inside archives.
+- Results are a panel you can act on while the walk is still running.
+
+**And the rest**
+
+- A persistent shell that keeps its directory in step with the panel, and gives the panels back when a command finishes.
+- TOML configuration, 21 themes with a picker that previews as you move, and every key rebindable.
 
 See [FEATURES.md](FEATURES.md) for the full list.
 
