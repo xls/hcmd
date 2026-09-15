@@ -1,3 +1,5 @@
+![Two panels, Pictures beside Downloads](docs/holoscommander-final.jpg)
+
 # Holos Commander
 
 Holos is a Total Commander inspired file explorer for the terminal, for people whose fingers
