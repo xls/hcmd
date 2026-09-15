@@ -111,6 +111,8 @@ background, follow their progress, and keep browsing while they run.
 
 [![Holos Commander with two file panels and a function-key bar](docs/sample1.png)](docs/sample1.png)
 
+**Two-panel browsing.** Source and destination side by side, with tabs and familiar function keys.
+
 ### Open the archive. Skip the unpacking.
 
 Step into **ZIP, 7z, RAR and TAR** archives as if they were folders, including
@@ -128,12 +130,9 @@ through the same panels you use locally. Saved passwords use the system keyring.
 The protocols run in process, without an external `ssh` command or
 `libsmbclient` installation.
 
-<details>
-<summary>See the connection dialog</summary>
-
 [![Remote connection dialog with quick connect and saved hosts](docs/sftp-ftp-remote.png)](docs/sftp-ftp-remote.png)
 
-</details>
+**Remote connections (`Ctrl+F`).** Quick connect or choose a saved host, then browse and copy through an ordinary panel.
 
 ### Look inside files of any size
 
@@ -147,12 +146,11 @@ architecture, with the corresponding regions highlighted in hex mode.
 
 [![Built-in viewer showing syntax highlighting and a text selection](docs/viewer-syntax-highlight-and-selection.png)](docs/viewer-syntax-highlight-and-selection.png)
 
-<details>
-<summary>See the hex viewer</summary>
+**The viewer (`F3`).** Syntax highlighting, line numbers and selection details in the active theme.
 
 [![Hex viewer showing a PNG header, byte offsets and ASCII](docs/hexviewer.png)](docs/hexviewer.png)
 
-</details>
+**Hex mode.** Inspect a file's bytes, with offsets and ASCII side by side.
 
 ### Find it. Then work with it.
 
@@ -160,12 +158,9 @@ Search names and content across **local folders, remote connections and archives
 Use masks, whole-word matching or regular expressions to narrow the search.
 Results become a panel you can act on while the search is still running.
 
-<details>
-<summary>See the search dialog</summary>
-
 [![Find Files dialog with name, content and archive search options](docs/findinfiles.png)](docs/findinfiles.png)
 
-</details>
+**Find Files (`Alt+F7`).** Search by name or content, including inside archives, and work with results as they arrive.
 
 ### See what changed in Git
 
