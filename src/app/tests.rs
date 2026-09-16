@@ -741,11 +741,30 @@ async fn service_reads(app: &mut App) {
                 generation,
                 message,
             }),
-            None => app.apply_vfs_event(VfsEvent::Done {
-                side,
-                tab,
-                generation,
-            }),
+            None => {
+                // The event loop feeds Done through `apply_read_event`, whose
+                // returned `CapsRequest` it hands to `probe_capabilities`. This
+                // harness must do the same, or the column plan and the header a
+                // listing composes never reach the tab under test.
+                if let Some(req) = app.apply_read_event(VfsEvent::Done {
+                    side,
+                    tab,
+                    generation,
+                }) {
+                    let vfs = Arc::clone(&app.vfs);
+                    let caps = vfs.capabilities_for(&req.path);
+                    let plan = vfs.column_plan(&req.path);
+                    let title = vfs.describe(&req.path);
+                    app.apply_caps_event(crate::app::reads::CapsEvent {
+                        side: req.side,
+                        tab: req.tab,
+                        generation: req.generation,
+                        caps,
+                        plan,
+                        title,
+                    });
+                }
+            }
         }
     }
 }
@@ -1369,4 +1388,36 @@ async fn a_rescan_leaves_the_cursor_where_the_user_moved_it() {
         moved_to,
         "the rescan left the cursor where the user put it"
     );
+}
+
+#[cfg(feature = "sqlite")]
+#[tokio::test]
+async fn entering_a_sqlite_table_ends_with_its_columns_not_the_configured_ones() {
+    use crate::vfs::BackendKind;
+    // A real database beside the test.
+    let dir = std::env::temp_dir().join(format!("hcmd-app-sqlite-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("dir");
+    let file = dir.join("emp.db");
+    let conn = rusqlite::Connection::open(&file).expect("open");
+    conn.execute_batch(
+        "CREATE TABLE employee (id INTEGER PRIMARY KEY, firstname TEXT, lastname TEXT);
+         INSERT INTO employee (firstname, lastname) VALUES ('a', 'b');",
+    )
+    .expect("seed");
+    drop(conn);
+
+    let mut app = App::headless(Config::default(), Keymap::builtin(), Theme::blue());
+    let table = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/employee");
+    app.navigate(Side::Left, table);
+    service_reads(&mut app).await;
+
+    let tab = app.left.active_tab();
+    let plan = tab
+        .column_plan
+        .as_ref()
+        .expect("the table's plan reached the tab");
+    assert_eq!(plan.header(crate::panel::ColumnId::Custom(0)), "id");
+    assert_eq!(plan.header(crate::panel::ColumnId::Custom(1)), "firstname");
+    let _ = std::fs::remove_dir_all(&dir);
 }

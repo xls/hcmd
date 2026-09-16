@@ -71,7 +71,7 @@ async fn a_table_lists_its_rows_named_for_their_id_and_carrying_sortable_cells()
     let listed = rows(&fs, &people).await;
     let names: Vec<&str> = listed.iter().map(|e| e.name.as_str()).collect();
     // A rowid table names its rows by the id, so `F5` writes `<id>.json`.
-    assert_eq!(names, vec!["1.json", "2.json", "3.json"]);
+    assert_eq!(names, vec!["1", "2", "3"], "the id value, plainly");
 
     // The plan names the table's own columns after the row name.
     let plan = fs
@@ -104,7 +104,7 @@ fn a_row_reads_as_the_pretty_json_of_its_whole_record() {
     let Some((file, fs)) = fixture("json") else {
         return;
     };
-    let row = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/people/2.json");
+    let row = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/people/2");
     let mut reader = fs.open_read(&row).expect("a row opens for reading");
     let mut text = String::new();
     std::io::Read::read_to_string(&mut reader, &mut text).expect("read the row");
@@ -126,9 +126,13 @@ async fn a_without_rowid_table_addresses_its_rows_by_position() {
     let listed = rows(&fs, &notes).await;
     let names: Vec<&str> = listed.iter().map(|e| e.name.as_str()).collect();
     // No rowid to name them by, so the row's position stands in.
-    assert_eq!(names, vec!["0.json", "1.json"]);
+    assert_eq!(
+        names,
+        vec!["0", "1"],
+        "the position, no rowid to name them by"
+    );
 
-    let row = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/notes/0.json");
+    let row = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/notes/0");
     let mut reader = fs.open_read(&row).expect("open the row");
     let mut text = String::new();
     std::io::Read::read_to_string(&mut reader, &mut text).expect("read");
@@ -143,7 +147,7 @@ fn writing_to_a_database_is_refused() {
     let Some((file, fs)) = fixture("readonly") else {
         return;
     };
-    let row = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/people/1.json");
+    let row = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/people/1");
     assert!(fs.open_write(&row).is_err(), "no write path exists");
     assert!(fs.remove(&row).is_err(), "nothing is removed");
     assert!(!fs.capabilities().writable, "and it says so up front");
@@ -197,7 +201,7 @@ fn a_row_copies_out_under_its_database_and_table() {
     let Some((file, fs)) = fixture("copyname") else {
         return;
     };
-    let row = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/people/2.json");
+    let row = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/people/2");
     assert_eq!(
         fs.copy_name(&row).as_deref(),
         Some("data.sqlite.people.2.json")
@@ -205,5 +209,33 @@ fn a_row_copies_out_under_its_database_and_table() {
     // The table itself and the root have no copy name of their own.
     let table = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/people");
     assert_eq!(fs.copy_name(&table), None);
+    let _ = std::fs::remove_dir_all(file.parent().unwrap_or(&file));
+}
+
+#[test]
+fn the_router_forwards_a_table_s_column_plan() {
+    // The panel shows Name/Ext/Date/Attr on a table instead of its columns.
+    // The backend builds the plan; the probe asks the *router*. This checks
+    // the router forwards it rather than answering None (the configured set).
+    let Some((file, fs)) = fixture("plan-flow") else {
+        return;
+    };
+    let people = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/people");
+    assert_eq!(
+        fs.column_plan(&people)
+            .map(|p| p.header(ColumnId::Custom(0)).to_string()),
+        Some("id".to_string()),
+        "the backend composes it"
+    );
+    let router = crate::vfs::VfsRouter::new(
+        crate::config::ArchiveConfig::default(),
+        crate::config::RemoteConfig::default(),
+    );
+    assert_eq!(
+        crate::vfs::Vfs::column_plan(&router, &people)
+            .map(|p| p.header(ColumnId::Custom(0)).to_string()),
+        Some("id".to_string()),
+        "and the router forwards it"
+    );
     let _ = std::fs::remove_dir_all(file.parent().unwrap_or(&file));
 }

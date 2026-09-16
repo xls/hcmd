@@ -315,12 +315,14 @@ fn read_page(
     let mut out = Vec::new();
     let mut n = offset;
     while let Some(row) = rows.next().map_err(|e| Error::msg(format!("a row: {e}")))? {
-        // The name is the rowid where there is one, else the row's position,
-        // so `F5` writes `<n>.json` and Enter reads the same row back.
+        // The name is the row's own id - the rowid where there is one, else
+        // its position - shown plainly, without the `.json` the copy carries.
+        // `Enter` reads the same row back by it, and `F5` writes it out as
+        // `<database>.<table>.<id>.json`.
         let id: Option<i64> = row.get(0).ok();
         let name = match (has_rowid, id) {
-            (true, Some(id)) => format!("{id}.json"),
-            _ => format!("{n}.json"),
+            (true, Some(id)) => id.to_string(),
+            _ => n.to_string(),
         };
         let mut entry = Entry::file(name);
         entry.cells = (0..shown.len())
@@ -411,8 +413,9 @@ impl Vfs for SqliteFs {
     }
 
     fn copy_name(&self, path: &VfsPath) -> Option<String> {
-        // `<database>.<table>.<row>`: the row sitting in another panel says
-        // where it came from, which `10000.json` on its own would not.
+        // `<database>.<table>.<id>.json`: the row sitting in another panel says
+        // where it came from, and copies out as the JSON it is - the `.json`
+        // the plain listing name does not carry.
         let Location::Rows(tail) = Self::locate(path) else {
             return None;
         };
@@ -421,7 +424,7 @@ impl Vfs for SqliteFs {
             return None;
         }
         let db = self.file.file_name()?.to_string_lossy();
-        Some(format!("{db}.{table}.{row}"))
+        Some(format!("{db}.{table}.{row}.json"))
     }
 
     fn describe(&self, path: &VfsPath) -> Option<String> {
@@ -439,17 +442,18 @@ impl Vfs for SqliteFs {
     fn stat(&self, path: &VfsPath) -> Result<Entry> {
         match Self::locate(path) {
             Location::Tables => Ok(Entry::dir("sqlite")),
-            Location::Rows(table) => {
-                // A path ending in a name is either the table (a directory) or
-                // a row within it (a file). A `.json` tail is a row.
-                if table.ends_with(".json") {
-                    let (tbl, row) = split_row(&table);
+            Location::Rows(tail) => {
+                // `table` is a directory; `table/<id>` is a row within it. The
+                // `/` is the whole of the distinction, now that the id stands
+                // on its own without an extension to tell them apart.
+                let (tbl, row) = split_row(&tail);
+                if !row.is_empty() {
                     let bytes = self.row_json(tbl, row)?;
                     let mut entry = Entry::file(row.to_string());
                     entry.size = bytes.len() as u64;
                     Ok(entry)
                 } else {
-                    Ok(Entry::dir(table))
+                    Ok(Entry::dir(tail))
                 }
             }
         }
