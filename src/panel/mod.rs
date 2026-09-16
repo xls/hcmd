@@ -504,6 +504,11 @@ pub struct Tab {
     /// place keeps it, or the columns would jump about on every watch event.
     pub column_plan: Option<ColumnPlan>,
 
+    /// What the listing calls itself, for the panel header, when the path as
+    /// written would say less: a revision, a database table. Answered by the
+    /// same probe as the capabilities, cleared on a change of directory.
+    pub described: Option<String>,
+
     /// The branch this directory's repository is on, `None` outside one.
     ///
     /// Answered by the git-status probe, which lands after the listing does,
@@ -648,6 +653,7 @@ impl Tab {
             scroll: 0,
             marks: HashSet::new(),
             column_plan: None,
+            described: None,
             git_branch: None,
             sort: SortState::default(),
             quick_filter: None,

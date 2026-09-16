@@ -149,7 +149,7 @@ impl BackendKind {
             // Read-only, local, and seekable because a git blob is
             // materialised whole from the object store. The feature, not a
             // placeholder.
-            Self::Git => Capabilities::READ_ONLY_LIST,
+            Self::Git => Capabilities::GIT,
         }
     }
 }
@@ -755,6 +755,16 @@ pub struct Capabilities {
     /// False for an archive member, which has a mode in its header and no way
     /// to change it, and for a FAT image, which has no modes at all.
     pub settable_mode: bool,
+    /// Whether a recursive walk from here means anything.
+    ///
+    /// False for a flat listing, where a search result's rows share no tree,
+    /// and for git history, where a walk from `#git/` would descend every
+    /// commit's tree - the whole history - and pour it into the panel. `Alt+F7`
+    /// consults this before offering to walk, the way the copy engine consults
+    /// `writable`: a question asked with a form and then refused is worse than
+    /// one never asked. It used to be a check on the backend's *kind*, which
+    /// every new backend had to be added to by hand.
+    pub walkable: bool,
     /// Latency class.
     pub latency: LatencyClass,
 }
@@ -771,6 +781,7 @@ impl Capabilities {
         can_execute: true,
         links: true,
         settable_mode: true,
+        walkable: true,
         latency: LatencyClass::Local,
     };
 
@@ -786,6 +797,7 @@ impl Capabilities {
         can_execute: false,
         links: false,
         settable_mode: false,
+        walkable: true,
         latency: LatencyClass::Local,
     };
 
@@ -805,6 +817,7 @@ impl Capabilities {
         can_execute: false,
         links: false,
         settable_mode: false,
+        walkable: true,
         latency: LatencyClass::Network,
     };
 
@@ -824,6 +837,7 @@ impl Capabilities {
         can_execute: false,
         links: false,
         settable_mode: false,
+        walkable: true,
         latency: LatencyClass::Network,
     };
 
@@ -845,6 +859,7 @@ impl Capabilities {
         can_execute: false,
         links: false,
         settable_mode: false,
+        walkable: true,
         latency: LatencyClass::Network,
     };
 
@@ -865,6 +880,7 @@ impl Capabilities {
         can_execute: false,
         links: false,
         settable_mode: false,
+        walkable: true,
         latency: LatencyClass::Network,
     };
 
@@ -887,6 +903,24 @@ impl Capabilities {
         can_execute: false,
         links: false,
         settable_mode: false,
+        walkable: true,
+        latency: LatencyClass::Local,
+    };
+
+    /// A repository's history: read-only, and a tree - commits are folders
+    /// and a commit's files live in directories - so unlike a flat listing it
+    /// has directories, but a walk from it would visit all of history.
+    pub const GIT: Self = Self {
+        writable: false,
+        seekable: true,
+        random_access: false,
+        atomic_rename: false,
+        has_directories: true,
+        paged_listing: false,
+        can_execute: false,
+        links: false,
+        settable_mode: false,
+        walkable: false,
         latency: LatencyClass::Local,
     };
 
@@ -901,6 +935,7 @@ impl Capabilities {
         can_execute: false,
         links: false,
         settable_mode: false,
+        walkable: false,
         latency: LatencyClass::Local,
     };
 }
@@ -982,6 +1017,19 @@ pub trait Vfs: Send + Sync {
     /// [`Vfs::capabilities`], so a slow answer arrives late rather than
     /// blocking the frame.
     fn column_plan(&self, _path: &VfsPath) -> Option<crate::panel::ColumnPlan> {
+        None
+    }
+
+    /// What the panel's header should call this listing, or `None` for the
+    /// path as written.
+    ///
+    /// A path is the honest header for a directory and a poor one for a
+    /// revision: `…/repo#git/abc123/src` says less at a glance than
+    /// `[git abc123: repo/src]`, and a database table is not a directory at
+    /// all. The backend that knows what the path *is* names it; the panel
+    /// draws whatever comes back and needs no kind of its own to check. Asked
+    /// once per listing, on the same probe as [`Vfs::capabilities`].
+    fn describe(&self, _path: &VfsPath) -> Option<String> {
         None
     }
 

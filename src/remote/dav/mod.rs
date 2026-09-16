@@ -277,6 +277,7 @@ impl RemoteTransport for DavFs {
             can_execute: false,
             links: false,
             settable_mode: false,
+            walkable: true,
             latency: LatencyClass::Network,
         }
     }

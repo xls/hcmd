@@ -203,9 +203,38 @@ impl GitFs {
     }
 }
 
+/// The panel header for a path inside the history: `[git history: repo]` at
+/// the commit list, `[git abc123: repo/src]` inside a revision. The raw path
+/// reads `…/repo#git/abc123/src`, which says less at a glance about the one
+/// thing that matters here - that this is a revision, not the working tree.
+fn revision_title(path: &VfsPath) -> String {
+    let repo = path
+        .segments()
+        .first()
+        .and_then(|(_, dir)| dir.file_name())
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    // The git segment's tail is `/`, `/<sha>`, or `/<sha>/<inner>`.
+    let tail = path.tail().to_string_lossy();
+    let rest = tail.trim_start_matches('/');
+    if rest.is_empty() {
+        return format!("[git history: {repo}]");
+    }
+    let (sha, inner) = rest.split_once('/').unwrap_or((rest, ""));
+    if inner.is_empty() {
+        format!("[git {sha}: {repo}]")
+    } else {
+        format!("[git {sha}: {repo}/{inner}]")
+    }
+}
+
 impl Vfs for GitFs {
     fn kind(&self) -> BackendKind {
         BackendKind::Git
+    }
+
+    fn describe(&self, path: &VfsPath) -> Option<String> {
+        Some(revision_title(path))
     }
 
     fn column_plan(&self, path: &VfsPath) -> Option<crate::panel::ColumnPlan> {
@@ -336,6 +365,9 @@ impl Vfs for GitFs {
             can_execute: false,
             links: false,
             settable_mode: false,
+            // A walk from a revision would visit the whole tree at every
+            // commit rather than a directory, so `Alt+F7` never offers one.
+            walkable: false,
             latency: LatencyClass::Local,
         }
     }

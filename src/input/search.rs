@@ -21,16 +21,19 @@ use crate::vfs::VfsPath;
 /// is the origin the search came from, because `list:/7` is not a tree and a
 /// second `Alt+F7` there means "search again", not "search these results"
 /// (which is `Alt+Shift+F7`).
+/// What a listing that cannot be walked says to `Alt+F7`. Quick search - just
+/// type - still filters the rows in front of you, which is what searching one
+/// of these wants.
+const NOT_WALKABLE: &str = "search walks a directory; here, just type to filter the listing";
+
 pub(super) fn open_find(app: &mut App) {
     let tab = app.active_panel().active_tab();
-    if tab.path.backend() == crate::vfs::BackendKind::Git {
-        // A recursive walk from a git view would descend every commit's tree -
-        // the whole history - and pour it into the panel. That is never what
-        // "find in here" means. Quick search (just type) filters the listing
-        // in front of you, which is what searching a commit's files wants.
-        app.message = Some(
-            "search walks a directory; in git history, just type to filter the listing".to_string(),
-        );
+    // The backend says whether a walk from here means anything - git history
+    // and a database table say no, and every new backend answers for itself
+    // rather than being added to a list here. A search result is exempt: its
+    // walk starts from the directory the search came from, not from the rows.
+    if !tab.caps.walkable && tab.virtual_view().is_none() {
+        app.message = Some(NOT_WALKABLE.to_string());
         return;
     }
     let start = tab
@@ -53,10 +56,8 @@ pub(super) fn open_find(app: &mut App) {
 /// reads the same on a real directory as on a set of results.
 pub(super) fn open_find_in_panel(app: &mut App) {
     let tab = app.active_panel().active_tab();
-    if tab.path.backend() == crate::vfs::BackendKind::Git {
-        app.message = Some(
-            "search walks a directory; in git history, just type to filter the listing".to_string(),
-        );
+    if !tab.caps.walkable && tab.virtual_view().is_none() {
+        app.message = Some(NOT_WALKABLE.to_string());
         return;
     }
     let roots = tab.operand_paths();
@@ -232,5 +233,42 @@ pub(super) fn stem_of(name: &str) -> String {
     match name.rfind('.') {
         Some(0) | None => name.to_string(),
         Some(at) => name.get(..at).unwrap_or(name).to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{Config, Keymap, Theme};
+    use crate::vfs::{BackendKind, Capabilities, Entry, VfsPath};
+
+    fn app_at(path: VfsPath, caps: Capabilities) -> App {
+        let mut app = App::headless(Config::default(), Keymap::builtin(), Theme::blue());
+        let tab = app.left.active_tab_mut();
+        tab.path = path;
+        tab.caps = caps;
+        tab.entries = vec![Entry::file("a")];
+        app
+    }
+
+    #[test]
+    fn a_listing_that_cannot_be_walked_refuses_the_search_by_its_capability() {
+        // Git history says `walkable: false` and is refused; so would any new
+        // backend that says so, with nothing added here. The old check named
+        // the kind, and a database would have walked all of history's worth of
+        // rows before anyone noticed.
+        let git = VfsPath::local("/repo").with_segment(BackendKind::Git, "/abc");
+        let mut app = app_at(git, Capabilities::GIT);
+        open_find(&mut app);
+        assert_eq!(app.message.as_deref(), Some(NOT_WALKABLE));
+        assert!(
+            !app.dialog_is_open(),
+            "no form was offered only to be refused"
+        );
+
+        // A plain directory walks.
+        let mut app = app_at(VfsPath::local("/tmp"), Capabilities::LOCAL);
+        open_find(&mut app);
+        assert!(app.dialog_is_open(), "the find form opened");
     }
 }

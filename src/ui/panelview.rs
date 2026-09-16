@@ -313,35 +313,6 @@ fn draw_quick_status(f: &mut Frame, app: &App, area: Rect, g: Glyphs) {
     );
 }
 
-/// `d [dev]  988G of 3.6T free (73% used)`.
-/// The panel's directory and its active file mask, for the top border.
-///
-/// A mask other than `*` is how a quick filter shows itself, so it
-/// is appended rather than given a row of its own.
-/// The panel title for a `#git/…` path: the commit list, a revision, or a
-/// folder within a revision, each named so it reads as git history rather than
-/// a real directory.
-fn git_revision_title(path: &crate::vfs::VfsPath) -> String {
-    let repo = path
-        .segments()
-        .first()
-        .and_then(|(_, dir)| dir.file_name())
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    // The git segment's tail is `/`, `/<sha>`, or `/<sha>/<inner>`.
-    let tail = path.tail().to_string_lossy();
-    let rest = tail.trim_start_matches('/');
-    if rest.is_empty() {
-        return format!("[git history: {repo}]");
-    }
-    let (sha, inner) = rest.split_once('/').unwrap_or((rest, ""));
-    if inner.is_empty() {
-        format!("[git {sha}: {repo}]")
-    } else {
-        format!("[git {sha}: {repo}/{inner}]")
-    }
-}
-
 fn path_title(panel: &Panel, _g: Glyphs) -> String {
     let tab = panel.active_tab();
     // "The panel header shows the virtual state, e.g.
@@ -366,13 +337,13 @@ fn path_title(panel: &Panel, _g: Glyphs) -> String {
             }
             header
         }
-        // A git-history path reads as `[git abc123: repo/src]` rather than the
-        // raw `…/repo#git/abc123/src`, so it is clear at a glance that the panel
-        // is inside a revision and not the live working tree.
-        (None, None) if tab.path.backend() == crate::vfs::BackendKind::Git => {
-            git_revision_title(&tab.path)
-        }
-        (None, None) => tab.path.to_string(),
+        // A backend that has a better name for what this is than the path -
+        // `[git abc123: repo/src]` for a revision - said so when the listing
+        // was probed. The panel draws it and checks no kind of its own.
+        (None, None) => tab
+            .described
+            .clone()
+            .unwrap_or_else(|| tab.path.to_string()),
     };
     let mask = panel.filter_mask.as_str();
     if mask.is_empty() || mask == "*" {
@@ -1051,22 +1022,10 @@ pub fn counts_text(
 
 #[cfg(test)]
 mod tests {
-    use super::{git_revision_title, walk_indicator};
+    use super::walk_indicator;
     use crate::config::SizeWalkStyle;
     use crate::ui::text::width as display_width;
     use std::time::Duration;
-
-    #[test]
-    fn a_git_path_reads_as_a_revision_not_a_directory() {
-        use crate::vfs::{BackendKind, VfsPath};
-        let repo = "/home/thorin/repo";
-        let commits = VfsPath::local(repo).with_segment(BackendKind::Git, "/");
-        assert_eq!(git_revision_title(&commits), "[git history: repo]");
-        let rev = VfsPath::local(repo).with_segment(BackendKind::Git, "/abc123");
-        assert_eq!(git_revision_title(&rev), "[git abc123: repo]");
-        let inner = VfsPath::local(repo).with_segment(BackendKind::Git, "/abc123/src/lib.rs");
-        assert_eq!(git_revision_title(&inner), "[git abc123: repo/src/lib.rs]");
-    }
 
     #[test]
     fn the_walk_indicator_is_five_cells_animates_and_falls_back_to_ascii() {

@@ -1768,6 +1768,22 @@ mod tests {
     }
 
     #[test]
+    fn a_listing_that_describes_itself_names_the_panel_header() {
+        // The backend's word for what the panel is looking at, drawn in place
+        // of the path. Git history was the only case and was a kind check in
+        // the renderer; now any backend answers, and the renderer asks none.
+        let mut a = app();
+        a.active_panel_mut().active_tab_mut().described = Some("[users: db.sqlite]".to_string());
+        let out = dump(&render(&a, 80, 15));
+        assert!(
+            out.lines()
+                .next()
+                .is_some_and(|top| top.contains("[users: db.sqlite]")),
+            "the top border carries the name: {out}"
+        );
+    }
+
+    #[test]
     fn a_cropped_name_does_not_displace_the_panel_counts() {
         let mut a = app();
         a.move_cursor_to(3);

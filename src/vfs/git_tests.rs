@@ -259,3 +259,19 @@ fn an_ordinary_directory_composes_nothing_and_keeps_the_configured_columns() {
     let fs = crate::vfs::local::LocalFs::new();
     assert_eq!(fs.column_plan(&VfsPath::local("/tmp")), None);
 }
+
+#[test]
+fn a_git_path_describes_itself_as_a_revision_not_a_directory() {
+    // The header is the backend's word, asked through the same seam every
+    // backend has, so the panel checks no kind of its own to draw it.
+    let repo = "/home/thorin/repo";
+    let commits = VfsPath::local(repo).with_segment(BackendKind::Git, "/");
+    assert_eq!(super::revision_title(&commits), "[git history: repo]");
+    let rev = VfsPath::local(repo).with_segment(BackendKind::Git, "/abc123");
+    assert_eq!(super::revision_title(&rev), "[git abc123: repo]");
+    let inner = VfsPath::local(repo).with_segment(BackendKind::Git, "/abc123/src/lib.rs");
+    assert_eq!(
+        super::revision_title(&inner),
+        "[git abc123: repo/src/lib.rs]"
+    );
+}

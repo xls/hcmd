@@ -103,6 +103,7 @@ impl VolumeFormat for Iso9660 {
             can_execute: false,
             links: false,
             settable_mode: false,
+            walkable: true,
             latency: LatencyClass::Local,
         }
     }

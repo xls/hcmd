@@ -708,6 +708,12 @@ impl Vfs for VfsRouter {
         }
     }
 
+    /// Straight through to whichever backend owns the path: what a listing is
+    /// called is its own business.
+    fn describe(&self, path: &VfsPath) -> Option<String> {
+        self.backend_for(path).ok()?.describe(path)
+    }
+
     /// Straight through to whichever backend owns the path: composing the
     /// columns is the listing's business and the router has no view of its own.
     /// The answer is remembered so that walking back into a listing draws its

@@ -79,6 +79,8 @@ pub struct CapsEvent {
     pub caps: Capabilities,
     /// The columns that listing asked for, if it asked for any.
     pub plan: Option<crate::panel::ColumnPlan>,
+    /// What the listing calls itself, if it has a name for the header.
+    pub title: Option<String>,
 }
 
 /// A directory whose git flags should be computed off the event loop.
@@ -161,9 +163,14 @@ pub async fn probe_capabilities(
     // Both answers come off one probe: they are asked at the same moment, for
     // the same listing, and a second round trip would only give them two ways
     // to disagree about which listing they describe.
-    let Ok((caps, plan)) =
-        tokio::task::spawn_blocking(move || (vfs.capabilities_for(&path), vfs.column_plan(&path)))
-            .await
+    let Ok((caps, plan, title)) = tokio::task::spawn_blocking(move || {
+        (
+            vfs.capabilities_for(&path),
+            vfs.column_plan(&path),
+            vfs.describe(&path),
+        )
+    })
+    .await
     else {
         return;
     };
@@ -174,6 +181,7 @@ pub async fn probe_capabilities(
             generation,
             caps,
             plan,
+            title,
         })
         .await;
 }
@@ -225,6 +233,7 @@ impl App {
         // meant the column blinked out and back on each rescan - and the watch
         // rescans often.
         tab.git_branch = None;
+        tab.described = None;
         // A different directory has nothing to reconcile against, so any rescan
         // that was mid-flight is abandoned rather than merged into the new one.
         tab.merging = None;
@@ -848,6 +857,7 @@ impl App {
         let path = tab.path.clone();
         if let Some(tab) = self.panel_mut(event.side).tab_mut(event.tab) {
             tab.column_plan = event.plan;
+            tab.described = event.title;
         }
         self.router.capability_cache().remember(&path, event.caps);
         self.refresh_caps(event.side, event.tab);
@@ -1082,6 +1092,7 @@ mod tests {
 
         app.apply_caps_event(CapsEvent {
             plan: None,
+            title: None,
             side: Side::Left,
             tab: 0,
             generation,
@@ -1139,6 +1150,7 @@ mod tests {
 
         app.apply_caps_event(CapsEvent {
             plan: None,
+            title: None,
             side: Side::Left,
             tab: 0,
             generation: stale,
