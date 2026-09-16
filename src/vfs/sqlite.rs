@@ -412,6 +412,15 @@ impl Vfs for SqliteFs {
         }
     }
 
+    fn view_format(&self, path: &VfsPath) -> Option<String> {
+        // A row is named for its id and reads as JSON: the viewer highlights
+        // and renders it as such though the name carries no `.json`.
+        match Self::locate(path) {
+            Location::Rows(tail) if !split_row(&tail).1.is_empty() => Some("json".to_string()),
+            _ => None,
+        }
+    }
+
     fn copy_name(&self, path: &VfsPath) -> Option<String> {
         // `<database>.<table>.<id>.json`: the row sitting in another panel says
         // where it came from, and copies out as the JSON it is - the `.json`

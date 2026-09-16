@@ -130,7 +130,7 @@ impl Viewer {
             return Ok(());
         }
 
-        let kind = RenderKind::of_name(&self.title);
+        let kind = RenderKind::of_name(&self.format_name());
         let fits = self.source.len().is_none_or(|len| len <= limit);
         // One read for both attempts below. Where a renderer applies and the
         // file fits, that is the whole file and the head is a prefix of it;

@@ -746,6 +746,12 @@ impl Vfs for VfsRouter {
         self.backend_for(path).ok()?.copy_name(path)
     }
 
+    /// Straight through: how a listing's rows want to be viewed is its own
+    /// business.
+    fn view_format(&self, path: &VfsPath) -> Option<String> {
+        self.backend_for(path).ok()?.view_format(path)
+    }
+
     /// Straight through to whichever backend owns the path: what a listing is
     /// called is its own business.
     fn describe(&self, path: &VfsPath) -> Option<String> {

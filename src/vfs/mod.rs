@@ -1069,6 +1069,18 @@ pub trait Vfs: Send + Sync {
         None
     }
 
+    /// A file extension to view this path as, when its name does not carry a
+    /// telling one. Empty for a real file, whose own name is the honest guide.
+    ///
+    /// A database row is named for its id - `10000`, no extension - but its
+    /// content is JSON, so the sqlite backend answers `json` here and the
+    /// viewer highlights and renders it as such. A suggestion, not a force:
+    /// content sniffs (a compiled manifest, a byte order mark) still run and
+    /// win where they fire. The viewer asks; it knows no backend by name.
+    fn view_format(&self, _path: &VfsPath) -> Option<String> {
+        None
+    }
+
     /// What the panel's header should call this listing, or `None` for the
     /// path as written.
     ///

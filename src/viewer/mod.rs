@@ -483,6 +483,11 @@ pub struct Viewer {
     id: ViewerId,
     title: String,
     path: Option<VfsPath>,
+    /// An extension to select the renderer and highlighter by when the title
+    /// carries no telling one - a database row named `10000` whose content is
+    /// JSON. A backend suggests it through [`crate::vfs::Vfs::view_format`];
+    /// empty for a real file. See [`Viewer::format_name`].
+    format_hint: Option<String>,
     is_help: bool,
 
     source: Source,
@@ -832,6 +837,7 @@ impl Viewer {
             id,
             title: title.into(),
             path,
+            format_hint: None,
             is_help: false,
             source,
             scan: Some(scan),
@@ -941,8 +947,11 @@ impl Viewer {
     ) -> Result<Self> {
         let len = vfs.stat(&path).ok().map(|e| e.size);
         let title = path.to_string();
+        let hint = vfs.view_format(&path);
         let opener = source::vfs_opener(Arc::clone(&vfs), path.clone());
-        Self::open(id, title, Some(path), opener, len, cfg)
+        let mut viewer = Self::open(id, title, Some(path), opener, len, cfg)?;
+        viewer.format_hint = hint;
+        Ok(viewer)
     }
 
     /// Open a viewer over text that is already in memory.
@@ -1003,6 +1012,33 @@ impl Viewer {
     }
 
     /// What is being viewed.
+    /// The name to choose the renderer and highlighter by: the file's own,
+    /// unless a backend suggested an extension for a name that carries none.
+    ///
+    /// The suggestion is applied as an extension on the real name, so a row
+    /// named `10000` is selected as `10000.json` while a real `.txt` keeps its
+    /// own extension and the hint is ignored. Content sniffs run regardless and
+    /// win where they fire, so this only decides the by-name fallback.
+    pub(crate) fn format_name(&self) -> String {
+        let name = self
+            .path
+            .as_ref()
+            .and_then(VfsPath::file_name)
+            .unwrap_or_else(|| self.title.clone());
+        match &self.format_hint {
+            Some(ext) => format!("{name}.{ext}"),
+            None => name,
+        }
+    }
+
+    /// Set the format hint directly, for a test that injects the kind the
+    /// name does not carry. Production sets it in `open_path` from the backend.
+    #[cfg(test)]
+    pub(crate) fn set_format_hint(&mut self, ext: Option<String>) {
+        self.format_hint = ext;
+    }
+
+    /// The panel-header title: the path, or a listing's own name for it.
     pub fn title(&self) -> &str {
         &self.title
     }

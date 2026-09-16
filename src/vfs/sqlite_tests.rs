@@ -239,3 +239,19 @@ fn the_router_forwards_a_table_s_column_plan() {
     );
     let _ = std::fs::remove_dir_all(file.parent().unwrap_or(&file));
 }
+
+#[test]
+fn a_row_suggests_json_so_the_viewer_highlights_it() {
+    // The row is named `2`, not `2.json`, so its own name tells the viewer
+    // nothing. The backend suggests `json`, and the viewer renders and
+    // highlights it as such.
+    let Some((file, fs)) = fixture("viewhint") else {
+        return;
+    };
+    let row = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/people/2");
+    assert_eq!(fs.view_format(&row).as_deref(), Some("json"));
+    // A table and the root suggest nothing - they are directories.
+    let table = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/people");
+    assert_eq!(fs.view_format(&table), None);
+    let _ = std::fs::remove_dir_all(file.parent().unwrap_or(&file));
+}

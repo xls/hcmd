@@ -527,11 +527,7 @@ impl Viewer {
             resumed.set_budget(highlight::PARSE_BUDGET);
             return Some(resumed);
         }
-        let name = self
-            .path
-            .as_ref()
-            .and_then(VfsPath::file_name)
-            .unwrap_or_else(|| self.title.clone());
+        let name = self.format_name();
         let first = self.first_line_text().unwrap_or_default();
         Highlighter::for_file(&name, &first)
     }

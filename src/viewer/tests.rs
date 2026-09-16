@@ -2913,3 +2913,33 @@ fn a_compiled_android_manifest_renders_as_xml_without_hiding_its_bytes() {
         "the dump is over the whole real file"
     );
 }
+
+#[test]
+fn a_backend_hint_selects_the_format_for_an_extensionless_name() {
+    // A name with no telling extension, plus a suggested one, renders as that
+    // format. This is the seam a database row uses: named `10000`, viewed json.
+    let cfg = cfg();
+    let body = r#"{"id": 10000, "name": "alice"}"#;
+    let bytes = std::sync::Arc::new(body.as_bytes().to_vec());
+    let len = bytes.len() as u64;
+    let mut v = Viewer::open(
+        ViewerId(1),
+        "db#sqlite/people/10000",
+        Some(VfsPath::local("/db")),
+        source::memory_opener(bytes),
+        Some(len),
+        &cfg,
+    )
+    .expect("open");
+    // Without a hint, the extensionless name renders as nothing special.
+    assert_eq!(
+        crate::viewer::render::RenderKind::of_name(&v.format_name()),
+        None
+    );
+    // With the hint, it is JSON.
+    v.set_format_hint(Some("json".to_string()));
+    assert_eq!(
+        crate::viewer::render::RenderKind::of_name(&v.format_name()),
+        Some(crate::viewer::render::RenderKind::Json)
+    );
+}
