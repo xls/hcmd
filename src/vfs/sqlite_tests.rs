@@ -255,3 +255,29 @@ fn a_row_suggests_json_so_the_viewer_highlights_it() {
     assert_eq!(fs.view_format(&table), None);
     let _ = std::fs::remove_dir_all(file.parent().unwrap_or(&file));
 }
+
+#[tokio::test]
+async fn a_listing_has_exactly_one_parent_row() {
+    // The read path prepends `..`; the backend must not send its own, or the
+    // listing shows two. The `rows` helper drops parents, so this counts them
+    // straight off the receiver instead.
+    let Some((file, fs)) = fixture("one-parent") else {
+        return;
+    };
+    for tail in ["/", "/people"] {
+        let path = VfsPath::local(&file).with_segment(BackendKind::Sqlite, tail);
+        let mut rx = fs.read_dir(&path);
+        let mut parents = 0;
+        while let Some(item) = rx.recv().await {
+            if item.map(|e| e.is_parent).unwrap_or(false) {
+                parents += 1;
+            }
+        }
+        // The backend sends none; the read path adds the one.
+        assert_eq!(
+            parents, 0,
+            "the backend sends no `..` of its own for {tail}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(file.parent().unwrap_or(&file));
+}

@@ -170,11 +170,11 @@ impl SqliteFs {
 
     /// Read a table's rows into `tx`, a page at a time.
     ///
-    /// The row name is `<n>.json`, `<n>` being the rowid where the table has
-    /// one and the row number otherwise, so `F5` writes a file named for the
-    /// row and two rows never collide. Each row carries its first columns'
-    /// values as cells and never the whole record - the record is what `F3`
-    /// reads, from the JSON [`open_read`] builds.
+    /// The row name is its id - the rowid where the table has one, its position
+    /// otherwise - so two rows never collide and `F5` writes a file named for
+    /// it. Each row carries its first columns' values as cells and never the
+    /// whole record; the record is what `F3` reads, from the JSON `open_read`
+    /// builds.
     fn stream_rows(&self, table: String, tx: &mpsc::Sender<Result<Entry>>) {
         let conn = match Self::connect(&self.file) {
             Ok(conn) => conn,
@@ -377,29 +377,23 @@ impl Vfs for SqliteFs {
     fn read_dir(&self, path: &VfsPath) -> mpsc::Receiver<Result<Entry>> {
         let (tx, rx) = mpsc::channel(READ_DIR_CHANNEL_DEPTH);
         let this = self.clone();
-        let parent = self.parent_row(path);
+        // No `..` row here: the read path prepends it for every backend alike,
+        // and sending one as well is how a listing ends up with two of them.
         let location = Self::locate(path);
-        tokio::task::spawn_blocking(move || {
-            if let Some(parent) = parent
-                && tx.blocking_send(Ok(parent)).is_err()
-            {
-                return;
-            }
-            match location {
-                Location::Tables => match this.list_tables() {
-                    Ok(rows) => {
-                        for row in rows {
-                            if tx.blocking_send(Ok(row)).is_err() {
-                                return;
-                            }
+        tokio::task::spawn_blocking(move || match location {
+            Location::Tables => match this.list_tables() {
+                Ok(rows) => {
+                    for row in rows {
+                        if tx.blocking_send(Ok(row)).is_err() {
+                            return;
                         }
                     }
-                    Err(err) => {
-                        let _ = tx.blocking_send(Err(err));
-                    }
-                },
-                Location::Rows(table) => this.stream_rows(table, &tx),
-            }
+                }
+                Err(err) => {
+                    let _ = tx.blocking_send(Err(err));
+                }
+            },
+            Location::Rows(table) => this.stream_rows(table, &tx),
         });
         rx
     }
