@@ -1,4 +1,4 @@
-# Pinned deliberately; Rust has no LTS channel.
+# Pinned deliberately; Rust has no LTS channel. qwoidjqoiwdjqw
 [toolchain]
 channel    = "1.98.0"
 components = ["rustfmt", "clippy"]

@@ -215,16 +215,18 @@ impl Vfs for GitFs {
             // Commits: the name carries the sha and the subject and wants every
             // cell it can get. There is no extension, no size worth the words
             // `<DIR>`, and no permissions on a commit.
-            Location::Commits => vec![ColumnId::Name, ColumnId::Date],
+            Location::Commits => {
+                crate::panel::ColumnPlan::builtin(vec![ColumnId::Name, ColumnId::Date])
+            }
             // A commit's files: the row is a path, so the extension is already
             // in it and a column of its own would repeat it. The size is the
             // blob's and worth having; the state is the point of the listing.
-            Location::In { .. } => vec![
+            Location::In { .. } => crate::panel::ColumnPlan::builtin(vec![
                 ColumnId::Name,
                 ColumnId::Size,
                 ColumnId::Date,
                 ColumnId::GitState,
-            ],
+            ]),
         })
     }
 

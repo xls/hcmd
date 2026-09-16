@@ -111,6 +111,7 @@ pub fn entry_from_metadata(name: impl Into<String>, meta: &fs::Metadata) -> Entr
         location: None,
         hit: None,
         git_state: None,
+        cells: Vec::new(),
     }
 }
 

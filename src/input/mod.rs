@@ -763,6 +763,22 @@ fn sort_column(order: &[crate::panel::ColumnId], n: usize) -> Option<crate::pane
     order.get(n.saturating_sub(1) % order.len()).copied()
 }
 
+/// The columns `Ctrl+<n>` counts along: the listing's own plan where it made
+/// one, the configured order otherwise.
+///
+/// A listing that composed its columns is what the user is looking at, and a
+/// number that addressed the configured layout underneath it would sort by a
+/// column that is not on screen. With a plan of `name, firstname, lastname`,
+/// `Ctrl+2` sorts by `firstname` - which is the point of a column the listing
+/// defined.
+fn sortable_order(app: &App) -> Vec<crate::panel::ColumnId> {
+    let tab = app.active_panel().active_tab();
+    match &tab.column_plan {
+        Some(plan) => plan.columns.clone(),
+        None => app.config.panel.columns.order.clone(),
+    }
+}
+
 /// Run a resolved action.
 ///
 /// `press` is the key that produced the action - the second key for a chord.
@@ -1073,7 +1089,7 @@ pub(crate) fn run_action(app: &mut App, action: Action, press: KeyPress) -> Resu
         // column that is currently hidden.
         a if a.sort_column_index().is_some() => {
             let n = a.sort_column_index().unwrap_or(1);
-            match sort_column(&app.config.panel.columns.order, n) {
+            match sort_column(&sortable_order(app), n) {
                 Some(column) => app.sort_active(SortKey::Column(column)),
                 None => app.message = Some("no columns are configured".to_string()),
             }
@@ -1081,7 +1097,7 @@ pub(crate) fn run_action(app: &mut App, action: Action, press: KeyPress) -> Resu
         // the same positional mapping, setting the tiebreak.
         a if a.sort_secondary_index().is_some() => {
             let n = a.sort_secondary_index().unwrap_or(1);
-            match sort_column(&app.config.panel.columns.order, n) {
+            match sort_column(&sortable_order(app), n) {
                 Some(column) => app.sort_secondary(column),
                 None => app.message = Some("no columns are configured".to_string()),
             }
@@ -1344,6 +1360,53 @@ mod tests {
     fn press(app: &mut App, code: KeyCode, mods: KeyModifiers) {
         let key = KeyEvent::new(code, mods);
         dispatch(app, key).expect("dispatch never fails on a bound key");
+    }
+
+    #[test]
+    fn ctrl_n_counts_along_the_listings_own_columns_when_it_made_a_plan() {
+        // A table listing planned `name, firstname, lastname`. Its second
+        // column is `firstname`, and that is what Ctrl+2 sorts by - not the
+        // second column of the configured layout, which is not on screen.
+        use crate::panel::text::Align;
+        use crate::panel::{ColumnId, ColumnPlan, CustomColumn, SortKey};
+        let mut app = app_with(vec![Entry::file("row")]);
+        app.left.active_tab_mut().column_plan = Some(ColumnPlan {
+            columns: vec![ColumnId::Name, ColumnId::Custom(0), ColumnId::Custom(1)],
+            custom: vec![
+                CustomColumn {
+                    header: "firstname".into(),
+                    align: Align::Left,
+                    min_chars: 12,
+                },
+                CustomColumn {
+                    header: "lastname".into(),
+                    align: Align::Left,
+                    min_chars: 12,
+                },
+            ],
+        });
+        run_action(
+            &mut app,
+            Action::SortByColumn2,
+            KeyPress::plain(KeyCode::Null),
+        )
+        .expect("sort dispatches");
+        assert_eq!(
+            app.left.active_tab().sort.key,
+            SortKey::Column(ColumnId::Custom(0)),
+            "the plan's second column, firstname"
+        );
+        run_action(
+            &mut app,
+            Action::SortByColumn3,
+            KeyPress::plain(KeyCode::Null),
+        )
+        .expect("sort dispatches");
+        assert_eq!(
+            app.left.active_tab().sort.key,
+            SortKey::Column(ColumnId::Custom(1)),
+            "and its third, lastname"
+        );
     }
 
     #[test]

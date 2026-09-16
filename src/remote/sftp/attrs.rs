@@ -54,6 +54,7 @@ pub(crate) fn entry_from(name: &str, attrs: &russh_sftp::protocol::FileAttribute
         location: None,
         hit: None,
         git_state: None,
+        cells: Vec::new(),
     }
 }
 

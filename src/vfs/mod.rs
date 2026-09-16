@@ -533,6 +533,72 @@ pub struct Entry {
     /// repository and `panel.git_status` is on. `None` everywhere else and for
     /// a clean tracked file, which the column draws as a blank.
     pub git_state: Option<crate::git::FileState>,
+    /// Values for the listing's own columns, one per [`ColumnId::Custom`] in
+    /// its plan, at the same index. Empty for a row from a backend that
+    /// defines no columns of its own, which is every filesystem.
+    ///
+    /// [`ColumnId::Custom`]: crate::panel::ColumnId::Custom
+    pub cells: Vec<CellValue>,
+}
+
+/// One value in a column a listing defined for itself.
+///
+/// Typed rather than pre-rendered, so that sorting a table by an integer
+/// column orders 9 before 10 and a null sorts before everything, the way the
+/// database the row came from would order it. Rendering is the panel's, and
+/// it is the same for every kind of value: what [`fmt::Display`] says.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CellValue {
+    /// No value. Draws blank, sorts first.
+    Null,
+    /// A whole number.
+    Int(i64),
+    /// A real number.
+    Real(f64),
+    /// Text, or anything that is only ever shown.
+    Text(String),
+}
+
+impl Eq for CellValue {}
+
+impl PartialOrd for CellValue {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for CellValue {
+    /// Nulls, then numbers by value, then text. Two numbers compare as numbers
+    /// whichever way they are held, so a table's `3` and `3.5` order correctly
+    /// against each other; text compares the way the name column does, case
+    /// folded.
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+        let rank = |v: &Self| match v {
+            Self::Null => 0,
+            Self::Int(_) | Self::Real(_) => 1,
+            Self::Text(_) => 2,
+        };
+        match (self, other) {
+            (Self::Int(a), Self::Int(b)) => a.cmp(b),
+            (Self::Int(a), Self::Real(b)) => (*a as f64).total_cmp(b),
+            (Self::Real(a), Self::Int(b)) => a.total_cmp(&(*b as f64)),
+            (Self::Real(a), Self::Real(b)) => a.total_cmp(b),
+            (Self::Text(a), Self::Text(b)) => crate::panel::name_cmp(a, b),
+            _ => rank(self).cmp(&rank(other)).then(Ordering::Equal),
+        }
+    }
+}
+
+impl fmt::Display for CellValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Null => Ok(()),
+            Self::Int(n) => write!(f, "{n}"),
+            Self::Real(x) => write!(f, "{x}"),
+            Self::Text(s) => f.write_str(s),
+        }
+    }
 }
 
 impl Entry {
@@ -553,6 +619,7 @@ impl Entry {
             location: None,
             hit: None,
             git_state: None,
+            cells: Vec::new(),
         }
     }
 
@@ -579,6 +646,7 @@ impl Entry {
             location: None,
             hit: None,
             git_state: None,
+            cells: Vec::new(),
         }
     }
 

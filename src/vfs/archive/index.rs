@@ -177,6 +177,7 @@ impl Member {
             location: None,
             hit: None,
             git_state: None,
+            cells: Vec::new(),
         }
     }
 }

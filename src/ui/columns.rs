@@ -29,7 +29,7 @@ use crate::vfs::Entry;
 use super::text::{self, Crop, Glyphs};
 
 pub use crate::panel::text::Align;
-pub use crate::panel::{Allocated, allocate as allocate_full};
+pub use crate::panel::{Allocated, ColumnPlan, allocate as allocate_full};
 
 /// Allocate the configured columns across `inner_width` cells.
 ///
@@ -44,14 +44,9 @@ pub use crate::panel::{Allocated, allocate as allocate_full};
 pub fn allocate(
     cfg: &PanelConfig,
     inner_width: usize,
-    plan: Option<&[ColumnId]>,
+    plan: Option<&ColumnPlan>,
 ) -> Vec<Allocated> {
-    let Some(plan) = plan else {
-        return allocate_full(cfg, inner_width).columns().to_vec();
-    };
-    let mut planned = cfg.clone();
-    planned.columns.order = plan.to_vec();
-    allocate_full(&planned, inner_width).columns().to_vec()
+    allocate_full(cfg, inner_width, plan).columns().to_vec()
 }
 
 /// How a column's text sits in its cell (`size` is the
@@ -85,11 +80,11 @@ pub fn name_crop(cfg: &PanelConfig, allocated: &[Allocated]) -> Crop {
 
 /// The header text for a column, with the sort arrow prefixed to the sorted
 /// one as Total Commander does it.
-pub fn header_text(id: ColumnId, sorted: bool, reverse: bool, g: Glyphs) -> String {
+pub fn header_text(name: &str, sorted: bool, reverse: bool, g: Glyphs) -> String {
     if sorted {
-        format!("{}{}", g.arrow(reverse), id.header())
+        format!("{}{}", g.arrow(reverse), name)
     } else {
-        id.header().to_string()
+        name.to_string()
     }
 }
 
@@ -131,7 +126,7 @@ pub fn group_digits(n: u64) -> String {
 
 /// Format one cell to exactly `column.width` cells.
 pub fn fit_cell(body: &str, column: Allocated, crop: Crop, g: Glyphs) -> String {
-    match align_of(column.id) {
+    match column.align {
         Align::Left => text::fit_left(body, column.width, crop, g.ellipsis()),
         Align::Right => text::fit_right(body, column.width, crop, g.ellipsis()),
     }
@@ -167,7 +162,7 @@ mod tests {
     fn a_listing_that_names_its_columns_gets_those_and_no_others() {
         // The seam: a backend says what its rows want and the configured set
         // steps aside. Nothing else about the layout is the backend's to know.
-        let plan = [ColumnId::Name, ColumnId::Date];
+        let plan = ColumnPlan::builtin(vec![ColumnId::Name, ColumnId::Date]);
         let got = allocate(&cfg(), 120, Some(&plan));
         let ids: Vec<ColumnId> = got.iter().map(|a| a.id).collect();
         assert_eq!(ids, [ColumnId::Name, ColumnId::Date]);
@@ -182,12 +177,12 @@ mod tests {
         // It names columns, not widths: hiding as the panel narrows and the
         // name minimum stay the configuration's business, so a backend cannot
         // produce a layout that does not fit.
-        let plan = [
+        let plan = ColumnPlan::builtin(vec![
             ColumnId::Name,
             ColumnId::Size,
             ColumnId::Date,
             ColumnId::GitState,
-        ];
+        ]);
         let narrow = allocate(&cfg(), 24, Some(&plan));
         let total: usize = narrow.iter().map(|a| a.width).sum();
         assert!(total <= 24, "it fits: {narrow:?}");

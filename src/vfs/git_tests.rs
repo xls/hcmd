@@ -231,14 +231,14 @@ fn a_commit_composes_its_own_columns() {
     // The commit list: the name carries the sha and the subject, and there is
     // no extension, no size and no permissions on a commit.
     let commits = fs.column_plan(&base).expect("the listing composes itself");
-    assert_eq!(commits, vec![ColumnId::Name, ColumnId::Date]);
+    assert_eq!(commits.columns, vec![ColumnId::Name, ColumnId::Date]);
 
     // Inside one: the row is a path, so its extension is already in the name,
     // but the blob's size and what the commit did to it are both worth a cell.
     let inside = VfsPath::local(&repo.root).with_segment(BackendKind::Git, "/abc123");
     let files = fs.column_plan(&inside).expect("and so does this one");
     assert_eq!(
-        files,
+        files.columns,
         vec![
             ColumnId::Name,
             ColumnId::Size,
@@ -247,7 +247,7 @@ fn a_commit_composes_its_own_columns() {
         ]
     );
     assert!(
-        !files.contains(&ColumnId::Ext) && !files.contains(&ColumnId::Attr),
+        !files.columns.contains(&ColumnId::Ext) && !files.columns.contains(&ColumnId::Attr),
         "and neither asks for the columns it has no use for"
     );
 }

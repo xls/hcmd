@@ -21,7 +21,7 @@ use crate::ops::SizeCache;
 use crate::vfs::list::ListingId;
 use crate::vfs::{Capabilities, Entry, VfsPath};
 
-pub use columns::{Allocated, Allocation, ColumnPlan, allocate};
+pub use columns::{Allocated, Allocation, ColumnPlan, CustomColumn, allocate};
 pub use format::{Cell, Counts};
 pub use text::{Align, Crop};
 
@@ -106,6 +106,17 @@ pub enum ColumnId {
     /// added, `U` untracked, blank for clean or outside a repository. Inside a
     /// commit it says what that commit did: `D` deleted, `R` renamed.
     GitState,
+    /// The listing's own `n`-th column, which the panel knows nothing about.
+    ///
+    /// A backend whose rows have fields no filesystem has - a database table's
+    /// `firstname` - names them in its [`ColumnPlan`] and puts each row's
+    /// values in [`Entry::cells`]; this is the handle the panel carries for
+    /// them. One generic variant rather than one per feature, so a listing
+    /// composes columns without the panel learning a word of its vocabulary:
+    /// the header, the alignment and the width come from the plan, the value
+    /// from the row, and sorting compares the values. Never read from the
+    /// configuration, which names only the columns above.
+    Custom(u8),
 }
 
 impl ColumnId {
@@ -133,6 +144,8 @@ impl ColumnId {
             Self::Owner => "owner",
             Self::Group => "group",
             Self::PermsOctal => "perms_octal",
+            // Not a configuration word: a listing names these, never the file.
+            Self::Custom(_) => "custom",
             Self::GitState => "git",
         }
     }
@@ -157,6 +170,9 @@ impl ColumnId {
             // One column, headed with a git-ish glyph. Kept to a single cell
             // because that is all a flag needs and width in a panel is dear.
             Self::GitState => "G",
+            // Named by the plan that defined it, not here: see
+            // [`ColumnPlan::header`], which is what every header goes through.
+            Self::Custom(_) => "",
         }
     }
 
@@ -336,11 +352,15 @@ impl SortState {
     /// A sorted column that the width allocation hid contributes no header at
     /// all, which is why [`SortState::indicator`] is shown in the status line as
     /// well: the footer tag is the half that survives the column disappearing.
-    pub fn header_text(&self, column: ColumnId, ascii: bool) -> String {
+    ///
+    /// `name` is what the column is called, which is the panel's word for its
+    /// own columns and the plan's for one a listing defined - the caller has
+    /// the plan, this does not.
+    pub fn header_text(&self, column: ColumnId, ascii: bool, name: &str) -> String {
         if self.key == SortKey::Column(column) {
-            format!("{}{}", self.arrow(ascii), column.header())
+            format!("{}{}", self.arrow(ascii), name)
         } else {
-            column.header().to_string()
+            name.to_string()
         }
     }
 
@@ -1539,6 +1559,12 @@ pub fn compare_by(column: ColumnId, a: &Entry, b: &Entry) -> std::cmp::Ordering 
         ColumnId::GitState => git_sort_key(a).cmp(&git_sort_key(b)),
         ColumnId::Owner => a.uid.cmp(&b.uid),
         ColumnId::Group => a.gid.cmp(&b.gid),
+        // The listing's own column: its values order themselves, numbers as
+        // numbers and text as text, and a row with no value sorts first.
+        ColumnId::Custom(n) => {
+            let n = usize::from(n);
+            a.cells.get(n).cmp(&b.cells.get(n))
+        }
     }
 }
 
@@ -2749,9 +2775,9 @@ mod tests {
             reverse: true,
             secondary: None,
         };
-        assert_eq!(sort.header_text(ColumnId::Ext, false), "\u{25BC}Ext");
-        assert_eq!(sort.header_text(ColumnId::Name, false), "Name");
-        assert_eq!(sort.header_text(ColumnId::Ext, true), "vExt");
+        assert_eq!(sort.header_text(ColumnId::Ext, false, "Ext"), "\u{25BC}Ext");
+        assert_eq!(sort.header_text(ColumnId::Name, false, "Name"), "Name");
+        assert_eq!(sort.header_text(ColumnId::Ext, true, "Ext"), "vExt");
         assert_eq!(sort.indicator(false), "[ext \u{25BC}]");
         let unsorted = SortState {
             key: SortKey::Unsorted,
@@ -3235,5 +3261,51 @@ mod page_sweep_tests {
         assert_eq!(to, 16, "five *shown* rows on, not five indices");
         tab.mark_through(to, 20);
         assert_eq!(tab.marks.len(), 6, "f10 through f15 inclusive");
+    }
+}
+
+#[cfg(test)]
+mod custom_sort_tests {
+    use super::*;
+    use crate::vfs::{CellValue, Entry};
+    use std::cmp::Ordering;
+
+    fn row(cell: CellValue) -> Entry {
+        let mut e = Entry::file("r");
+        e.cells = vec![cell];
+        e
+    }
+
+    #[test]
+    fn a_custom_column_sorts_numbers_as_numbers_and_nulls_first() {
+        // 9 before 10, which a text sort gets wrong; a null before everything,
+        // which is how the table the rows came from would order them.
+        let c = ColumnId::Custom(0);
+        assert_eq!(
+            compare_by(c, &row(CellValue::Int(9)), &row(CellValue::Int(10))),
+            Ordering::Less
+        );
+        assert_eq!(
+            compare_by(c, &row(CellValue::Real(3.5)), &row(CellValue::Int(3))),
+            Ordering::Greater
+        );
+        assert_eq!(
+            compare_by(c, &row(CellValue::Null), &row(CellValue::Int(-1))),
+            Ordering::Less
+        );
+        assert_eq!(
+            compare_by(
+                c,
+                &row(CellValue::Text("b".into())),
+                &row(CellValue::Text("A".into()))
+            ),
+            Ordering::Greater,
+            "text folds case like the name column"
+        );
+        // A row with no cell for the column sorts with the nulls.
+        assert_eq!(
+            compare_by(c, &Entry::file("short"), &row(CellValue::Int(0))),
+            Ordering::Less
+        );
     }
 }

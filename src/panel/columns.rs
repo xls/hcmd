@@ -22,6 +22,7 @@
 
 use crate::config::{AttrStyle, NameTruncate, PanelConfig};
 use crate::panel::ColumnId;
+use crate::panel::text::Align;
 use crate::panel::text::Crop;
 
 /// One space between adjacent columns, and it has to be paid for out of the
@@ -38,6 +39,10 @@ pub struct Allocated {
     pub id: ColumnId,
     /// Its width in terminal cells. Never zero.
     pub width: usize,
+    /// How its cells sit. Decided here, once, from the column's kind or from
+    /// the plan that defined it, so the renderer has one answer for every
+    /// column and no plan to consult.
+    pub align: Align,
 }
 
 /// The result of laying out one panel's columns at one width.
@@ -135,11 +140,24 @@ fn default_min_chars(cfg: &PanelConfig, id: ColumnId) -> usize {
         ColumnId::PermsOctal => 4,
         // One glyph.
         ColumnId::GitState => 1,
+        // Answered by the plan that defined it, in `requested_width`; this is
+        // only the floor for a plan that forgot to say.
+        ColumnId::Custom(_) => 8,
     }
 }
 
 /// Step 1: `round(pct × inner_width)`, clamped up to `min_chars`.
-fn requested_width(cfg: &PanelConfig, id: ColumnId, inner_width: usize) -> usize {
+fn requested_width(
+    cfg: &PanelConfig,
+    id: ColumnId,
+    inner_width: usize,
+    plan: Option<&ColumnPlan>,
+) -> usize {
+    // A column the listing defined is as wide as the listing said, and takes
+    // no share of the width: `name` absorbs the rest, as it always has.
+    if let Some(custom) = plan.and_then(|p| p.custom(id)) {
+        return usize::from(custom.min_chars);
+    }
     let pct = usize::from(cfg.columns.width.get(&id).copied().unwrap_or(0));
     let min = cfg
         .columns
@@ -154,22 +172,74 @@ fn requested_width(cfg: &PanelConfig, id: ColumnId, inner_width: usize) -> usize
     raw.max(min)
 }
 
-/// The configured order, with `name` guaranteed present.
+/// A column a listing defines for itself, which the panel has never heard of.
 ///
-/// the design calls `name` "always present"; a configuration that omits it
-/// gets it back at the front rather than a panel with no filenames in it.
+/// A database table's `firstname` is not a column any filesystem has, so there
+/// is no [`ColumnId`] for it. The listing describes it here - what to call it,
+/// how its cells sit, how narrow it may go - and each row carries its value in
+/// [`crate::vfs::Entry::cells`] at the same index. The panel draws, widens,
+/// hides and sorts it exactly as it does `size`, and never learns the name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomColumn {
+    /// What the header row says.
+    pub header: String,
+    /// How the cells sit. Numbers read right-aligned, everything else left.
+    pub align: Align,
+    /// The narrowest this column is drawn before it is dropped instead.
+    pub min_chars: u16,
+}
+
 /// The columns a listing asks for, in place of the user's configured set.
 ///
 /// A backend that knows its rows better than the configuration can returns one
 /// of these and gets exactly those columns: a commit's changed files have no
 /// extension worth a column of its own and no permissions at all, and the room
-/// is better spent on the path. Everything downstream is untouched - widths,
-/// the hide-by-priority order, the name minimum and the redraw all work as they
-/// already do, so a listing composes its columns without knowing anything about
-/// rendering.
-pub type ColumnPlan = Vec<ColumnId>;
+/// is better spent on the path. `columns` may name the panel's own kinds, or
+/// [`ColumnId::Custom`] entries that index into `custom` for their definition.
+/// Everything downstream is untouched - widths, the hide-by-priority order,
+/// the name minimum and the redraw all work as they already do, so a listing
+/// composes its columns without knowing anything about rendering.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ColumnPlan {
+    /// The columns, in the order they are drawn and the order `Ctrl+<n>`
+    /// addresses them.
+    pub columns: Vec<ColumnId>,
+    /// The definitions behind each [`ColumnId::Custom`] in `columns`.
+    pub custom: Vec<CustomColumn>,
+}
+
+impl ColumnPlan {
+    /// A plan over the panel's own columns only.
+    #[must_use]
+    pub fn builtin(columns: Vec<ColumnId>) -> Self {
+        Self {
+            columns,
+            custom: Vec::new(),
+        }
+    }
+
+    /// The definition behind a custom column, if `id` is one this plan made.
+    #[must_use]
+    pub fn custom(&self, id: ColumnId) -> Option<&CustomColumn> {
+        match id {
+            ColumnId::Custom(n) => self.custom.get(usize::from(n)),
+            _ => None,
+        }
+    }
+
+    /// What the header row says for `id`: the plan's word for its own columns,
+    /// the panel's for the rest.
+    #[must_use]
+    pub fn header(&self, id: ColumnId) -> &str {
+        self.custom(id)
+            .map_or_else(|| id.header(), |c| c.header.as_str())
+    }
+}
 
 /// The configured order, de-duplicated, with `name` guaranteed present.
+///
+/// the design calls `name` "always present"; a configuration that omits it
+/// gets it back at the front rather than a panel with no filenames in it.
 pub fn effective_order(configured: &[ColumnId]) -> Vec<ColumnId> {
     let mut order: Vec<ColumnId> = Vec::with_capacity(configured.len().saturating_add(1));
     if !configured.contains(&ColumnId::Name) {
@@ -188,8 +258,12 @@ pub fn effective_order(configured: &[ColumnId]) -> Vec<ColumnId> {
 ///
 /// `inner_width` is the space inside the panel's borders. Zero, one and two are
 /// legal inputs and produce a `name`-only allocation rather than a panic.
-pub fn allocate(cfg: &PanelConfig, inner_width: usize) -> Allocation {
-    let order = effective_order(&cfg.columns.order);
+pub fn allocate(cfg: &PanelConfig, inner_width: usize, plan: Option<&ColumnPlan>) -> Allocation {
+    let order = effective_order(plan.map_or(&cfg.columns.order, |p| &p.columns));
+    let align = |id: ColumnId| {
+        plan.and_then(|p| p.custom(id))
+            .map_or_else(|| super::format::align_of(id), |c| c.align)
+    };
     let name_min = usize::from(cfg.effective_name_min_width());
     let mut hidden: Vec<ColumnId> = Vec::new();
 
@@ -200,13 +274,17 @@ pub fn allocate(cfg: &PanelConfig, inner_width: usize) -> Allocation {
             if *id == ColumnId::Name || hidden.contains(id) {
                 continue;
             }
-            let width = requested_width(cfg, *id, inner_width);
+            let width = requested_width(cfg, *id, inner_width, plan);
             if width == 0 {
                 // Neither a percentage nor a minimum: nothing to draw.
                 hidden.push(*id);
                 continue;
             }
-            fixed.push(Allocated { id: *id, width });
+            fixed.push(Allocated {
+                id: *id,
+                width,
+                align: align(*id),
+            });
         }
 
         let separators = fixed.len().saturating_mul(SEPARATOR_WIDTH);
@@ -229,6 +307,7 @@ pub fn allocate(cfg: &PanelConfig, inner_width: usize) -> Allocation {
                     columns.push(Allocated {
                         id: ColumnId::Name,
                         width: name_width,
+                        align: Align::Left,
                     });
                 } else if let Some(col) = fixed.iter().find(|c| c.id == *id) {
                     columns.push(*col);
@@ -278,6 +357,7 @@ pub fn allocate(cfg: &PanelConfig, inner_width: usize) -> Allocation {
                     columns: vec![Allocated {
                         id: ColumnId::Name,
                         width: inner_width,
+                        align: Align::Left,
                     }],
                     inner_width,
                     crop: Crop::Middle,
@@ -297,7 +377,7 @@ mod tests {
     }
 
     fn visible(inner: usize) -> Vec<ColumnId> {
-        allocate(&cfg(), inner)
+        allocate(&cfg(), inner, None)
             .columns()
             .iter()
             .map(|c| c.id)
@@ -308,7 +388,7 @@ mod tests {
     fn the_total_never_exceeds_the_inner_width_at_any_width() {
         let cfg = cfg();
         for inner in 0..=200usize {
-            let a = allocate(&cfg, inner);
+            let a = allocate(&cfg, inner, None);
             assert!(
                 a.total_width() <= inner,
                 "inner {inner}: total {} > {inner} ({:?})",
@@ -331,7 +411,7 @@ mod tests {
     #[test]
     fn zero_one_and_two_are_name_only_and_do_not_panic() {
         for inner in [0usize, 1, 2] {
-            let a = allocate(&cfg(), inner);
+            let a = allocate(&cfg(), inner, None);
             assert_eq!(a.columns().len(), 1);
             assert_eq!(a.name_width(), inner);
             assert!(a.total_width() <= inner);
@@ -393,7 +473,7 @@ mod tests {
         let cfg = cfg();
         let floor = usize::from(cfg.effective_name_min_width());
         for inner in 0..=200usize {
-            let a = allocate(&cfg, inner);
+            let a = allocate(&cfg, inner, None);
             if a.columns().len() > 1 {
                 assert!(
                     a.name_width() >= floor,
@@ -409,7 +489,7 @@ mod tests {
     fn a_column_that_cannot_reach_min_chars_is_hidden_not_squeezed() {
         let cfg = cfg();
         for inner in 0..=200usize {
-            let a = allocate(&cfg, inner);
+            let a = allocate(&cfg, inner, None);
             for col in a.columns() {
                 if col.id == ColumnId::Name {
                     continue;
@@ -429,7 +509,7 @@ mod tests {
     fn auto_cropping_follows_whether_ext_is_actually_rendered() {
         let cfg = cfg();
         for inner in 0..=200usize {
-            let a = allocate(&cfg, inner);
+            let a = allocate(&cfg, inner, None);
             let expected = if a.is_visible(ColumnId::Ext) {
                 Crop::End
             } else {
@@ -438,17 +518,17 @@ mod tests {
             assert_eq!(a.crop(), expected, "inner {inner}");
         }
         // And there really is a crossover, so the assertion above is not vacuous.
-        assert_eq!(allocate(&cfg, 100).crop(), Crop::End);
-        assert_eq!(allocate(&cfg, 30).crop(), Crop::Middle);
+        assert_eq!(allocate(&cfg, 100, None).crop(), Crop::End);
+        assert_eq!(allocate(&cfg, 30, None).crop(), Crop::Middle);
     }
 
     #[test]
     fn an_explicit_truncate_setting_overrides_the_auto_rule() {
         let mut cfg = cfg();
         cfg.name_truncate = Some(NameTruncate::Middle);
-        assert_eq!(allocate(&cfg, 120).crop(), Crop::Middle);
+        assert_eq!(allocate(&cfg, 120, None).crop(), Crop::Middle);
         cfg.name_truncate = Some(NameTruncate::End);
-        assert_eq!(allocate(&cfg, 20).crop(), Crop::End);
+        assert_eq!(allocate(&cfg, 20, None).crop(), Crop::End);
     }
 
     #[test]
@@ -460,7 +540,7 @@ mod tests {
             ColumnId::Date,
             ColumnId::Ext,
         ];
-        let a = allocate(&cfg, 120);
+        let a = allocate(&cfg, 120, None);
         let ids: Vec<ColumnId> = a.columns().iter().map(|c| c.id).collect();
         assert_eq!(
             ids,
@@ -477,7 +557,7 @@ mod tests {
     fn a_configuration_without_name_still_gets_a_name_column() {
         let mut cfg = cfg();
         cfg.columns.order = vec![ColumnId::Size, ColumnId::Date];
-        let a = allocate(&cfg, 100);
+        let a = allocate(&cfg, 100, None);
         assert_eq!(
             a.columns().first().map(|c| c.id),
             Some(ColumnId::Name),
@@ -491,12 +571,12 @@ mod tests {
         cfg.columns.order = vec![ColumnId::Name, ColumnId::Owner, ColumnId::Group];
         cfg.columns.hide_priority = Vec::new();
         for inner in 0..=80usize {
-            let a = allocate(&cfg, inner);
+            let a = allocate(&cfg, inner, None);
             assert!(a.total_width() <= inner, "inner {inner}");
         }
         // Wide enough for name + owner + group, narrow enough for none of them.
-        assert!(allocate(&cfg, 60).is_visible(ColumnId::Group));
-        assert!(!allocate(&cfg, 20).is_visible(ColumnId::Group));
+        assert!(allocate(&cfg, 60, None).is_visible(ColumnId::Group));
+        assert!(!allocate(&cfg, 20, None).is_visible(ColumnId::Group));
     }
 
     #[test]
@@ -514,8 +594,8 @@ mod tests {
             (ColumnId::Date, 16),
         ]);
         for inner in 0..=200usize {
-            let a = allocate(&full, inner);
-            let b = allocate(&partial, inner);
+            let a = allocate(&full, inner, None);
+            let b = allocate(&partial, inner, None);
             assert_eq!(
                 a.width_of(ColumnId::Attr),
                 b.width_of(ColumnId::Attr),
@@ -533,10 +613,84 @@ mod tests {
     fn owner_and_group_render_without_extra_configuration() {
         let mut cfg = cfg();
         cfg.columns.order = vec![ColumnId::Name, ColumnId::Owner];
-        let a = allocate(&cfg, 100);
+        let a = allocate(&cfg, 100, None);
         assert_eq!(
             a.width_of(ColumnId::Owner),
             Some(default_min_chars(&cfg, ColumnId::Owner))
         );
+    }
+}
+
+#[cfg(test)]
+mod plan_tests {
+    use super::*;
+    use crate::config::Config;
+
+    fn cfg() -> PanelConfig {
+        Config::default().panel
+    }
+
+    fn table_plan() -> ColumnPlan {
+        ColumnPlan {
+            columns: vec![ColumnId::Name, ColumnId::Custom(0), ColumnId::Custom(1)],
+            custom: vec![
+                CustomColumn {
+                    header: "firstname".to_string(),
+                    align: Align::Left,
+                    min_chars: 12,
+                },
+                CustomColumn {
+                    header: "age".to_string(),
+                    align: Align::Right,
+                    min_chars: 4,
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn a_column_the_listing_defined_is_laid_out_from_its_own_words() {
+        // The panel has no idea what `firstname` is. It draws it at the width
+        // the plan asked for, sitting the way the plan said, under the header
+        // the plan gave it - and never learns the word.
+        let plan = table_plan();
+        let a = allocate(&cfg(), 80, Some(&plan));
+        let first = a.columns().iter().find(|c| c.id == ColumnId::Custom(0));
+        let age = a.columns().iter().find(|c| c.id == ColumnId::Custom(1));
+        assert_eq!(first.map(|c| (c.width, c.align)), Some((12, Align::Left)));
+        assert_eq!(age.map(|c| (c.width, c.align)), Some((4, Align::Right)));
+        assert_eq!(plan.header(ColumnId::Custom(0)), "firstname");
+        assert_eq!(plan.header(ColumnId::Custom(1)), "age");
+        assert_eq!(
+            plan.header(ColumnId::Name),
+            "Name",
+            "the panel's own stay its own"
+        );
+        assert_eq!(
+            a.name_width(),
+            80 - 12 - 4 - 2 * SEPARATOR_WIDTH,
+            "and name takes what is left, as it always has"
+        );
+    }
+
+    #[test]
+    fn a_custom_column_narrows_and_drops_by_the_same_rules_as_the_rest() {
+        let plan = table_plan();
+        for inner in 0..=120usize {
+            let a = allocate(&cfg(), inner, Some(&plan));
+            assert!(a.total_width() <= inner, "inner {inner}: {a:?}");
+            assert!(a.is_visible(ColumnId::Name), "name is never dropped");
+        }
+    }
+
+    #[test]
+    fn a_plan_that_forgot_a_definition_still_draws_something() {
+        // `Custom(3)` with only two definitions: the floor, not a panic.
+        let plan = ColumnPlan {
+            columns: vec![ColumnId::Name, ColumnId::Custom(3)],
+            custom: Vec::new(),
+        };
+        let a = allocate(&cfg(), 60, Some(&plan));
+        assert!(a.is_visible(ColumnId::Custom(3)));
     }
 }

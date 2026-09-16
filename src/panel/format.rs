@@ -19,7 +19,7 @@ use chrono::{DateTime, Local};
 
 use crate::config::{AttrStyle, PanelConfig};
 use crate::ops::SizeCache;
-use crate::panel::columns::{Allocation, SEPARATOR};
+use crate::panel::columns::{Allocation, ColumnPlan, SEPARATOR};
 use crate::panel::text::{self, Align, Crop};
 use crate::panel::{ColumnId, SortState, Tab};
 use crate::vfs::{Entry, EntryKind};
@@ -382,6 +382,13 @@ pub fn cell_text(
         ColumnId::GitState => entry
             .git_state
             .map_or_else(String::new, |g| g.flag().to_string()),
+        // The listing's own column: the row carries its value, and a row
+        // that has none for it - `..`, or a backend that promised fewer cells
+        // than columns - draws a blank rather than failing.
+        ColumnId::Custom(n) => entry
+            .cells
+            .get(usize::from(n))
+            .map_or_else(String::new, ToString::to_string),
     }
 }
 
@@ -410,7 +417,7 @@ pub fn render_row(
             } else {
                 Crop::End
             };
-            let align = align_of(col.id);
+            let align = col.align;
             Cell {
                 id: col.id,
                 cropped: text::is_cropped(&raw, col.width),
@@ -441,13 +448,19 @@ pub fn row_text(
 ///
 /// A sorted column that is hidden contributes no arrow here, which is exactly
 /// why the status-line tag from [`SortState::indicator`] exists as well.
-pub fn header_row(alloc: &Allocation, sort: SortState, ascii: bool) -> Vec<Cell> {
+pub fn header_row(
+    alloc: &Allocation,
+    sort: SortState,
+    ascii: bool,
+    plan: Option<&ColumnPlan>,
+) -> Vec<Cell> {
     alloc
         .columns()
         .iter()
         .map(|col| {
-            let raw = sort.header_text(col.id, ascii);
-            let align = align_of(col.id);
+            let name = plan.map_or_else(|| col.id.header(), |p| p.header(col.id));
+            let raw = sort.header_text(col.id, ascii, name);
+            let align = col.align;
             Cell {
                 id: col.id,
                 cropped: text::is_cropped(&raw, col.width),
@@ -460,8 +473,13 @@ pub fn header_row(alloc: &Allocation, sort: SortState, ascii: bool) -> Vec<Cell>
 }
 
 /// The header as a single line.
-pub fn header_text(alloc: &Allocation, sort: SortState, ascii: bool) -> String {
-    join(&header_row(alloc, sort, ascii))
+pub fn header_text(
+    alloc: &Allocation,
+    sort: SortState,
+    ascii: bool,
+    plan: Option<&ColumnPlan>,
+) -> String {
+    join(&header_row(alloc, sort, ascii, plan))
 }
 
 /// Join rendered cells with the one-space column separator.
@@ -791,7 +809,7 @@ mod tests {
         let cfg = cfg();
         let mut e = Entry::file("farfuture");
         e.mtime = Some(UNIX_EPOCH + Duration::from_secs(9_999_999_999_999));
-        let alloc = allocate(&cfg, 100);
+        let alloc = allocate(&cfg, 100, None);
         let line = row_text(&e, &alloc, &cfg, false, true);
         assert_eq!(text::width(&line), alloc.total_width());
     }
@@ -809,7 +827,7 @@ mod tests {
         e.mode = 0o100_644;
         e.mtime = Some(UNIX_EPOCH + Duration::from_secs(1_760_000_000));
         for inner in 0..=200usize {
-            let alloc = allocate(&cfg, inner);
+            let alloc = allocate(&cfg, inner, None);
             let line = row_text(&e, &alloc, &cfg, false, true);
             assert_eq!(
                 text::width(&line),
@@ -823,18 +841,18 @@ mod tests {
     #[test]
     fn the_header_carries_the_arrow_on_the_sorted_column_only() {
         let cfg = cfg();
-        let alloc = allocate(&cfg, 120);
+        let alloc = allocate(&cfg, 120, None);
         let sort = SortState {
             key: crate::panel::SortKey::Column(ColumnId::Ext),
             reverse: false,
             secondary: None,
         };
-        let line = header_text(&alloc, sort, false);
+        let line = header_text(&alloc, sort, false, None);
         assert!(line.contains("\u{25B2}Ext"), "{line}");
         assert!(line.contains("Name"), "{line}");
         assert!(!line.contains("\u{25B2}Name"), "{line}");
 
-        let ascii = header_text(&alloc, sort, true);
+        let ascii = header_text(&alloc, sort, true, None);
         assert!(ascii.contains("^Ext"), "{ascii}");
         assert!(!ascii.contains('\u{25B2}'), "{ascii}");
     }
@@ -939,6 +957,37 @@ mod tests {
             status_text(&tab, &c, false, &empty()),
             "12060 k in 3 files, 1 dir",
             "no separators when the setting is off"
+        );
+    }
+}
+
+#[cfg(test)]
+mod cell_tests {
+    use super::*;
+    use crate::config::Config;
+    use crate::vfs::CellValue;
+
+    #[test]
+    fn a_custom_cell_renders_the_rows_value_and_a_missing_one_draws_blank() {
+        let cfg = Config::default().panel;
+        let mut e = Entry::file("row");
+        e.cells = vec![CellValue::Text("alice".into()), CellValue::Int(42)];
+        assert_eq!(
+            cell_text(&e, ColumnId::Custom(0), &cfg, false, true),
+            "alice"
+        );
+        assert_eq!(cell_text(&e, ColumnId::Custom(1), &cfg, false, true), "42");
+        // A column the row has no value for - `..`, or a short row.
+        assert_eq!(cell_text(&e, ColumnId::Custom(2), &cfg, false, true), "");
+        assert_eq!(
+            cell_text(
+                &Entry::parent_entry(),
+                ColumnId::Custom(0),
+                &cfg,
+                false,
+                true
+            ),
+            ""
         );
     }
 }

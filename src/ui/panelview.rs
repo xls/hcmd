@@ -240,7 +240,7 @@ pub fn draw(f: &mut Frame, app: &App, side: Side, area: Rect) {
     let allocated = columns::allocate(
         &app.config.panel,
         usize::from(r.entries.width),
-        tab.column_plan.as_deref(),
+        tab.column_plan.as_ref(),
     );
     let crop = columns::name_crop(&app.config.panel, &allocated);
 
@@ -478,7 +478,11 @@ fn draw_header(
             body.push(' ');
         }
         let sorted = tab.sort.key == SortKey::Column(col.id);
-        let head = columns::header_text(col.id, sorted, tab.sort.reverse, g);
+        let name = tab
+            .column_plan
+            .as_ref()
+            .map_or_else(|| col.id.header(), |p| p.header(col.id));
+        let head = columns::header_text(name, sorted, tab.sort.reverse, g);
         body.push_str(&columns::fit_cell(&head, *col, Crop::End, g));
     }
     let body = text::fit_left(&body, usize::from(area.width), Crop::End, g.ellipsis());
