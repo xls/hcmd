@@ -427,6 +427,18 @@ impl VfsRouter {
                 let fs = crate::vfs::git::GitFs::open(path.clone())?;
                 Ok(Arc::new(fs) as Arc<dyn Vfs>)
             }
+            // The database the outer segment names, reopened per call: a
+            // `Connection` is neither `Sync` nor cheap to hold across a panel
+            // leaving the file, and every read opens its own anyway.
+            #[cfg(feature = "sqlite")]
+            BackendKind::Sqlite => {
+                let fs = crate::vfs::sqlite::SqliteFs::open(path.clone())?;
+                Ok(Arc::new(fs) as Arc<dyn Vfs>)
+            }
+            #[cfg(not(feature = "sqlite"))]
+            BackendKind::Sqlite => {
+                Err(Error::msg("this build was compiled without SQLite support"))
+            }
             // An explicit arm per backend as v0.6 made it: a connection that
             // has been closed names nothing, and the message says so rather
             // than listing `/`.
@@ -501,6 +513,20 @@ impl Vfs for VfsRouter {
             // A registered listing is a `Vfs` like any other, and streaming
             // from it is what makes the "results stream back over
             // a channel" the ordinary directory-read channel.
+            // A listing whose backend opens cheaply and streams itself: the
+            // synthetic one, git history, and a database (when built in).
+            #[cfg(feature = "sqlite")]
+            BackendKind::List | BackendKind::Git | BackendKind::Sqlite => {
+                return match self.backend_for(path) {
+                    Ok(listing) => {
+                        self.capabilities
+                            .remember(path, listing.capabilities_for(path));
+                        listing.read_dir(path)
+                    }
+                    Err(err) => failed_listing(err),
+                };
+            }
+            #[cfg(not(feature = "sqlite"))]
             BackendKind::List | BackendKind::Git => {
                 return match self.backend_for(path) {
                     Ok(listing) => {
@@ -510,6 +536,12 @@ impl Vfs for VfsRouter {
                     }
                     Err(err) => failed_listing(err),
                 };
+            }
+            #[cfg(not(feature = "sqlite"))]
+            BackendKind::Sqlite => {
+                return failed_listing(Error::msg(
+                    "this build was compiled without SQLite support",
+                ));
             }
             // The remote backend already returns its receiver immediately and
             // puts itself on the blocking pool, so the archive arm's extra

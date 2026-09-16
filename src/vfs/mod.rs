@@ -31,6 +31,8 @@ pub mod image;
 pub mod list;
 pub mod local;
 pub mod router;
+#[cfg(feature = "sqlite")]
+pub mod sqlite;
 pub mod users;
 
 use std::fmt;
@@ -81,6 +83,12 @@ pub enum BackendKind {
     /// partition is a segment, not a directory inside one". An image with no
     /// partition table has one segment and it is the filesystem's root.
     Image,
+    /// The inside of one SQLite database. `db.sqlite#sqlite/` lists its
+    /// tables; a table is a directory of rows; a row reads as its JSON. A
+    /// segment of this kind addresses the database file every segment above it
+    /// names. Read-only entirely: a file manager browses a database, it does
+    /// not edit one by copying onto it.
+    Sqlite,
     /// One repository's history: commits, and the files each one touched.
     ///
     /// A segment of this kind addresses the git object store of the repository
@@ -98,6 +106,7 @@ impl BackendKind {
             Self::Local => "local",
             Self::List => "list",
             Self::Git => "git",
+            Self::Sqlite => "sqlite",
             Self::Archive => "archive",
             Self::Remote(_) => "remote",
             Self::Image => "image",
@@ -115,7 +124,14 @@ impl BackendKind {
     pub const fn container_is_a_directory(&self) -> bool {
         match self {
             Self::Git => true,
-            Self::Local | Self::List | Self::Archive | Self::Image | Self::Remote(_) => false,
+            // A database is a file, like an archive: leaving it lands on the
+            // directory that holds it, not on the file itself.
+            Self::Local
+            | Self::List
+            | Self::Archive
+            | Self::Image
+            | Self::Remote(_)
+            | Self::Sqlite => false,
         }
     }
 
@@ -150,6 +166,9 @@ impl BackendKind {
             // materialised whole from the object store. The feature, not a
             // placeholder.
             Self::Git => Capabilities::GIT,
+            // A database of tables of rows: directories, read-only, and a walk
+            // across every row of every table is never what "find here" means.
+            Self::Sqlite => Capabilities::SQLITE,
         }
     }
 }
@@ -904,6 +923,24 @@ impl Capabilities {
         links: false,
         settable_mode: false,
         walkable: true,
+        latency: LatencyClass::Local,
+    };
+
+    /// The inside of a SQLite database: read-only, a tree of tables and rows,
+    /// each row materialised as JSON so a seek within one is free. Not
+    /// walkable - a recursive descent would pour every row of every table into
+    /// the panel.
+    pub const SQLITE: Self = Self {
+        writable: false,
+        seekable: true,
+        random_access: false,
+        atomic_rename: false,
+        has_directories: true,
+        paged_listing: false,
+        can_execute: false,
+        links: false,
+        settable_mode: false,
+        walkable: false,
         latency: LatencyClass::Local,
     };
 

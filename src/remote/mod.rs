@@ -108,9 +108,11 @@ impl RemoteId {
             // An image keeps its connection segment outermost, and that
             // segment is what this finds; an `Image` segment itself never
             // names a connection.
-            BackendKind::Local | BackendKind::List | BackendKind::Archive | BackendKind::Image => {
-                None
-            }
+            BackendKind::Local
+            | BackendKind::List
+            | BackendKind::Archive
+            | BackendKind::Image
+            | BackendKind::Sqlite => None,
         })
     }
 }

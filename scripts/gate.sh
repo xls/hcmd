@@ -180,8 +180,14 @@ binary-size)
   # them, readable and diffable at that commit - which is a feature the owner
   # asked for outright, and there is no cheaper way to walk a real object store
   # than the crate that already reads it.
+  #
+  # 33.7 MB buys the SQLite backend: browsing a database as directories, rows
+  # as JSON, with rusqlite's bundled amalgamation (~2 MB, the one C library
+  # admitted by name). It is a default-on feature; a build with
+  # --no-default-features drops it and measures ~31.7 MB, so the ceiling holds
+  # for both and the owner agreed to 35 MB.
   b=$(stat -c %s target/release/hcmd)
-  [ "$b" -lt 31500000 ] || { echo "binary is $b bytes, expected under 31500000"; exit 1; }
+  [ "$b" -lt 35000000 ] || { echo "binary is $b bytes, expected under 35000000"; exit 1; }
   echo "BINARY-SIZE-OK bytes=$b"
   ;;
 

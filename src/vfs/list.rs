@@ -471,7 +471,9 @@ fn entry_for(path: VfsPath) -> Entry {
         | BackendKind::Archive
         | BackendKind::Remote(_)
         | BackendKind::Image
-        | BackendKind::Git => None,
+        | BackendKind::Git
+        // A database row is the same case: it needs the open `SqliteFs`.
+        | BackendKind::Sqlite => None,
     };
     let mut entry = stated.unwrap_or_else(|| {
         let name = path.file_name().unwrap_or_else(|| path.to_string());

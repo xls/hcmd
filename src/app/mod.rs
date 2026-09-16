@@ -1157,7 +1157,24 @@ fn container_kind(name: &str) -> Option<BackendKind> {
     if crate::vfs::image::format::looks_like_image_name(name) {
         return Some(BackendKind::Image);
     }
+    #[cfg(feature = "sqlite")]
+    if looks_like_sqlite_name(name) {
+        return Some(BackendKind::Sqlite);
+    }
     None
+}
+
+/// Whether a name is worth opening as a database on `Enter`.
+///
+/// The name is a hint, as it is for archives and images: the content decides,
+/// one frame later, and the panel goes back if the file was not a database
+/// after all. `Ctrl+PgDn` opens one whose extension says nothing.
+#[cfg(feature = "sqlite")]
+fn looks_like_sqlite_name(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    [".sqlite", ".sqlite3", ".db", ".db3"]
+        .iter()
+        .any(|ext| lower.ends_with(ext))
 }
 
 /// The name to put the cursor on when a path is left.

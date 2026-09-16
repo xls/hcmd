@@ -192,7 +192,8 @@ impl RemoteFs {
                 | BackendKind::List
                 | BackendKind::Archive
                 | BackendKind::Image
-                | BackendKind::Git,
+                | BackendKind::Git
+                | BackendKind::Sqlite,
                 _,
             ) => {
                 return Err(Error::InvalidPath(format!(

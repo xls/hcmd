@@ -81,6 +81,15 @@ liblzma              = { version = "0.4.8", features = ["static"] }
 zstd                 = "0.13.3"
 bzip2                = "0.6.1"
 sevenz-rust2         = "0.22.2"
+# SQLite, read-only, for the database listing backend. The one C library the
+# design admits by name rather than by the "pure Rust wherever credible" rule:
+# reading the file format by hand would re-implement WAL, overflow pages and
+# WITHOUT ROWID for no gain, against the most-tested C there is. Bundled, so
+# it cross-compiles through the same cc path zstd and liblzma already take, and
+# adds ~2 MB. No writing, ever.
+rusqlite             = { version = "0.40.2", features = ["bundled"], optional = true }
+# Row-to-JSON for the sqlite backend; already in the tree transitively.
+serde_json           = { version = "1.0.151", optional = true }
 unrar                = "0.5.8"
 
 # The design: search runs in-process on ripgrep's own libraries. This is
@@ -323,3 +332,12 @@ type_complexity = "deny"
 # down where the other severities are, not left for the next reader to
 # rediscover as an omission.
 # ---------------------------------------------------------------------------
+
+[features]
+# Browse SQLite databases as directories. On by default; a distribution that
+# forbids C can build a fully pure-Rust binary with `--no-default-features`,
+# and everything else - archives, images, the viewer - is unaffected. The one
+# optional dependency the crate has, and the one bundled C library.
+default = ["sqlite"]
+sqlite = ["dep:rusqlite", "dep:serde_json"]
+
