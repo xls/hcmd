@@ -410,6 +410,20 @@ impl Vfs for SqliteFs {
         }
     }
 
+    fn copy_name(&self, path: &VfsPath) -> Option<String> {
+        // `<database>.<table>.<row>`: the row sitting in another panel says
+        // where it came from, which `10000.json` on its own would not.
+        let Location::Rows(tail) = Self::locate(path) else {
+            return None;
+        };
+        let (table, row) = split_row(&tail);
+        if row.is_empty() {
+            return None;
+        }
+        let db = self.file.file_name()?.to_string_lossy();
+        Some(format!("{db}.{table}.{row}"))
+    }
+
     fn describe(&self, path: &VfsPath) -> Option<String> {
         let db = self
             .file

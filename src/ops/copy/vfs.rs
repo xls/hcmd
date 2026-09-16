@@ -77,7 +77,10 @@ pub(super) fn run_through_vfs(
         // under the cursor to the other panel's directory", and the archive's
         // root is the archive. Its contents go into the destination itself
         // rather than into a directory named after a name it does not have.
-        let target = match source.file_name() {
+        // The backend may have a better name for the copy than the path's own -
+        // a database row carries its database and table. `file_name` otherwise.
+        let copy_name = vfs.copy_name(source).or_else(|| source.file_name());
+        let target = match copy_name {
             Some(_) if names_the_target => dest.clone(),
             Some(name) => dest.join(&name),
             None => dest.clone(),

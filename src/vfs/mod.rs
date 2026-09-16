@@ -1057,6 +1057,18 @@ pub trait Vfs: Send + Sync {
         None
     }
 
+    /// The name a row copies out under, or `None` for its own file name.
+    ///
+    /// A file keeps its name. A database row has none of its own worth
+    /// keeping, since `10000.json` says nothing about where it came from once
+    /// it is sitting in another directory, so the sqlite backend answers the
+    /// lineage here (`employee.db.employee.10000.json`) and a copied row
+    /// carries its database and table with it. The copy engine asks, and knows
+    /// no backend by name.
+    fn copy_name(&self, _path: &VfsPath) -> Option<String> {
+        None
+    }
+
     /// What the panel's header should call this listing, or `None` for the
     /// path as written.
     ///

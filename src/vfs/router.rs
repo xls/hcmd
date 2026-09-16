@@ -740,6 +740,12 @@ impl Vfs for VfsRouter {
         }
     }
 
+    /// Straight through to whichever backend owns the path: what a row copies
+    /// out as is its own business.
+    fn copy_name(&self, path: &VfsPath) -> Option<String> {
+        self.backend_for(path).ok()?.copy_name(path)
+    }
+
     /// Straight through to whichever backend owns the path: what a listing is
     /// called is its own business.
     fn describe(&self, path: &VfsPath) -> Option<String> {

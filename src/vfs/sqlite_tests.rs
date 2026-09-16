@@ -188,3 +188,22 @@ async fn a_column_name_with_a_quote_in_it_cannot_break_the_query() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_row_copies_out_under_its_database_and_table() {
+    // Your example: employee.db, table employee, row 10000 -> a file named
+    // employee.db.employee.10000.json in the other panel. The listing name
+    // stays 10000.json; only what it copies to carries the lineage.
+    let Some((file, fs)) = fixture("copyname") else {
+        return;
+    };
+    let row = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/people/2.json");
+    assert_eq!(
+        fs.copy_name(&row).as_deref(),
+        Some("data.sqlite.people.2.json")
+    );
+    // The table itself and the root have no copy name of their own.
+    let table = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/people");
+    assert_eq!(fs.copy_name(&table), None);
+    let _ = std::fs::remove_dir_all(file.parent().unwrap_or(&file));
+}
