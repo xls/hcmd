@@ -2,6 +2,14 @@
 
 Notable changes per release, one line each. Newest first.
 
+## v0.10.0
+
+- Browse a SQLite database as directories: Enter a `.db`/`.sqlite` file to list its tables, enter a table to stream its rows, and each row reads as JSON with F3 and copies out as `<database>.<table>.<id>.json` with F5. Read-only.
+- A table's own first columns become the panel's columns, so Ctrl+2 sorts by the second column of the database and Ctrl+3 by the third, like any other column.
+- The SQLite backend is a default-on `sqlite` build feature; `cargo build --no-default-features` produces a pure-Rust binary without it, and everything else is unaffected.
+- A listing can now define its own columns rather than only choosing among the panel's built-in ones, with per-row values that sort as numbers or text.
+- A backend can suggest the format the viewer reads a row as, so a database row named `10000` still opens as highlighted JSON.
+
 ## v0.9.13
 
 - Holding Ins in a large directory no longer skips rows or marks them twice: a rescan that finished while you were moving used to put the cursor back where it had been when the rescan started.

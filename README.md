@@ -122,6 +122,10 @@ is still recognised.
 Explore **ISO, FAT, ext2/3/4 and SquashFS disk images**, including GPT and MBR
 partitions, with read-only browsing. Find the file you need and copy it out.
 
+Open a **SQLite database** the same way: enter it to list its tables, enter a
+table to stream its rows, sort by the table's own columns, and read or copy any
+row out as JSON. Read-only, and an optional build feature.
+
 ### Bring your servers into the same workflow
 
 Connect over **SFTP, FTP, FTPS, SMB2/3, S3 or WebDAV**, then browse, view and copy

@@ -136,6 +136,27 @@ Rust will reject.
 
 Read-only is the feature, not a stage of one: there is no write path to disable.
 
+## SQLite databases (read-only)
+
+A `.db`, `.sqlite`, `.sqlite3` or `.db3` file browses like a directory.
+Detection is by content, so a database with any name opens on `Ctrl+PgDn`.
+
+- The root lists the tables and views. A table is a directory of its rows.
+- A row is named for its id - the rowid, or its position for a `WITHOUT ROWID`
+  table - and reads as the pretty JSON of its whole record on `F3`.
+- `F5` copies a row out as `<database>.<table>.<id>.json`, so it says where it
+  came from; copying a table makes a folder with one JSON per row.
+- A table's own first columns become the panel's columns, headed by their real
+  names, so `Ctrl+<n>` sorts by them - `Ctrl+2` by the second column of the
+  database - and each value sorts as a number or as text as its type dictates.
+- Read directly with the SQLite library, so the write-ahead log, overflow pages
+  and `WITHOUT ROWID` tables are all handled. Read-only, entirely: there is no
+  write path.
+
+An optional build feature, on by default. `cargo build --no-default-features`
+produces a binary without it - and without the one C library the project
+otherwise avoids - leaving everything else untouched.
+
 ## Remote
 
 - **SFTP** over SSH, in process (`russh`), with `known_hosts` checking including
