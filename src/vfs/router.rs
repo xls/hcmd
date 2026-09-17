@@ -732,11 +732,18 @@ impl Vfs for VfsRouter {
     /// can share a name and which has nowhere "up" to go, would have been given
     /// a `..` anyway.
     fn parent_row(&self, path: &VfsPath) -> Option<Entry> {
-        match self.backend_for(path) {
-            Ok(backend) => backend.parent_row(path),
-            // Nothing could be opened, so nothing can say. The default is the
-            // honest answer: a path with a parent has a way back to it.
-            Err(_) => path.parent().is_some().then(Entry::parent_entry),
+        // Answered structurally, and deliberately without opening the backend.
+        // Opening one here to ask a question whose answer is structural had a
+        // real cost: an archive on a remote had to be *downloaded* before its
+        // `..` row could be produced, and because the read path asks for it up
+        // front and inline, that download blocked the read - no `..`, no way
+        // out, no error, just "reading" forever. The `..` a backend produces is
+        // the default one in every case but the flat listing, whose kind the
+        // path already names, so nothing has to be opened to know it.
+        match path.backend() {
+            // A flat listing (search results, a branch view) has nowhere up.
+            BackendKind::List => None,
+            _ => path.parent().is_some().then(Entry::parent_entry),
         }
     }
 

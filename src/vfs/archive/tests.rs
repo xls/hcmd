@@ -99,6 +99,35 @@ fn inside(container: &Path, member: &str) -> VfsPath {
 }
 
 #[tokio::test]
+async fn producing_the_parent_row_of_an_archive_opens_nothing() {
+    // The `..` row is navigation, and the read path asks the router for it up
+    // front and inline. Opening the archive to produce it - downloading it, for
+    // one on a remote - blocked the read at "reading" with no `..`, no error
+    // and no way out. It is answered structurally now, so a router that has
+    // never opened an archive still offers the way out of one.
+    let tree = TempTree::new("parent-no-open");
+    let container = tree.path("box.zip");
+    write_zip(&container, &[("hello.txt", b"hi")]);
+    let cfg = crate::config::Config::default();
+    let router = crate::vfs::router::VfsRouter::new(cfg.archive.clone(), cfg.remote.clone());
+    let root = inside(&container, "/");
+
+    let parent = Vfs::parent_row(&router, &root);
+    assert!(
+        parent.is_some_and(|e| e.is_parent),
+        "the way out of the archive is offered"
+    );
+    assert!(
+        router.open_session().is_none(),
+        "no archive session was even created to answer a structural question"
+    );
+
+    // A flat listing still reports no way up.
+    let results = VfsPath::new(BackendKind::List, "/7");
+    assert!(Vfs::parent_row(&router, &results).is_none());
+}
+
+#[tokio::test]
 async fn entering_an_archive_lists_it_like_a_directory() {
     let tree = TempTree::new("enter");
     let container = tree.path("foo.zip");
