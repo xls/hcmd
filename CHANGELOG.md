@@ -2,6 +2,11 @@
 
 Notable changes per release, one line each. Newest first.
 
+## v0.12.0
+
+- On an [Omarchy](https://omarchy.org/) desktop, an `omarchy` theme paints the panel from the desktop's own colour scheme; it is built from the live palette rather than fetched from the repository, and appears in the `Alt+T` picker only where Omarchy is installed.
+- The omarchy theme follows the desktop: changing the desktop theme recolours a running session in place, through a small `theme-set` hook hcmd installs itself and a `SIGUSR1` reload.
+
 ## v0.11.0
 
 - The default theme is now tokyo-night; the blue theme and the other twenty still ship, `Alt+T` switches between them, and `HCMD_THEME` forces one for a single run.
