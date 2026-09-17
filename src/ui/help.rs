@@ -529,9 +529,15 @@ pub fn about_page() -> String {
             "release"
         }
     ));
+    out.push_str(&format!(
+        "  by Thomas Rizos\n  https://github.com/{}\n\n",
+        crate::net::REPO
+    ));
     out.push_str("Inspired by Total Commander and every two-panel manager before it. We\n");
     out.push_str("kept the muscle memory: the default keys are mapped to Total\n");
     out.push_str("Commander's. You're welcome.\n\n");
+    out.push_str("With thanks to Christian Ghisler, who has maintained Total Commander\n");
+    out.push_str("all these years.\n\n");
     out.push_str("Built against:\n\n");
     for (name, version, what) in CRATE_VERSIONS {
         out.push_str(&format!("  {name:<26}{version:<10}{what}\n"));
@@ -549,7 +555,9 @@ pub fn about_page() -> String {
         "Checking for a newer release asks GitHub for the latest tag and says\n\
          so once per version, with the command that installs it. It downloads\n\
          nothing and never replaces this binary - the install command is\n\
-         yours to run. Which version you have been told about is remembered\n\
+         yours to run. The check also runs once at startup, blinking a notice\n\
+         on the right status bar when one is out (ui.check_for_updates = false\n\
+         turns that off). Which version you have been told about is remembered\n\
          in update.toml; delete that file to hear it again.\n\n",
     );
     out
@@ -1734,6 +1742,14 @@ mod tests {
         assert!(page.contains(crate::VERSION), "{page}");
         assert!(page.contains(crate::BIN_NAME), "{page}");
         assert!(page.contains(crate::APP_NAME), "the product name: {page}");
+        // The author, the repository, and the debt to Total Commander's own
+        // maintainer.
+        assert!(page.contains("Thomas Rizos"), "the author: {page}");
+        assert!(
+            page.contains(&format!("github.com/{}", crate::net::REPO)),
+            "the repository: {page}"
+        );
+        assert!(page.contains("Christian Ghisler"), "the thanks: {page}");
         for name in ["ratatui", "russh", "mime_guess / infer"] {
             assert!(page.contains(name), "{name} missing:\n{page}");
         }
