@@ -104,9 +104,7 @@ fn the_message_names_the_version_and_the_command_that_installs_it() {
     let said = notice("v0.1.1");
     assert!(said.contains("v0.1.1"), "{said}");
     assert!(
-        said.contains(
-            "curl -fsSL https://raw.githubusercontent.com/xls/hcmd/main/install.sh | sh"
-        ),
+        said.contains("curl -fsSL https://raw.githubusercontent.com/xls/hcmd/main/install.sh | sh"),
         "{said}"
     );
 }
