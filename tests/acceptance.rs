@@ -118,19 +118,20 @@ mod keys {
 ///
 /// A cursor bar is a *background style*, so it does not appear in the screen's
 /// plain text at all; reading the cell colours is the only honest way to check
-/// "the cursor is here, drawn like this". These are `themes/blue.toml`
-/// verbatim, and `COLORTERM=truecolor` keeps them unquantised.
+/// "the cursor is here, drawn like this". These are `themes/tokyo-night.toml`
+/// verbatim - the shipped default theme - and `COLORTERM=truecolor` keeps them
+/// unquantised.
 mod paint {
     /// `panel.cursor_bg` - the focused panel's cursor bar.
-    pub const CURSOR_FOCUSED: (u8, u8, u8) = (0x00, 0xA8, 0xA8);
+    pub const CURSOR_FOCUSED: (u8, u8, u8) = (0x7A, 0xA2, 0xF7);
     /// `panel.cursor_bg_unfocused` - the active panel's bar while the command
     /// line has focus. Dimmer, never absent.
-    pub const CURSOR_UNFOCUSED: (u8, u8, u8) = (0x00, 0x78, 0x78);
+    pub const CURSOR_UNFOCUSED: (u8, u8, u8) = (0x33, 0x46, 0x7C);
     /// `panel.inactive_cursor_bg` - the third, weaker style on the panel that
     /// is not active.
-    pub const CURSOR_INACTIVE: (u8, u8, u8) = (0x20, 0x20, 0xB0);
+    pub const CURSOR_INACTIVE: (u8, u8, u8) = (0x26, 0x30, 0x51);
     /// `cmdline.caret_unfocused` - the painted command-line caret.
-    pub const CARET_UNFOCUSED: (u8, u8, u8) = (0xA0, 0xA0, 0xA0);
+    pub const CARET_UNFOCUSED: (u8, u8, u8) = (0x56, 0x5F, 0x89);
 }
 
 // ---------------------------------------------------------------------------
@@ -591,8 +592,8 @@ impl Session {
     /// The trimmed text of the row painted in `bg` - that is, the entry a
     /// cursor bar is sitting on. `None` when nothing carries that background.
     ///
-    /// Only the rows above the command line are searched. The blue theme paints
-    /// `keybar.label_bg` in the same `#00A8A8` as `panel.cursor_bg`, so a scan
+    /// Only the rows above the command line are searched. The tokyo-night theme
+    /// paints `keybar.label_bg` in the same `#7AA2F7` as `panel.cursor_bg`, so a scan
     /// of the whole screen would report the key bar as a cursor bar and the
     /// "the focused style is gone" half of the design could never be
     /// checked.

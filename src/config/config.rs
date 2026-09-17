@@ -159,7 +159,7 @@ pub struct UiConfig {
 impl Default for UiConfig {
     fn default() -> Self {
         Self {
-            theme: "blue".to_string(),
+            theme: "tokyo-night".to_string(),
             ascii_borders: false,
             show_menubar: false,
             show_keybar: true,

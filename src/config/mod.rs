@@ -49,8 +49,9 @@ pub use units::{ByteSize, Timeout};
 pub const EXAMPLE_CONFIG: &str = include_str!("../../examples/config.toml");
 /// The shipped `keymap.toml`, which is also the compiled-in default layout.
 pub const EXAMPLE_KEYMAP: &str = include_str!("../../examples/keymap.toml");
-/// The shipped blue theme, which is also [`Theme::blue`].
-pub const EXAMPLE_THEME_BLUE: &str = include_str!("../../themes/blue.toml");
+/// The default theme, written out on first run as an editable copy of what the
+/// program starts on. `ui.theme` defaults to `tokyo-night`, so this is it.
+pub const EXAMPLE_THEME_DEFAULT: &str = include_str!("../../themes/tokyo-night.toml");
 
 /// The themes that ship with the program, compiled in.
 ///
@@ -317,14 +318,14 @@ fn read_optional(path: &Path, warnings: &mut Vec<String>) -> Option<String> {
     }
 }
 
-/// Create `config.toml`, `keymap.toml` and `themes/blue.toml` if they are
+/// Create `config.toml`, `keymap.toml` and `themes/tokyo-night.toml` if they are
 /// missing. Returns warnings; never fails.
 ///
 /// `config.toml` is written **commented out**, which is what "commented
 /// defaults" means and is also what keeps it honest: several values in
 /// `examples/config.toml` disagree with the design (see
 /// [`crate::config::config`]), and a fully commented file cannot disagree with
-/// anything. `keymap.toml` and `themes/blue.toml` are written verbatim, because
+/// anything. `keymap.toml` and `themes/tokyo-night.toml` are written verbatim, because
 /// they match the compiled-in defaults exactly and are files people edit.
 pub fn ensure_default_files(dir: &Path) -> Vec<String> {
     let mut warnings = Vec::new();
@@ -355,8 +356,8 @@ pub fn ensure_default_files(dir: &Path) -> Vec<String> {
             comment_out(EXAMPLE_KEYMAP, "key bindings"),
         ),
         (
-            dir.join("themes").join("blue.toml"),
-            EXAMPLE_THEME_BLUE.to_string(),
+            dir.join("themes").join("tokyo-night.toml"),
+            EXAMPLE_THEME_DEFAULT.to_string(),
         ),
     ];
 
@@ -1580,7 +1581,7 @@ mod tests {
     #[test]
     fn the_shipped_example_config_deserializes_completely() {
         let cfg: Config = toml::from_str(EXAMPLE_CONFIG).expect("examples/config.toml parses");
-        assert_eq!(cfg.ui.theme, "blue");
+        assert_eq!(cfg.ui.theme, "tokyo-night");
         assert_eq!(cfg.panel.max_tabs, 9);
         assert_eq!(cfg.panel.columns.order.first(), Some(&ColumnId::Name));
         assert_eq!(cfg.viewer.index_chunk, ByteSize::mib(1));
@@ -1736,7 +1737,7 @@ mod tests {
     fn a_partial_file_keeps_every_other_default() {
         let cfg: Config = toml::from_str("[panel]\nmax_tabs = 3\n").expect("partial config");
         assert_eq!(cfg.panel.max_tabs, 3);
-        assert_eq!(cfg.ui.theme, "blue");
+        assert_eq!(cfg.ui.theme, "tokyo-night");
         assert!(cfg.ui.show_keybar);
         assert_eq!(cfg.panel.columns.order.len(), 6);
     }
@@ -1767,7 +1768,7 @@ mod tests {
         fs::create_dir_all(&dir).expect("temp dir");
         fs::write(dir.join("config.toml"), "this is not = = toml").expect("write");
         let loaded = load_from(&dir);
-        assert_eq!(loaded.config.ui.theme, "blue");
+        assert_eq!(loaded.config.ui.theme, "tokyo-night");
         assert!(!loaded.warnings.is_empty());
         assert!(loaded.warnings.iter().any(|w| w.contains("config.toml")));
         let _ = fs::remove_dir_all(&dir);
@@ -1781,14 +1782,16 @@ mod tests {
         assert!(warnings.is_empty(), "{warnings:?}");
         assert!(dir.join("config.toml").exists());
         assert!(dir.join("keymap.toml").exists());
-        assert!(dir.join("themes").join("blue.toml").exists());
+        assert!(dir.join("themes").join("tokyo-night.toml").exists());
 
         let loaded = load_from(&dir);
         assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
         // The created config.toml is entirely commented, so the compiled-in
         // the design defaults apply.
         assert!(!loaded.config.panel.human_sizes);
-        assert_eq!(loaded.theme, Theme::blue());
+        // The default theme is tokyo-night, written out and read back verbatim.
+        assert_eq!(loaded.config.ui.theme, "tokyo-night");
+        assert_eq!(loaded.theme.name, "tokyo-night");
         let _ = fs::remove_dir_all(&dir);
     }
 

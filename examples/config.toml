@@ -11,7 +11,7 @@
 # Chrome and layout.
 [ui]
 # Theme name; loaded from `themes/<name>.toml`.
-theme = "blue"
+theme = "tokyo-night"
 # `+-|` instead of box drawing, and `...`/`^`/`v` instead of `…`/`▲`/`▼`.
 ascii_borders = false
 # Keep the menu bar permanently visible. `F9` summons it either way.
