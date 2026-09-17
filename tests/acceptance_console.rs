@@ -262,6 +262,7 @@ impl Session {
         let mut cmd = CommandBuilder::new(env!("CARGO_BIN_EXE_hcmd"));
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
+        cmd.env("HCMD_THEME", "blue");
         // Pin the locale so `ui.ascii_borders` resolves the same way on every
         // machine: the assertions read `│` and `▲`.
         cmd.env("LANG", "en_US.UTF-8");

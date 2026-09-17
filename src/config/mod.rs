@@ -44,6 +44,31 @@ pub use paths::{config_dir, start_dir, state_dir};
 pub use theme::{ColorDepth, Named16, Rgb, Theme};
 pub use units::{ByteSize, Timeout};
 
+/// Environment variable that forces the theme for one run, overriding the
+/// configured one. For a screenshot, a demo, or a test that needs a known
+/// theme whatever the shipped default is.
+pub const THEME_ENV: &str = "HCMD_THEME";
+
+/// The theme to load: the one [`THEME_ENV`] forces, or the configured one.
+///
+/// An unset or blank `HCMD_THEME` leaves the configured theme alone, so setting
+/// it to the empty string is the same as not setting it - a shell that exports
+/// it empty does not silently pick a theme nobody named.
+fn forced_theme(configured: String, forced: Option<std::ffi::OsString>) -> String {
+    match forced {
+        Some(value) => {
+            let value = value.to_string_lossy();
+            let value = value.trim();
+            if value.is_empty() {
+                configured
+            } else {
+                value.to_string()
+            }
+        }
+        None => configured,
+    }
+}
+
 /// The `examples/` files, embedded so the binary is self-contained
 /// (missing files are created on first run).
 pub const EXAMPLE_CONFIG: &str = include_str!("../../examples/config.toml");
@@ -260,6 +285,18 @@ pub fn load_from(dir: &Path) -> Loaded {
         None => Keymap::builtin(),
     };
     warnings.extend(keymap.warnings.iter().cloned());
+
+    // A theme forced for this run through `HCMD_THEME`, overriding the file.
+    // The `Alt+T` picker is how a person changes their theme for good, by
+    // writing it to the config; this is for the times a theme is wanted for one
+    // run without touching that - a screenshot, a demo, or a test that reads
+    // the cursor bar out of the cell colours and needs a known theme whatever
+    // the shipped default happens to be. It takes the same shape as
+    // `HCMD_KEYBOARD_PROTOCOL`, which overrides detection the same way.
+    config.ui.theme = forced_theme(
+        std::mem::take(&mut config.ui.theme),
+        std::env::var_os(THEME_ENV),
+    );
 
     // --------------------------------------------------- themes/<n>.toml ----
     let theme_path = dir.join("themes").join(format!("{}.toml", config.ui.theme));
@@ -1772,6 +1809,28 @@ mod tests {
         assert!(!loaded.warnings.is_empty());
         assert!(loaded.warnings.iter().any(|w| w.contains("config.toml")));
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn hcmd_theme_forces_the_theme_and_a_blank_one_does_not() {
+        use std::ffi::OsString;
+        // Set, it wins over the configured theme.
+        assert_eq!(
+            forced_theme("tokyo-night".to_string(), Some(OsString::from("blue"))),
+            "blue"
+        );
+        // Whitespace is trimmed off the name a shell might pad.
+        assert_eq!(
+            forced_theme("tokyo-night".to_string(), Some(OsString::from(" dracula "))),
+            "dracula"
+        );
+        // Unset or blank leaves the configured one alone, so an exported-empty
+        // variable does not silently pick a theme nobody named.
+        assert_eq!(forced_theme("tokyo-night".to_string(), None), "tokyo-night");
+        assert_eq!(
+            forced_theme("tokyo-night".to_string(), Some(OsString::from("   "))),
+            "tokyo-night"
+        );
     }
 
     #[test]

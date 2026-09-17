@@ -343,6 +343,7 @@ impl Session {
         let mut cmd = CommandBuilder::new(env!("CARGO_BIN_EXE_hcmd"));
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
+        cmd.env("HCMD_THEME", "blue");
         cmd.env("LANG", "en_US.UTF-8");
         cmd.env("LC_ALL", "en_US.UTF-8");
         cmd.env("HCMD_KEYBOARD_PROTOCOL", "enhanced");

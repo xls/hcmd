@@ -187,6 +187,7 @@ fn run_in_pty(run: Run<'_>) -> (vt100::Parser, bool) {
     let mut cmd = CommandBuilder::new(env!("CARGO_BIN_EXE_hcmd"));
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
+    cmd.env("HCMD_THEME", "blue");
     // A bare pty answers no capability query, so `auto` would spend its whole
     // timeout waiting and then decide "legacy" anyway. Say so up front, and the
     // tests exercise the legacy encodings deliberately rather than by accident.

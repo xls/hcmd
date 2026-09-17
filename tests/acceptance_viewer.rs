@@ -268,6 +268,11 @@ struct Launch {
     rows: u16,
     cwd: PathBuf,
     config: String,
+    /// The theme this child loads, forced through `HCMD_THEME` so it is a known
+    /// one whatever the shipped default is - `blue` unless a test asks for
+    /// another. Carried by the environment rather than the config so a test's
+    /// own `config` cannot collide with a second `[ui]` section.
+    theme_name: String,
     /// `panel.cursor_bg` for whatever theme this child will load, because the
     /// panel's cursor bar is a background and is read back out of the cells.
     cursor_bg: (u8, u8, u8),
@@ -280,6 +285,7 @@ impl Launch {
             rows,
             cwd: cwd.into(),
             config: NO_CONSOLE.to_string(),
+            theme_name: "blue".to_string(),
             cursor_bg: paint::CURSOR_FOCUSED,
         }
     }
@@ -293,8 +299,7 @@ impl Launch {
     /// Select one of the shipped themes, and tell the harness what
     /// its cursor bar looks like.
     fn theme(mut self, theme: &ThemeCase) -> Self {
-        self.config
-            .push_str(&format!("[ui]\ntheme = \"{}\"\n", theme.name));
+        self.theme_name = theme.name.to_string();
         self.cursor_bg = theme.cursor_bg;
         self
     }
@@ -329,6 +334,7 @@ impl Session {
             rows,
             cwd,
             config,
+            theme_name,
             cursor_bg,
         } = launch;
 
@@ -353,6 +359,7 @@ impl Session {
         let mut cmd = CommandBuilder::new(env!("CARGO_BIN_EXE_hcmd"));
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
+        cmd.env("HCMD_THEME", &theme_name);
         // Pin the locale so `ui.ascii_borders` resolves the same way on every
         // machine: criterion 7 reads `»`, the marker for a line that runs past
         // the right edge.
