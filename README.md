@@ -9,7 +9,7 @@ Browse, search, preview and move files across local folders, archives and remote
 
 **Linux + macOS** &nbsp; | &nbsp; **x86_64 + arm64** &nbsp; | &nbsp; **MIT licensed**
 
-[Install](#install) &nbsp; / &nbsp; [Explore the features](#made-for-more-than-moving-files) &nbsp; / &nbsp; [First steps](#your-first-minute) &nbsp; / &nbsp; [Releases](https://github.com/xls/hcmd/releases)
+[Install](#install) &nbsp; / &nbsp; [Explore the features](#made-for-more-than-moving-files) &nbsp; / &nbsp; [First steps](#your-first-minute) &nbsp; / &nbsp; [Releases](https://github.com/xls/holos/releases)
 
 </div>
 
@@ -24,14 +24,14 @@ with tabbed panels, background jobs and a built-in shell to keep you moving.
 **Get started on Linux or macOS:**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/xls/hcmd/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/xls/holos/main/install.sh | sh
 hcmd
 ```
 
 Prefer Node.js?
 
 ```sh
-npx hcmd-installer
+npx holos-installer
 hcmd
 ```
 
@@ -40,10 +40,10 @@ to `~/.local/bin`, without root. If `hcmd` is not found, add that directory to
 your `PATH`, or launch `~/.local/bin/hcmd` directly.
 
 **Already installed?** Run either installer again to update, or use
-`npx hcmd-installer update`.
+`npx holos-installer update`.
 
 Want a package or a manual download? Get a **.deb**, **.rpm** or **tarball** from
-[Releases](https://github.com/xls/hcmd/releases). Linux builds are available for
+[Releases](https://github.com/xls/holos/releases). Linux builds are available for
 glibc and musl. There is no Windows build.
 
 <details>
@@ -88,7 +88,7 @@ and archive libraries. With `rustup`, the repository's `rust-toolchain.toml`
 selects the pinned toolchain automatically.
 
 ```sh
-git clone https://github.com/xls/hcmd
+git clone https://github.com/xls/holos
 cd hcmd
 cargo build --release
 ./target/release/hcmd
@@ -182,6 +182,17 @@ Holos reads directly from the object store, without starting a `git` process.
 - **Find your look** with 21 built-in themes and a live preview picker (`Alt+T`).
 - **Set your own shortcuts** with configurable key bindings and readable TOML settings.
 
+### Dress it in any theme
+
+Twenty-one built-in themes with a live-preview picker (`Alt+T`) that applies as
+you move over each one. On an [Omarchy](https://omarchy.org/) desktop there is
+one more: a dynamic `omarchy` theme that reads the desktop's own palette and
+recolours in place when you switch the desktop theme.
+
+[![A selection of Holos Commander's built-in themes](docs/holos-themes.png)](docs/holos-themes.png)
+
+**Themes (`Alt+T`).** Twenty-one built-in looks, plus live integration with Omarchy's colour scheme.
+
 [Explore the complete feature list](FEATURES.md)
 
 ## Your first minute
@@ -236,7 +247,7 @@ override automatic detection.
 
 Put Holos to work on your everyday files. If something feels awkward, a terminal
 behaves unexpectedly, or you have an idea for a better workflow,
-[open an issue](https://github.com/xls/hcmd/issues). Include your operating system,
+[open an issue](https://github.com/xls/holos/issues). Include your operating system,
 terminal and Holos version when reporting a problem.
 
 For code contributions, start with [AGENTS.md](AGENTS.md), the guide to the
