@@ -147,22 +147,49 @@ impl SqliteFs {
     /// the panel can sort by them, after the name that carries the row id.
     fn table_columns(&self, table: &str) -> Result<(ColumnPlan, Vec<String>)> {
         let conn = Self::connect(&self.file)?;
+        let has_rowid = table_has_rowid(&conn, table);
+        // A single-column INTEGER primary key *is* the rowid, so the row's name
+        // already carries its value. It is the Name column's header, not a
+        // column of its own that would print the id twice.
+        let alias = rowid_alias(&conn, table, has_rowid);
         let names = column_names(&conn, table)?;
-        let shown: Vec<String> = names.iter().take(MAX_TABLE_COLUMNS).cloned().collect();
-        let mut plan = vec![ColumnId::Name];
+        let shown: Vec<String> = names
+            .iter()
+            .filter(|n| Some(n.as_str()) != alias.as_deref())
+            .take(MAX_TABLE_COLUMNS)
+            .cloned()
+            .collect();
+        let mut columns = vec![ColumnId::Name];
         let mut custom = Vec::new();
         for (i, name) in shown.iter().enumerate() {
-            plan.push(ColumnId::Custom(u8::try_from(i).unwrap_or(u8::MAX)));
+            columns.push(ColumnId::Custom(u8::try_from(i).unwrap_or(u8::MAX)));
             custom.push(CustomColumn {
                 header: name.clone(),
                 align: Align::Left,
                 min_chars: 12,
             });
         }
+        // When the table names its id, the Name column takes that name, stays
+        // as narrow as an id needs, and yields the leftover width to the first
+        // data column instead of hogging it. Without a named id it is "Name"
+        // and the flexible column, exactly as every other listing's is.
+        let (name, flex) = match &alias {
+            Some(id) => (
+                Some(CustomColumn {
+                    header: id.clone(),
+                    align: Align::Left,
+                    min_chars: id_width(id),
+                }),
+                columns.get(1).copied(),
+            ),
+            None => (None, None),
+        };
         Ok((
             ColumnPlan {
-                columns: plan,
+                columns,
                 custom,
+                name,
+                flex,
             },
             shown,
         ))
@@ -276,6 +303,49 @@ fn column_names(conn: &Connection, table: &str) -> Result<Vec<String>> {
         .into_iter()
         .map(str::to_string)
         .collect())
+}
+
+/// The column whose value is the rowid, if the table declares one.
+///
+/// A single-column `INTEGER PRIMARY KEY` on a rowid table is an alias for the
+/// rowid: selecting it and selecting `rowid` return the same number. The
+/// listing shows the rowid as the row's name, so naming that column separately
+/// would draw the same id in two columns; instead its name titles the Name
+/// column. Anything else - a composite key, a text key, a `WITHOUT ROWID`
+/// table - has no such alias and the row's name stays the plain "Name".
+fn rowid_alias(conn: &Connection, table: &str, has_rowid: bool) -> Option<String> {
+    if !has_rowid {
+        return None;
+    }
+    let mut stmt = conn
+        .prepare(&format!("PRAGMA table_info(\"{}\")", escape(table)))
+        .ok()?;
+    let rows = stmt
+        .query_map([], |row| {
+            let name: String = row.get("name")?;
+            let ty: String = row.get("type")?;
+            let pk: i64 = row.get("pk")?;
+            Ok((name, ty, pk))
+        })
+        .ok()?;
+    let pk_cols: Vec<(String, String)> = rows
+        .filter_map(std::result::Result::ok)
+        .filter(|(_, _, pk)| *pk > 0)
+        .map(|(name, ty, _)| (name, ty))
+        .collect();
+    match pk_cols.as_slice() {
+        // Exactly one key column, declared INTEGER: the rowid alias.
+        [(name, ty)] if ty.to_ascii_uppercase().contains("INT") => Some(name.clone()),
+        _ => None,
+    }
+}
+
+/// How wide the id (Name) column is drawn: room for its header and a typical
+/// id, and no more, since the id is not where a table's width should go.
+fn id_width(header: &str) -> u16 {
+    u16::try_from(header.chars().count())
+        .unwrap_or(u16::MAX)
+        .clamp(6, 16)
 }
 
 /// Whether a table has an addressable rowid. A `WITHOUT ROWID` table does not,

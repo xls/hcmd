@@ -1417,7 +1417,10 @@ async fn entering_a_sqlite_table_ends_with_its_columns_not_the_configured_ones()
         .column_plan
         .as_ref()
         .expect("the table's plan reached the tab");
-    assert_eq!(plan.header(crate::panel::ColumnId::Custom(0)), "id");
-    assert_eq!(plan.header(crate::panel::ColumnId::Custom(1)), "firstname");
+    // The id names the Name column, not a data column of its own; the table's
+    // real data columns follow it.
+    assert_eq!(plan.header(crate::panel::ColumnId::Name), "id");
+    assert_eq!(plan.header(crate::panel::ColumnId::Custom(0)), "firstname");
+    assert_eq!(plan.header(crate::panel::ColumnId::Custom(1)), "lastname");
     let _ = std::fs::remove_dir_all(&dir);
 }

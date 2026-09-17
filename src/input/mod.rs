@@ -1384,6 +1384,8 @@ mod tests {
                     min_chars: 12,
                 },
             ],
+            name: None,
+            flex: None,
         });
         run_action(
             &mut app,

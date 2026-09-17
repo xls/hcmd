@@ -206,6 +206,17 @@ pub struct ColumnPlan {
     pub columns: Vec<ColumnId>,
     /// The definitions behind each [`ColumnId::Custom`] in `columns`.
     pub custom: Vec<CustomColumn>,
+    /// The [`ColumnId::Name`] column's own header and width, when a listing
+    /// calls its first column something other than "Name": a database's `id`,
+    /// which is what the row's name really is. `None` keeps "Name" and the
+    /// panel's own `name_min_width`.
+    pub name: Option<CustomColumn>,
+    /// Which column absorbs the leftover width and is never dropped. The Name
+    /// column by default; a listing whose Name is a short id nominates a data
+    /// column instead, so the id stays as narrow as it needs while the text
+    /// column takes the room. A `Custom` id the plan does not draw falls back
+    /// to Name.
+    pub flex: Option<ColumnId>,
 }
 
 impl ColumnPlan {
@@ -215,20 +226,34 @@ impl ColumnPlan {
         Self {
             columns,
             custom: Vec::new(),
+            name: None,
+            flex: None,
         }
     }
 
-    /// The definition behind a custom column, if `id` is one this plan made.
+    /// The definition behind a column, if the plan gave it one - a `Custom`
+    /// entry, or the Name column when the plan renamed it.
     #[must_use]
     pub fn custom(&self, id: ColumnId) -> Option<&CustomColumn> {
         match id {
             ColumnId::Custom(n) => self.custom.get(usize::from(n)),
+            ColumnId::Name => self.name.as_ref(),
             _ => None,
         }
     }
 
-    /// What the header row says for `id`: the plan's word for its own columns,
-    /// the panel's for the rest.
+    /// The column that absorbs the leftover width: the plan's choice if it
+    /// named one this plan actually draws, else Name.
+    #[must_use]
+    pub fn flex_column(&self) -> ColumnId {
+        match self.flex {
+            Some(id) if self.columns.contains(&id) => id,
+            _ => ColumnId::Name,
+        }
+    }
+
+    /// What the header row says for `id`: the plan's word for its own columns
+    /// and for a renamed Name, the panel's for the rest.
     #[must_use]
     pub fn header(&self, id: ColumnId) -> &str {
         self.custom(id)
@@ -264,14 +289,24 @@ pub fn allocate(cfg: &PanelConfig, inner_width: usize, plan: Option<&ColumnPlan>
         plan.and_then(|p| p.custom(id))
             .map_or_else(|| super::format::align_of(id), |c| c.align)
     };
-    let name_min = usize::from(cfg.effective_name_min_width());
+    // The column that takes the leftover and is never dropped: Name, unless a
+    // plan nominated a data column so its own short id column stays narrow.
+    let flex = plan.map_or(ColumnId::Name, ColumnPlan::flex_column);
+    // The flex column's floor. Name's is the configured `name_min_width`; a
+    // custom flex column's is its own `min_chars`.
+    let name_min = if flex == ColumnId::Name {
+        usize::from(cfg.effective_name_min_width())
+    } else {
+        plan.and_then(|p| p.custom(flex))
+            .map_or(1, |c| usize::from(c.min_chars))
+    };
     let mut hidden: Vec<ColumnId> = Vec::new();
 
     loop {
         // Step 1, for every column that is still in the running.
         let mut fixed: Vec<Allocated> = Vec::new();
         for id in &order {
-            if *id == ColumnId::Name || hidden.contains(id) {
+            if *id == flex || hidden.contains(id) {
                 continue;
             }
             let width = requested_width(cfg, *id, inner_width, plan);
@@ -303,11 +338,11 @@ pub fn allocate(cfg: &PanelConfig, inner_width: usize, plan: Option<&ColumnPlan>
                 .saturating_sub(separators);
             let mut columns = Vec::with_capacity(fixed.len().saturating_add(1));
             for id in &order {
-                if *id == ColumnId::Name {
+                if *id == flex {
                     columns.push(Allocated {
-                        id: ColumnId::Name,
+                        id: *id,
                         width: name_width,
-                        align: Align::Left,
+                        align: align(*id),
                     });
                 } else if let Some(col) = fixed.iter().find(|c| c.id == *id) {
                     columns.push(*col);
@@ -339,13 +374,13 @@ pub fn allocate(cfg: &PanelConfig, inner_width: usize, plan: Option<&ColumnPlan>
             .hide_priority
             .iter()
             .copied()
-            .find(|c| *c != ColumnId::Name && order.contains(c) && !hidden.contains(c))
+            .find(|c| *c != flex && order.contains(c) && !hidden.contains(c))
             .or_else(|| {
                 order
                     .iter()
                     .rev()
                     .copied()
-                    .find(|c| *c != ColumnId::Name && !hidden.contains(c))
+                    .find(|c| *c != flex && !hidden.contains(c))
             });
         match victim {
             Some(id) => hidden.push(id),
@@ -645,6 +680,8 @@ mod plan_tests {
                     min_chars: 4,
                 },
             ],
+            name: None,
+            flex: None,
         }
     }
 
@@ -689,8 +726,75 @@ mod plan_tests {
         let plan = ColumnPlan {
             columns: vec![ColumnId::Name, ColumnId::Custom(3)],
             custom: Vec::new(),
+            name: None,
+            flex: None,
         };
         let a = allocate(&cfg(), 60, Some(&plan));
         assert!(a.is_visible(ColumnId::Custom(3)));
+    }
+
+    #[test]
+    fn a_renamed_name_column_stays_narrow_and_a_data_column_takes_the_room() {
+        // A database table names its first column `id` and hands its width to
+        // `firstname`: the id column is exactly as wide as the plan asked, its
+        // header is `id` and not "Name", and `firstname` absorbs the leftover
+        // rather than the id doing it.
+        let plan = ColumnPlan {
+            columns: vec![ColumnId::Name, ColumnId::Custom(0)],
+            custom: vec![CustomColumn {
+                header: "firstname".to_string(),
+                align: Align::Left,
+                min_chars: 12,
+            }],
+            name: Some(CustomColumn {
+                header: "id".to_string(),
+                align: Align::Left,
+                min_chars: 6,
+            }),
+            flex: Some(ColumnId::Custom(0)),
+        };
+        let a = allocate(&cfg(), 80, Some(&plan));
+        assert_eq!(
+            a.name_width(),
+            6,
+            "the id column keeps the width it asked for"
+        );
+        assert_eq!(plan.header(ColumnId::Name), "id", "and its own name");
+        let first = a
+            .columns()
+            .iter()
+            .find(|c| c.id == ColumnId::Custom(0))
+            .map(|c| c.width);
+        assert_eq!(
+            first,
+            Some(80 - 6 - SEPARATOR_WIDTH),
+            "firstname takes the leftover, the id does not"
+        );
+    }
+
+    #[test]
+    fn a_nominated_flex_column_is_never_dropped_and_the_layout_fits() {
+        let plan = ColumnPlan {
+            columns: vec![ColumnId::Name, ColumnId::Custom(0)],
+            custom: vec![CustomColumn {
+                header: "firstname".to_string(),
+                align: Align::Left,
+                min_chars: 12,
+            }],
+            name: Some(CustomColumn {
+                header: "id".to_string(),
+                align: Align::Left,
+                min_chars: 6,
+            }),
+            flex: Some(ColumnId::Custom(0)),
+        };
+        for inner in 0..=120usize {
+            let a = allocate(&cfg(), inner, Some(&plan));
+            assert!(a.total_width() <= inner, "inner {inner}: {a:?}");
+            assert!(
+                a.is_visible(ColumnId::Custom(0)),
+                "inner {inner}: the flex column is never dropped",
+            );
+        }
     }
 }

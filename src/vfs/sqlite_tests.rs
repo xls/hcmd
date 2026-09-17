@@ -73,23 +73,31 @@ async fn a_table_lists_its_rows_named_for_their_id_and_carrying_sortable_cells()
     // A rowid table names its rows by the id, so `F5` writes `<id>.json`.
     assert_eq!(names, vec!["1", "2", "3"], "the id value, plainly");
 
-    // The plan names the table's own columns after the row name.
+    // The plan names the table's own columns after the row name. The id is the
+    // row's name, so it titles the Name column rather than repeating as a
+    // column of its own; the data columns follow.
     let plan = fs
         .column_plan(&people)
         .expect("a table composes its columns");
     assert_eq!(plan.columns.first(), Some(&ColumnId::Name));
-    assert_eq!(plan.header(ColumnId::Custom(0)), "id");
-    assert_eq!(plan.header(ColumnId::Custom(1)), "firstname");
-
-    // And each row carries its first columns' values, typed - the age is an
-    // integer, so it will sort as one.
-    let alice = &listed[0];
-    assert_eq!(alice.cells.first(), Some(&CellValue::Int(1)));
     assert_eq!(
-        alice.cells.get(1),
+        plan.header(ColumnId::Name),
+        "id",
+        "the Name column is the id"
+    );
+    assert_eq!(plan.header(ColumnId::Custom(0)), "firstname");
+    assert_eq!(plan.header(ColumnId::Custom(1)), "lastname");
+    // The first data column takes the leftover width, so the id stays narrow.
+    assert_eq!(plan.flex_column(), ColumnId::Custom(0));
+
+    // And each row carries its data columns' values, typed - the age is an
+    // integer, so it will sort as one - with the id no longer among them.
+    let alice = &listed[0];
+    assert_eq!(
+        alice.cells.first(),
         Some(&CellValue::Text("alice".to_string()))
     );
-    assert_eq!(alice.cells.get(3), Some(&CellValue::Int(30)));
+    assert_eq!(alice.cells.get(2), Some(&CellValue::Int(30)));
 
     // The header is the table's, not the database's.
     assert_eq!(
@@ -224,7 +232,7 @@ fn the_router_forwards_a_table_s_column_plan() {
     assert_eq!(
         fs.column_plan(&people)
             .map(|p| p.header(ColumnId::Custom(0)).to_string()),
-        Some("id".to_string()),
+        Some("firstname".to_string()),
         "the backend composes it"
     );
     let router = crate::vfs::VfsRouter::new(
@@ -234,7 +242,7 @@ fn the_router_forwards_a_table_s_column_plan() {
     assert_eq!(
         crate::vfs::Vfs::column_plan(&router, &people)
             .map(|p| p.header(ColumnId::Custom(0)).to_string()),
-        Some("id".to_string()),
+        Some("firstname".to_string()),
         "and the router forwards it"
     );
     let _ = std::fs::remove_dir_all(file.parent().unwrap_or(&file));
@@ -279,5 +287,45 @@ async fn a_listing_has_exactly_one_parent_row() {
             "the backend sends no `..` of its own for {tail}"
         );
     }
+    let _ = std::fs::remove_dir_all(file.parent().unwrap_or(&file));
+}
+
+#[test]
+fn an_integer_primary_key_titles_the_name_column_and_narrows_it() {
+    // `people.id` is an INTEGER PRIMARY KEY, an alias for the rowid the listing
+    // already shows as the row's name. So it names the Name column and hands
+    // its width to a data column, rather than drawing the same id twice.
+    let Some((file, fs)) = fixture("idname") else {
+        return;
+    };
+    let people = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/people");
+    let plan = fs.column_plan(&people).expect("a plan");
+    assert_eq!(plan.header(ColumnId::Name), "id");
+    assert!(
+        plan.name.is_some(),
+        "the Name column carries the id's width and header"
+    );
+    assert_eq!(plan.flex_column(), ColumnId::Custom(0));
+    assert!(
+        !plan.custom.iter().any(|c| c.header == "id"),
+        "the id is not also a data column"
+    );
+    let _ = std::fs::remove_dir_all(file.parent().unwrap_or(&file));
+}
+
+#[test]
+fn a_table_without_an_integer_key_keeps_the_plain_name_column() {
+    // `notes` is `WITHOUT ROWID` with a text key, so its rows are named by
+    // position and no column aliases that. The Name column stays "Name" and
+    // the flexible one, and `key` is a data column of its own.
+    let Some((file, fs)) = fixture("plainname") else {
+        return;
+    };
+    let notes = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/notes");
+    let plan = fs.column_plan(&notes).expect("a plan");
+    assert_eq!(plan.header(ColumnId::Name), "Name");
+    assert!(plan.name.is_none());
+    assert_eq!(plan.flex_column(), ColumnId::Name);
+    assert_eq!(plan.header(ColumnId::Custom(0)), "key");
     let _ = std::fs::remove_dir_all(file.parent().unwrap_or(&file));
 }
