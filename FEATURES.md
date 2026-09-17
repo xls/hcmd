@@ -327,8 +327,11 @@ contents were not recognised, which is most files and is not a failure.
   network failure is a line in the status bar and nothing more.
 - On an [Omarchy](https://omarchy.org/) desktop, an extra `omarchy` theme reads
   the desktop's own live colour scheme, so the panel follows whatever theme the
-  rest of the desktop is on and changes with it. It appears in the picker only
-  where Omarchy is installed.
+  rest of the desktop is on. It appears in the picker only where Omarchy is
+  installed, and a running session recolours in place when the desktop theme
+  changes: adopting it installs a small `theme-set.d` hook that signals hcmd to
+  re-read its configuration, so no restart is needed. The hook is best-effort
+  and safe to delete.
 - `HCMD_THEME=<name>` forces a theme for one run without touching the config, so
   a screenshot or a demo can pin a look. It overrides the configured theme the
   way `HCMD_KEYBOARD_PROTOCOL` overrides key detection.

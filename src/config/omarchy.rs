@@ -83,6 +83,54 @@ pub fn is_available() -> bool {
     palette_path().is_some_and(|path| path.exists())
 }
 
+/// The Omarchy `theme-set` hook that keeps a running hcmd in step: it signals
+/// every hcmd process to re-read its configuration when the desktop theme
+/// changes, so the `omarchy` theme recolours in place.
+const HOOK_BODY: &str = "#!/bin/sh\n\
+    # Installed by Holos Commander for `ui.theme = \"omarchy\"`: retheme any\n\
+    # running instance when the desktop theme changes. Safe to delete.\n\
+    pkill -USR1 -x hcmd 2>/dev/null || true\n";
+
+/// Make sure the `theme-set` hook is installed, so a running session follows a
+/// desktop theme change without a restart.
+///
+/// Called when the `omarchy` theme is adopted, which is the consent to touch
+/// the desktop's hook directory. Idempotent, gated on Omarchy actually being
+/// present, and best-effort throughout: a machine without Omarchy, or one where
+/// the directory cannot be written, is left exactly as it was rather than told
+/// about a hook it did not ask for.
+pub fn ensure_hook() {
+    if let Ok(config) = paths::xdg_config_home() {
+        ensure_hook_in(&config);
+    }
+}
+
+/// [`ensure_hook`] against a stated configuration directory.
+fn ensure_hook_in(config: &std::path::Path) {
+    let omarchy = config.join("omarchy");
+    // Only where Omarchy is installed - its own config directory is the sign -
+    // so hcmd never creates an `omarchy/` tree on a machine that has none.
+    if !omarchy.is_dir() {
+        return;
+    }
+    let dir = omarchy.join("hooks").join("theme-set.d");
+    let hook = dir.join("holoscommander");
+    if hook.exists() {
+        return;
+    }
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    if std::fs::write(&hook, HOOK_BODY).is_err() {
+        return;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        let _ = std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755));
+    }
+}
+
 /// The current Omarchy theme as an hcmd [`Theme`], or `None` when Omarchy is
 /// not installed or its palette cannot be read.
 ///
@@ -285,6 +333,46 @@ mod tests {
         assert_eq!(first(&[&none, &value], "#000000"), "#abcdef");
         assert_eq!(first(&[&blank, &value], "#000000"), "#abcdef");
         assert_eq!(first(&[&none, &blank], "#000000"), "#000000");
+    }
+
+    #[test]
+    fn the_hook_is_installed_only_where_omarchy_is_and_only_once() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let base = std::env::temp_dir().join(format!("hcmd-omarchy-hook-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("temp config dir");
+
+        // No `omarchy/` here, so nothing is created - hcmd does not build an
+        // Omarchy tree on a machine that has none.
+        ensure_hook_in(&base);
+        assert!(
+            !base.join("omarchy").exists(),
+            "no omarchy tree is invented"
+        );
+
+        // With Omarchy present, the hook is written and made executable.
+        std::fs::create_dir_all(base.join("omarchy")).expect("omarchy dir");
+        ensure_hook_in(&base);
+        let hook = base.join("omarchy/hooks/theme-set.d/holoscommander");
+        assert!(hook.is_file(), "the hook is installed");
+        let mode = std::fs::metadata(&hook).expect("stat").permissions().mode();
+        assert_eq!(mode & 0o111, 0o111, "and executable");
+        assert!(
+            std::fs::read_to_string(&hook)
+                .expect("read")
+                .contains("pkill -USR1"),
+            "and signals the running instance"
+        );
+
+        // A second call leaves it alone rather than rewriting it every start.
+        std::fs::write(&hook, "edited by hand\n").expect("edit");
+        ensure_hook_in(&base);
+        assert_eq!(
+            std::fs::read_to_string(&hook).expect("read"),
+            "edited by hand\n",
+            "an existing hook is not overwritten"
+        );
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

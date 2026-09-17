@@ -266,6 +266,12 @@ impl App {
             return false;
         };
         self.theme = theme;
+        // Picking the `omarchy` theme is choosing to follow the desktop, so the
+        // hook that keeps a running session in step goes in now rather than only
+        // on the next start.
+        if name == crate::config::omarchy::NAME {
+            crate::config::omarchy::ensure_hook();
+        }
         true
     }
 

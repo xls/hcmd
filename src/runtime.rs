@@ -201,6 +201,14 @@ pub async fn event_loop() -> Result<()> {
     //
     app.color_depth = ColorDepth::resolve(app.config.terminal.colors);
 
+    // Running the `omarchy` theme means following the desktop, so install the
+    // `theme-set` hook that signals this process on a theme change. Idempotent
+    // and gated on Omarchy being present, so it is a no-op every run but the
+    // first and on any machine that is not Omarchy.
+    if app.theme.name == crate::config::omarchy::NAME {
+        crate::config::omarchy::ensure_hook();
+    }
+
     // Signals first, before raw mode exists to leak. `Term::init` enables raw
     // mode as its very first action and can then sit in the keyboard capability
     // query for up to half a second on a terminal that never answers; a
@@ -219,6 +227,14 @@ pub async fn event_loop() -> Result<()> {
     Term::spawn_signal_guard(false)?;
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     let mut sighup = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())?;
+    // `SIGUSR1` re-reads the configuration, the same as `Ctrl+Alt+R`, so an
+    // outside tool can retheme a running session: the Omarchy `theme-set` hook
+    // signals hcmd, the `omarchy` theme re-reads the desktop's new palette, and
+    // the panel recolours in place. Armed here, beside the others, so the
+    // window before the handler exists - when the default disposition would
+    // kill the process - is as small as it is for them.
+    let mut sigusr1 =
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::user_defined1())?;
 
     let mut term = Term::init(&app.config.terminal)?;
     // Raw mode and the alternate screen are on as of the line above, which is
@@ -982,6 +998,12 @@ pub async fn event_loop() -> Result<()> {
             // stands: leaving through the bottom of this function is what
             // restores the terminal and saves the tabs.
             _ = sighup.recv() => break,
+            _ = sigusr1.recv() => {
+                // A reload asked for from outside. Queued the same way
+                // `Ctrl+Alt+R` queues it, so the read happens on the loop's own
+                // reload step below and never in a signal handler.
+                app.reload_config();
+            }
             () = tokio::time::sleep(idle) => {
                 // Nothing arrived, so a half-typed escape sequence is not
                 // going to be completed. Release it rather than swallow it.
