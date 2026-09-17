@@ -1120,6 +1120,15 @@ impl App {
     pub fn open_archive_session(&self) -> Option<&Arc<ArchiveSession>> {
         self.router.open_session()
     }
+
+    /// How far the remote archive transfer running now has got, or `None` when
+    /// nothing is transferring. What the "reading" line asks to draw a bar over
+    /// a download rather than a bare spinner. An atomic read; safe every frame.
+    #[must_use]
+    pub fn download_progress(&self) -> Option<(u64, u64)> {
+        self.open_archive_session()
+            .and_then(|session| session.download_progress())
+    }
 }
 
 /// The backend to open a file through when it is being treated as a container.

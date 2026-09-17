@@ -748,12 +748,20 @@ pub async fn event_loop() -> Result<()> {
             .jobs
             .any_active()
             .then(|| std::time::Instant::now() + Duration::from_millis(100));
+        // The same 100 ms wake while a remote archive is being fetched, so its
+        // "reading" line steps its progress bar even though the download runs
+        // on the blocking pool and queues no events until it is done.
+        let download_tick = app
+            .download_progress()
+            .is_some()
+            .then(|| std::time::Instant::now() + Duration::from_millis(100));
         let deadline = [
             app.console_switch_deadline(),
             app.console_settle_deadline(),
             app.quick_view_deadline(),
             app.drives_deadline(),
             walk_tick,
+            download_tick,
             // The filesystem-watch debounce: wake when the quiet after a change
             // is up, so the panel re-reads on its own with nothing else going
             // on to keep the loop turning.

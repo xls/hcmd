@@ -894,6 +894,35 @@ fn draw_status(
     );
 }
 
+/// The "reading" line while a remote archive is fetched: a small bar and a
+/// percentage, so a transfer of seconds shows how far it has got rather than
+/// only that it is happening.
+fn reading_with_bar(done: u64, total: u64, ascii: bool) -> String {
+    const CELLS: u128 = 12;
+    let done = u128::from(done);
+    let total = u128::from(total).max(1);
+    let filled = usize::try_from(done.saturating_mul(CELLS) / total)
+        .unwrap_or(0)
+        .min(CELLS as usize);
+    let percent = (done.saturating_mul(100) / total).min(100);
+    let (full, empty, open, close) = if ascii {
+        ("#", "-", "[", "]")
+    } else {
+        ("\u{2588}", "\u{2591}", "\u{2595}", "\u{258f}")
+    };
+    let word = if ascii {
+        "reading..."
+    } else {
+        "reading\u{2026}"
+    };
+    let bar = format!(
+        "{}{}",
+        full.repeat(filled),
+        empty.repeat(CELLS as usize - filled)
+    );
+    format!("{word} {open}{bar}{close} {percent}%")
+}
+
 /// The left-hand text of the panel status line, before the sort tag.
 ///
 /// Two overrides on the counts, highest priority first:
@@ -941,7 +970,14 @@ pub fn status_text(app: &App, side: Side) -> String {
     // costs nothing and says what is actually happening.
     let tab = panel.active_tab();
     if tab.loading {
-        return if app.config.ui.ascii_borders {
+        let ascii = app.config.ui.ascii_borders;
+        // A remote archive is fetched whole before it can be entered, which can
+        // take seconds; the bar says how far, where the plain word would only
+        // say that something is happening.
+        if let Some((done, total)) = app.download_progress() {
+            return reading_with_bar(done, total, ascii);
+        }
+        return if ascii {
             "reading...".to_string()
         } else {
             "reading\u{2026}".to_string()
@@ -1304,5 +1340,27 @@ mod tests {
         assert_ne!(styles[0].0, styles[1].0);
         assert_ne!(styles[1].0, styles[2].0);
         assert_ne!(styles[0].0, styles[2].0);
+    }
+
+    #[test]
+    fn the_reading_bar_fills_with_the_transfer() {
+        // Empty, half and full, the percentage and the fill agreeing.
+        let start = reading_with_bar(0, 1000, true);
+        assert!(start.starts_with("reading... ["), "{start}");
+        assert!(start.contains(" 0%"), "{start}");
+        assert!(!start.contains('#'), "nothing filled yet: {start}");
+
+        let half = reading_with_bar(500, 1000, true);
+        assert!(half.contains(" 50%"), "{half}");
+        assert_eq!(half.matches('#').count(), 6, "half of twelve cells: {half}");
+
+        let full = reading_with_bar(1000, 1000, true);
+        assert!(full.contains(" 100%"), "{full}");
+        assert_eq!(full.matches('#').count(), 12, "every cell: {full}");
+
+        // A zero total cannot divide, and reads as a full, finished bar rather
+        // than a panic.
+        let zero = reading_with_bar(0, 0, true);
+        assert!(zero.contains('%'), "{zero}");
     }
 }

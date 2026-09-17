@@ -348,6 +348,69 @@ pub struct ArchiveSession {
     /// without one - a test, or the sweep - where a remote container is simply
     /// unreachable rather than a panic.
     remotes: std::sync::OnceLock<Arc<crate::remote::RemoteRegistry>>,
+    /// How far the remote transfer that is running now has got, for the
+    /// panel's "reading" line to draw a bar rather than a spinner over a
+    /// download that can take seconds.
+    download: DownloadProgress,
+}
+
+/// The progress of the remote archive transfer that is running now.
+///
+/// One at a time is the honest shape for a status line that shows one panel's
+/// wait: two panels fetching two archives at once is rare, and a bar that
+/// jumped between them would say less than the plain word does. `total` of
+/// zero means nothing is transferring.
+#[derive(Debug, Default)]
+pub struct DownloadProgress {
+    done: AtomicU64,
+    total: AtomicU64,
+}
+
+impl DownloadProgress {
+    /// A transfer of `total` bytes is starting.
+    fn begin(&self, total: u64) {
+        self.total.store(total, Ordering::Relaxed);
+        self.done.store(0, Ordering::Relaxed);
+    }
+
+    /// `done` bytes have been written so far.
+    fn advance(&self, done: u64) {
+        self.done.store(done, Ordering::Relaxed);
+    }
+
+    /// The transfer is over, one way or the other.
+    fn end(&self) {
+        self.total.store(0, Ordering::Relaxed);
+        self.done.store(0, Ordering::Relaxed);
+    }
+
+    /// `(done, total)` while a transfer is running, or `None`.
+    #[must_use]
+    pub fn snapshot(&self) -> Option<(u64, u64)> {
+        let total = self.total.load(Ordering::Relaxed);
+        (total > 0).then(|| (self.done.load(Ordering::Relaxed).min(total), total))
+    }
+}
+
+/// Copy `reader` into `writer`, reporting how far it has got to `progress` as
+/// it goes, so a slow transfer can be drawn rather than only waited on.
+fn copy_watched<R: std::io::Read, W: std::io::Write>(
+    reader: &mut R,
+    writer: &mut W,
+    progress: &DownloadProgress,
+) -> std::io::Result<u64> {
+    let mut buf = vec![0u8; 128 * 1024];
+    let mut done = 0u64;
+    loop {
+        let read = reader.read(&mut buf)?;
+        if read == 0 {
+            break;
+        }
+        writer.write_all(&buf[..read])?;
+        done = done.saturating_add(read as u64);
+        progress.advance(done);
+    }
+    Ok(done)
 }
 
 impl std::fmt::Debug for ArchiveSession {
@@ -397,7 +460,16 @@ impl ArchiveSession {
             budget: DEFAULT_CACHE_BUDGET,
             nonce: AtomicU64::new(0),
             remotes: std::sync::OnceLock::new(),
+            download: DownloadProgress::default(),
         }))
+    }
+
+    /// How far the remote archive transfer running now has got, or `None` when
+    /// nothing is transferring. An atomic read, so a status line may ask it
+    /// every frame.
+    #[must_use]
+    pub fn download_progress(&self) -> Option<(u64, u64)> {
+        self.download.snapshot()
     }
 
     /// Remove the temp directories of sessions whose process is gone
@@ -543,14 +615,24 @@ impl ArchiveSession {
                 // works.
                 let name = display.file_name().unwrap_or_else(|| "archive".to_string());
                 let dest = dir.join(name);
+                // The size the panel's bar counts towards. Its own stat, not the
+                // cache's above, so a total is available even when the cache
+                // took a different path to deciding this transfer runs.
+                let total = crate::vfs::Vfs::stat(fs.as_ref(), &display)
+                    .map(|entry| entry.size)
+                    .unwrap_or(0);
+                self.download.begin(total);
                 let written = (|| -> Result<u64> {
                     let mut reader = crate::vfs::Vfs::open_read(fs.as_ref(), &display)?;
                     let mut file = std::fs::File::create(&dest).map_err(|e| Error::io(&dest, e))?;
-                    std::io::copy(&mut reader, &mut file).map_err(|e| Error::io(&dest, e))
+                    copy_watched(&mut reader, &mut file, &self.download)
+                        .map_err(|e| Error::io(&dest, e))
                 })()
                 .inspect_err(|_| {
                     let _ = std::fs::remove_dir_all(&dir);
+                    self.download.end();
                 })?;
+                self.download.end();
                 Ok((dest, written))
             },
         )?;
@@ -1174,6 +1256,22 @@ fn outer_key(archive: &ArchiveFs) -> Result<ArchiveKey> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn download_progress_reports_a_transfer_and_clears_when_it_ends() {
+        let progress = DownloadProgress::default();
+        assert_eq!(progress.snapshot(), None, "nothing transferring");
+        progress.begin(1000);
+        assert_eq!(progress.snapshot(), Some((0, 1000)));
+        progress.advance(400);
+        assert_eq!(progress.snapshot(), Some((400, 1000)));
+        // A `done` beyond `total` - a size that grew, a miscount - reads as
+        // done rather than as more than whole.
+        progress.advance(5000);
+        assert_eq!(progress.snapshot(), Some((1000, 1000)));
+        progress.end();
+        assert_eq!(progress.snapshot(), None, "cleared after the transfer");
+    }
 
     #[test]
     fn the_temp_root_is_private_and_swept() {
