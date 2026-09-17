@@ -67,13 +67,13 @@ jobs:
           set -eu
           cd packaging/npm
           node --check install.js
-          # The bin entry is the whole interface: `npx hcmd-installer` is a
+          # The bin entry is the whole interface: `npx holos-installer` is a
           # lookup of this name, and a package that packs without it installs
           # nothing.
           node -e "
             const pkg = require('./package.json');
-            if (!pkg.bin || !pkg.bin['hcmd-installer']) {
-              throw new Error('package.json declares no hcmd-installer bin');
+            if (!pkg.bin || !pkg.bin['holos-installer']) {
+              throw new Error('package.json declares no holos-installer bin');
             }
             if (pkg.version !== '${{ steps.v.outputs.version }}') {
               throw new Error('version was not substituted');
@@ -134,7 +134,7 @@ jobs:
           # that it does not reveal whether a package exists - which reads as
           # "missing package" and is the opposite of the truth.
           if grep -q 'E404' /tmp/publish.log; then
-            echo "::warning::NPM_TOKEN cannot publish hcmd-installer (npm's 404"
+            echo "::warning::NPM_TOKEN cannot publish holos-installer (npm's 404"
             echo "::warning::to an unauthorised PUT is a permissions answer, not a"
             echo "::warning::missing package). Nothing is lost: the installer"
             echo "::warning::fetches the latest release, so npm already installs"

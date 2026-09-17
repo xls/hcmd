@@ -3,7 +3,7 @@ Version:        @VERSION@
 Release:        1%{?dist}
 Summary:        A Total Commander alternative for the terminal, for fingers that learned F5 in 1998
 License:        MIT
-URL:            https://github.com/xls/hcmd
+URL:            https://github.com/xls/holos
 
 # The binary is built before rpmbuild runs and staged into the buildroot, so
 # there is nothing to compile here and no build dependency to declare.

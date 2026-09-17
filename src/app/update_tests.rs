@@ -1,12 +1,12 @@
 use super::*;
 
 /// A trimmed but otherwise real answer from
-/// `api.github.com/repos/xls/hcmd/releases/latest`: the field order is
+/// `api.github.com/repos/xls/holos/releases/latest`: the field order is
 /// GitHub's own, and the body carries prose after it.
 const RELEASE_JSON: &str = r#"{
-  "url": "https://api.github.com/repos/xls/hcmd/releases/207234131",
-  "assets_url": "https://api.github.com/repos/xls/hcmd/releases/207234131/assets",
-  "html_url": "https://github.com/xls/hcmd/releases/tag/v0.1.1",
+  "url": "https://api.github.com/repos/xls/holos/releases/207234131",
+  "assets_url": "https://api.github.com/repos/xls/holos/releases/207234131/assets",
+  "html_url": "https://github.com/xls/holos/releases/tag/v0.1.1",
   "id": 207234131,
   "tag_name": "v0.1.1",
   "target_commitish": "main",
@@ -104,7 +104,9 @@ fn the_message_names_the_version_and_the_command_that_installs_it() {
     let said = notice("v0.1.1");
     assert!(said.contains("v0.1.1"), "{said}");
     assert!(
-        said.contains("curl -fsSL https://raw.githubusercontent.com/xls/hcmd/main/install.sh | sh"),
+        said.contains(
+            "curl -fsSL https://raw.githubusercontent.com/xls/holos/main/install.sh | sh"
+        ),
         "{said}"
     );
 }

@@ -3,7 +3,7 @@
 
 // Install hcmd, from npm.
 //
-//   npx hcmd-installer
+//   npx holos-installer
 //
 // Downloads the release build for this platform, checks it against the
 // published SHA256SUMS, and installs to ~/.local/bin. It never needs root and
@@ -11,10 +11,10 @@
 //
 // Commands:
 //
-//   npx hcmd-installer            install the latest release
-//   npx hcmd-installer update     the same, but says so when there is nothing
+//   npx holos-installer            install the latest release
+//   npx holos-installer update     the same, but says so when there is nothing
 //                                 to do rather than reinstalling in silence
-//   npx hcmd-installer --version  what is installed, and what is current
+//   npx holos-installer --version  what is installed, and what is current
 //
 //   HCMD_INSTALL_DIR   where to put the binary   (default ~/.local/bin)
 //   HCMD_VERSION       which release to fetch    (default the latest)
@@ -31,7 +31,7 @@ const https = require("https");
 const crypto = require("crypto");
 const { execFileSync } = require("child_process");
 
-const REPO = "xls/hcmd";
+const REPO = "xls/holos";
 const INSTALL_DIR =
   process.env.HCMD_INSTALL_DIR || path.join(os.homedir(), ".local", "bin");
 const SHARE_DIR =
@@ -85,7 +85,7 @@ function fetch(url, hops = 0) {
   return new Promise((resolve, reject) => {
     if (hops > 5) return reject(new Error("too many redirects"));
     https
-      .get(url, { headers: { "User-Agent": "hcmd-installer" } }, (res) => {
+      .get(url, { headers: { "User-Agent": "holos-installer" } }, (res) => {
         if (
           res.statusCode >= 300 &&
           res.statusCode < 400 &&
@@ -111,7 +111,7 @@ function fetch(url, hops = 0) {
 ///
 /// This is what `install.sh` has always done, and what this did **not**: it
 /// installed the version pinned in its own `package.json`, so `npx
-/// hcmd-installer` kept installing whatever was current on the day the npm
+/// holos-installer` kept installing whatever was current on the day the npm
 /// package was last published. A pinned installer is a stale installer, and
 /// nobody types `npx` to get last month's build.
 async function latestVersion() {

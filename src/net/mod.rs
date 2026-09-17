@@ -27,7 +27,7 @@ use std::time::Duration;
 use crate::error::{Error, Result};
 
 /// The repository the two questions are about.
-pub const REPO: &str = "xls/hcmd";
+pub const REPO: &str = "xls/holos";
 
 /// How long to wait before giving up on a question nobody asked twice.
 ///

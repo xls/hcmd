@@ -1,7 +1,7 @@
 #!/bin/sh
 # Install hcmd.
 #
-#   curl -fsSL https://raw.githubusercontent.com/xls/hcmd/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/xls/holos/main/install.sh | sh
 #
 # Downloads the build for this platform, checks it against the published
 # SHA256SUMS, and installs to ~/.local/bin. No root, and nothing outside the
@@ -14,7 +14,7 @@
 # bash, and it is the first thing anyone runs, so it should not need much.
 set -eu
 
-REPO="xls/hcmd"
+REPO="xls/holos"
 INSTALL_DIR="${HCMD_INSTALL_DIR:-$HOME/.local/bin}"
 
 say()  { printf '%s\n' "$*"; }
