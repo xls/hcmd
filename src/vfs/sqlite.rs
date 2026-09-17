@@ -237,9 +237,19 @@ impl SqliteFs {
             }
         };
         let has_rowid = table_has_rowid(&conn, &table);
-        let mut offset = 0usize;
+        // Keyset paging where there is a rowid to key on: `WHERE rowid > last`
+        // walks the table's btree forward one page at a time, so a table of
+        // millions costs the same per page as a table of ten. `OFFSET` rescans
+        // and discards every row before the page, which pages a large table
+        // quadratically. A `WITHOUT ROWID` table has no rowid to key on and
+        // pages by position - which is what names its rows anyway.
+        let mut cursor = if has_rowid {
+            Cursor::Rowid(None)
+        } else {
+            Cursor::Position(0)
+        };
         loop {
-            let page = match read_page(&conn, &table, &shown, has_rowid, offset) {
+            let (page, next) = match read_page(&conn, &table, &shown, cursor) {
                 Ok(page) => page,
                 Err(err) => {
                     let _ = tx.blocking_send(Err(err));
@@ -255,7 +265,7 @@ impl SqliteFs {
             if count < PAGE {
                 return;
             }
-            offset = offset.saturating_add(count);
+            cursor = next;
         }
     }
 
@@ -430,51 +440,88 @@ fn table_has_rowid(conn: &Connection, table: &str) -> bool {
         .is_ok()
 }
 
-/// One page of a table's rows as entries.
+/// Where the next page of a table's rows begins.
+///
+/// A rowid table pages by keyset - the last rowid it handed out - so each page
+/// is one forward walk of the btree. A `WITHOUT ROWID` table has no rowid to
+/// key on and pages by position, the same value that names its rows.
+#[derive(Debug, Clone, Copy)]
+enum Cursor {
+    /// The last rowid handed out, or `None` before the first page.
+    Rowid(Option<i64>),
+    /// The number of rows handed out so far - the `OFFSET` of the next page.
+    Position(usize),
+}
+
+/// One page of a table's rows as entries, and where the page after it begins.
 fn read_page(
     conn: &Connection,
     table: &str,
     shown: &[String],
-    has_rowid: bool,
-    offset: usize,
-) -> Result<Vec<Entry>> {
-    let id_expr = if has_rowid { "rowid" } else { "NULL" };
+    cursor: Cursor,
+) -> Result<(Vec<Entry>, Cursor)> {
     let selected = if shown.is_empty() {
         String::new()
     } else {
         let cols: Vec<String> = shown.iter().map(|c| format!("\"{}\"", escape(c))).collect();
         format!(", {}", cols.join(", "))
     };
-    let sql = format!(
-        "SELECT {id_expr}{selected} FROM \"{}\" LIMIT {PAGE} OFFSET {offset}",
-        escape(table)
-    );
+    let table = escape(table);
+    let sql = match cursor {
+        Cursor::Rowid(Some(_)) => format!(
+            "SELECT rowid{selected} FROM \"{table}\" WHERE rowid > ?1 ORDER BY rowid LIMIT {PAGE}"
+        ),
+        Cursor::Rowid(None) => {
+            format!("SELECT rowid{selected} FROM \"{table}\" ORDER BY rowid LIMIT {PAGE}")
+        }
+        Cursor::Position(offset) => {
+            format!("SELECT NULL{selected} FROM \"{table}\" LIMIT {PAGE} OFFSET {offset}")
+        }
+    };
     let mut stmt = conn
         .prepare(&sql)
         .map_err(|e| Error::msg(format!("reading {table}: {e}")))?;
-    let mut rows = stmt
-        .query([])
-        .map_err(|e| Error::msg(format!("reading {table}: {e}")))?;
+    let mut rows = match cursor {
+        Cursor::Rowid(Some(last)) => stmt.query([last]),
+        _ => stmt.query([]),
+    }
+    .map_err(|e| Error::msg(format!("reading {table}: {e}")))?;
     let mut out = Vec::new();
-    let mut n = offset;
+    // The starting position for a `WITHOUT ROWID` table, so its rows keep their
+    // absolute row number as they page.
+    let mut n = match cursor {
+        Cursor::Position(offset) => offset,
+        Cursor::Rowid(_) => 0,
+    };
+    let mut last_rowid = match cursor {
+        Cursor::Rowid(last) => last,
+        Cursor::Position(_) => None,
+    };
     while let Some(row) = rows.next().map_err(|e| Error::msg(format!("a row: {e}")))? {
         // The name is the row's own id - the rowid where there is one, else
         // its position - shown plainly, without the `.json` the copy carries.
         // `Enter` reads the same row back by it, and `F5` writes it out as
         // `<database>.<table>.<id>.json`.
         let id: Option<i64> = row.get(0).ok();
-        let name = match (has_rowid, id) {
-            (true, Some(id)) => id.to_string(),
-            _ => n.to_string(),
+        let name = match id {
+            Some(id) => id.to_string(),
+            None => n.to_string(),
         };
         let mut entry = Entry::file(name);
         entry.cells = (0..shown.len())
             .map(|i| row.get_ref(i + 1).map_or(CellValue::Null, cell_of))
             .collect();
         out.push(entry);
+        if let Some(id) = id {
+            last_rowid = Some(id);
+        }
         n = n.saturating_add(1);
     }
-    Ok(out)
+    let next = match cursor {
+        Cursor::Rowid(_) => Cursor::Rowid(last_rowid),
+        Cursor::Position(offset) => Cursor::Position(offset.saturating_add(out.len())),
+    };
+    Ok((out, next))
 }
 
 /// A cell value for the sortable columns, typed so numbers sort as numbers.

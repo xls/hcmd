@@ -369,3 +369,49 @@ fn a_column_widens_to_fit_its_values_not_only_its_header() {
     assert_eq!(huge.min_chars, 40, "an over-long value is capped");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[tokio::test]
+async fn a_table_larger_than_a_page_streams_every_row_once_and_in_order() {
+    // Keyset paging must not skip or repeat a row at a page boundary, and its
+    // `WHERE rowid > last` walk must step across gaps in the rowids. 1200 rows
+    // span three 512-row pages; deleting a scattered few - including two on a
+    // page boundary - leaves the gaps the walk has to hop.
+    let dir = std::env::temp_dir().join(format!("hcmd-sqlite-pages-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let file = dir.join("big.sqlite");
+    let conn = Connection::open(&file).expect("open");
+    conn.execute_batch("CREATE TABLE big (id INTEGER PRIMARY KEY, v TEXT);")
+        .expect("create");
+    {
+        let tx = conn.unchecked_transaction().expect("txn");
+        let mut stmt = tx
+            .prepare("INSERT INTO big (id, v) VALUES (?1, ?2)")
+            .expect("prepare");
+        for i in 1..=1200i64 {
+            stmt.execute(rusqlite::params![i, format!("row-{i}")])
+                .expect("insert");
+        }
+        drop(stmt);
+        tx.commit().expect("commit");
+    }
+    let gaps = [1i64, 512, 513, 600, 1024, 1200];
+    conn.execute(
+        "DELETE FROM big WHERE id IN (1, 512, 513, 600, 1024, 1200)",
+        [],
+    )
+    .expect("delete");
+    drop(conn);
+
+    let base = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/");
+    let fs = SqliteFs::open(base).expect("open db");
+    let table = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/big");
+    let listed = rows(&fs, &table).await;
+    let got: Vec<i64> = listed
+        .iter()
+        .map(|e| e.name.parse::<i64>().expect("a numeric id"))
+        .collect();
+    let want: Vec<i64> = (1..=1200).filter(|i| !gaps.contains(i)).collect();
+    assert_eq!(got, want, "every surviving row, once, ascending");
+    let _ = std::fs::remove_dir_all(&dir);
+}
