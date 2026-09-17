@@ -2,6 +2,17 @@
 
 Notable changes per release, one line each. Newest first.
 
+## v0.11.0
+
+- The default theme is now tokyo-night; the blue theme and the other twenty still ship, `Alt+T` switches between them, and `HCMD_THEME` forces one for a single run.
+- A SQLite table opens at once: its columns are known before the rows stream in, the rows page by rowid so a million-row table fills in linear time, each column is sized to its own values, and the first is the row id under the name the table gives it rather than "Name".
+- The hex viewer's binary templates walk a format's chunks, so a WAV's format, sample rate and bit depth read correctly past a `JUNK` or `bext` chunk instead of as zero; the same walk serves AVI, WebP and other RIFF files.
+- A ZIP whose sizes follow the data - a streamed archive, an APK - shows them as "deferred" rather than a misleading 0.
+- Entering an archive that sits on a remote host no longer blanks the panel until the whole file has downloaded: the way out appears at once, the download shows a progress bar in the status line, and leaving cancels it.
+- `PgUp` and `PgDn` within a page of the top or bottom of a file land on its first or last byte instead of doing nothing.
+- The `F9` menu's dropdown fills the width of its box under a rule, rather than a narrow column hung under its title.
+- A tab left inside an archive, disk image or database reopens in the folder that holds the file, not the home directory.
+
 ## v0.10.0
 
 - Browse a SQLite database as directories: Enter a `.db`/`.sqlite` file to list its tables, enter a table to stream its rows, and each row reads as JSON with F3 and copies out as `<database>.<table>.<id>.json` with F5. Read-only.
