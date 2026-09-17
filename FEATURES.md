@@ -1,392 +1,186 @@
 # Holos Commander - features
 
-Everything below is implemented and covered by tests. Where a limit exists, it
-is stated rather than glossed over.
+Every feature below is implemented and tested. Where a limit exists it is
+stated, not hidden.
 
-## Panels
+## Two-pane operations
 
-- Two panels side by side, each with up to 9 tabs.
-- Columns: name, extension, size, date, attributes, and a one-character git
-  state. Order and widths are configurable, and columns are dropped in a
-  configured priority as the panel narrows. Name is never dropped.
-- Git state in the listing: each file carries a flag in the letters git itself
-  uses - `M` modified, `S` staged, `A` added, `U` untracked - and a directory
-  shows the state of what is under it, so `src` reads as modified when
-  something inside it is. The column is drawn wherever the setting is on rather
-  than appearing and disappearing as you walk between repositories; a blank
-  cell means clean. On by default, and off turns the whole check off so an
-  ordinary directory read never touches git.
-- The panel's status line names the branch, right-aligned: `[master]`, at any
-  depth inside the repository.
-- Sort by any column, ascending or descending, with a secondary sort. Positional
-  binding: `Ctrl+<n>` sorts by the n-th column as *you* have ordered them.
-- Quick search by typing. Matching is incremental and the status line says when
-  nothing matched.
-- Marking: by key, by `*.rs`-style mask, by inverting, and by comparing the two
-  panels. `Shift` with a movement key sweeps - `Shift+Up`/`Down`, `PgUp`/`PgDn`,
-  `Home`/`End` - and the row the sweep starts on decides whether it marks or
-  clears, so a second sweep gives the selection back. A partial page at either
-  edge sweeps to the edge.
-- `Ctrl+E` brings the other panel to this panel's directory; `Ctrl+P` puts the
-  current path on the command line.
+- Two panels side by side, up to 9 tabs each.
+- Configurable columns: name, extension, size, date, attributes, git state.
+  Columns drop by priority as the panel narrows; name never drops.
+- Sort by any column with a secondary key. `Ctrl+<n>` sorts by the n-th column
+  as you have ordered them.
+- Quick search by typing, incremental.
+- Marking by key, by `*.rs`-style mask, by inversion, or by comparing the two
+  panels. `Shift` with a movement key sweeps a range.
 - Directory sizes on demand (`Space`), reported exactly.
-- Hidden files toggle, brief and full views, and a hotlist of bookmarked
-  directories (`Ctrl+D`).
-- Quick view (`Ctrl+Q`): the opposite panel becomes a live view of the file
-  under the cursor, following it as the cursor moves.
-- Branch view (`Ctrl+B`): a flat, recursive listing of the whole tree under the
-  current directory, as one panel of files to search, mark and act on.
+- Hidden-files toggle, brief and full views, and bookmarked directories
+  (`Ctrl+D`).
+- Quick view (`Ctrl+Q`): the opposite panel previews the file under the cursor,
+  following it as you move.
+- Branch view (`Ctrl+B`): the whole tree below the current directory as one flat
+  panel to search, mark and act on.
+- `Ctrl+E` brings the other panel here; `Ctrl+P` puts the path on the command
+  line.
 
-## Files
+## Local files
 
-- Copy, move, rename, delete, and make directory, on the classic function keys.
-- View (`F3`) and edit (`F4`) in the external viewer and editor. Editing a file
-  past a configurable size (10 MB by default) asks first, so a stray `F4` on a
-  disk image does not hand it to an editor that would try to load the whole
-  thing.
-- Multi-rename with a pattern language, a preview, and its own undo.
-- Conflict handling per file or for the whole batch: skip, overwrite, overwrite
-  if newer, overwrite if a different size, rename, or refuse.
-- Copies are verified on request, and are synced to the medium before the
-  destination is replaced, so a truncated write is never reported as success.
-- Deletion goes to the desktop trash where one exists, with a permanent variant.
-- Attribute preservation for mode and timestamps, best effort with a warning
-  where the filesystem refuses.
-- Every long operation runs as a cancellable background job with progress, and
-  cancellation is honoured inside the copy loop rather than only between files.
-- Compare the two listings and mark what differs on either side, by name, size
-  and date (`Shift+F2`), or by reading the bytes so a file changed without
-  changing its size or date is still caught (`Ctrl+Shift+F2`). Marking is all
-  it does: copy the marks whichever way you like with `F5` or `F6`, which is the
-  synchronise, driven by hand.
-- Compare the two files under the cursors byte for byte, for a verdict: the
-  same file, or the offset at which they stop agreeing.
-- Copy the full path of the selection to the system clipboard, for pasting into
-  a terminal or another program.
-- Checksums: write and verify SHA-256 (`.sha256`) and CRC32 (`.sfv`). The
-  formats are the ones that already exist, so a file this writes verifies with
-  `sha256sum -c` and one `sha256sum` wrote verifies here. A line naming a file
-  outside the list's own directory is refused rather than followed.
-- Create symbolic and hard links, and edit permissions. Each is refused before
-  its dialog opens where the backend cannot do it, which is the rule the copy
-  engine already follows: a question answered with a form and then refused is
-  worse than one never asked. An archive member's mode is in its header and a
-  FAT image has no modes at all, so neither offers the dialog.
-- Split a file into numbered parts and merge them back. `name.001`, `name.002`,
-  as every other tool writes them. Merging starts at the first part and stops
-  at the first number missing rather than producing a short file.
-- Resize and convert images, with the source's own pixel size, format and
-  channel count carried through rather than promoted.
+- Copy, move, rename, delete and make-directory on the classic function keys.
+- Every long operation is a cancellable background job with progress;
+  cancellation is honoured inside the copy loop, not only between files.
+- Conflict handling per file or per batch: skip, overwrite, overwrite if newer,
+  overwrite if a different size, rename, or refuse.
+- Optional copy verification; data is synced to the medium before the
+  destination is replaced.
+- Delete to the desktop trash where one exists, with a permanent variant.
+- Mode and timestamp preservation, best-effort with a warning where refused.
+- Multi-rename with a pattern language, a preview and its own undo.
+- Resize and convert images in bulk, carrying the source's pixel size, format
+  and channel count through unchanged.
+- Compare the two listings and mark differences by name, size and date
+  (`Shift+F2`) or byte for byte (`Ctrl+Shift+F2`); copy the marks yourself with
+  `F5`/`F6`.
+- Compare the two files under the cursors byte for byte, for a same-or-differs
+  verdict.
+- Checksums: write and verify SHA-256 (`.sha256`) and CRC32 (`.sfv`), compatible
+  with `sha256sum -c`.
+- Symbolic and hard links, and permission editing, offered only where the
+  backend supports them.
+- Split a file into `name.001`, `name.002`, ... and merge them back.
+- External editor (`F4`), with a size guard before a huge file is handed over.
+- Copy the selection's full path to the system clipboard.
 
-## Archives
+## Virtual filesystems
 
-Browse into an archive as though it were a directory, and copy files back out.
-Archives nest: an archive inside an archive is extracted to a session cache and
-cleaned up on exit.
+Enter archives, disk images, databases and remote hosts like directories. They
+nest, and the type is decided by content, not by the extension.
 
-The format is decided by the file's **content**, not its extension, so an
-archive under a name no table knows - an `.apkm`, an `.epub`, a `.jar` - opens
-on `Enter` like any other.
+**Archives**
 
-A singly compressed file is a container holding exactly one member: `disk.img.xz`
-holds `disk.img`, which can be viewed, copied out, or stepped into as a disk
-image in its own right. The member's size is read from the container where the
-container states it, never by decompressing to find out.
+- Browse into and copy out of ZIP, 7z, RAR and TAR (including `.tar.gz`,
+  `.tar.xz`, `.tar.zst`, `.tar.bz2`). Write ZIP, the TAR family and 7z.
+- A single-compressed file (`disk.img.xz`) opens as its one member.
+- Listings stream as the index is built; nothing is read whole into memory.
+- Entries whose names would escape the destination, and members that lie about
+  their size, are refused and counted.
 
-| Format | Read | Write |
-| --- | --- | --- |
-| `.zip` | yes | yes |
-| `.tar`, `.tar.gz`, `.tar.bz2`, `.tar.xz`, `.tar.zst` | yes | yes |
-| `.gz`, `.xz`, `.zst`, `.bz2` (single file) | yes | no (writing one means recompressing the whole file) |
-| `.7z` | yes | yes |
-| `.rar` | yes | no (the format is not ours to write) |
+**Disk images** (read-only)
 
-Listings stream as the index is built, so a 500,000-entry archive fills the
-panel as it is read rather than after. Nothing reads an archive whole into
-memory.
+- ISO 9660 (Joliet, Rock Ridge), FAT12/16/32, ext2/3/4 and SquashFS, with GPT
+  and MBR partition tables.
+- exFAT, NTFS, HFS+ and APFS are recognised and named, not read.
+- SquashFS covers AppImages, Snaps, initramfs and most router firmware.
 
-Entries whose names would escape the destination are refused before extraction
-and counted, and the refusal names the entry. Declared sizes are treated as
-claims: a member that lies about its size stops being decompressed rather than
-stopping being read.
+**SQLite** (read-only, optional build feature)
 
-## Disk images (read-only)
+- A `.db`/`.sqlite`/`.sqlite3`/`.db3` file opens as a directory of tables; a
+  table is a directory of rows.
+- Rows read and copy out as JSON (`F3`, `F5`); the table's own columns become
+  panel columns you can sort by.
+- Read through the SQLite library: WAL, overflow pages and `WITHOUT ROWID`
+  tables are all handled.
 
-`.iso` and `.img` browse like directories. Detection is by content, because an
-extension says nothing about what is inside.
+**Remote**
 
-| Filesystem | Support |
-| --- | --- |
-| ISO 9660, with Joliet and Rock Ridge | read |
-| FAT12, FAT16, FAT32 | read |
-| ext2, ext3, ext4 | read: names, sizes, modes, owners, symbolic links. No timestamps - the reader exposes none |
-| SquashFS | read: names, sizes, modes, owners, timestamps, and seekable files. Symbolic links and device nodes cannot be listed; the rows around them are, and the count is reported |
-| GPT and MBR partition tables | read |
-| exFAT, NTFS, HFS+, APFS | recognised and named, not read |
-
-A partitioned image lists its partitions, and entering one is a step in the path
-rather than a directory inside the image. An unsupported filesystem is reported
-by name ("exFAT, not supported"), which is a different thing from a damaged
-image, which is a different thing again from a file that is not an image.
-
-SquashFS is what an AppImage, a Snap, an initramfs and most router firmware
-are, so those open as directories now. NTFS stays out on purpose: the one crate
-that reads it pulls in a dependency cargo reports as containing code a future
-Rust will reject.
-
-Read-only is the feature, not a stage of one: there is no write path to disable.
-
-## SQLite databases (read-only)
-
-A `.db`, `.sqlite`, `.sqlite3` or `.db3` file browses like a directory.
-Detection is by content, so a database with any name opens on `Ctrl+PgDn`.
-
-- The root lists the tables and views. A table is a directory of its rows.
-- A row is named for its id - the rowid, or its position for a `WITHOUT ROWID`
-  table - and reads as the pretty JSON of its whole record on `F3`.
-- `F5` copies a row out as `<database>.<table>.<id>.json`, so it says where it
-  came from; copying a table makes a folder with one JSON per row.
-- A table's own first columns become the panel's columns, headed by their real
-  names, so `Ctrl+<n>` sorts by them - `Ctrl+2` by the second column of the
-  database - and each value sorts as a number or as text as its type dictates.
-- The first column is the row's id under the name the table gives it - an
-  `INTEGER PRIMARY KEY` reads as `id`, not as "Name" - and stays as narrow as an
-  id needs. The columns pack to their own widths like a grid, rather than one
-  stretching across the panel and leaving a gap.
-- Read directly with the SQLite library, so the write-ahead log, overflow pages
-  and `WITHOUT ROWID` tables are all handled. Read-only, entirely: there is no
-  write path.
-
-An optional build feature, on by default. `cargo build --no-default-features`
-produces a binary without it - and without the one C library the project
-otherwise avoids - leaving everything else untouched.
-
-## Remote
-
-- **SFTP** over SSH, in process (`russh`), with `known_hosts` checking including
-  hashed entries, and host-key changes surfaced rather than silently accepted.
-- **FTP** and FTPS, in process (`suppaftp`), with explicit and implicit TLS.
-- **SMB2 and SMB3**, in process (`smb2`), pure Rust with no `libsmbclient` and
-  no FFI: signing, encryption, and share enumeration. A share is the first
-  component of the path, so `/` on the connection is the server and lists its
-  shares, and `..` out of a share lands there. Anonymous and guest logins are
-  never prompted; a domain is written `DOMAIN\user`.
-- Credentials come from an agent, a key, or the system keyring where one is
-  available; the program degrades to asking rather than failing when it is not.
-- A connected panel behaves like any other: copy, move, view, search, and browse
-  an archive that lives on the remote.
-- Saved connections in `hosts.toml`.
-
-- **S3**, over `s3://` for TLS or `s3+http://` for a plain-HTTP endpoint like a
-  MinIO in a container - or just paste the `http://` or `https://` URL and the
-  scheme decides. Credentials come from the connect line, a saved bookmark, or
-  the AWS environment variables. Buckets are
-  the root listing, prefixes are directories, and a key is a file. Requests are
-  signed with SigV4, checked here against the specification's own worked
-  example rather than against itself. Listings page, so a bucket larger than
-  one reply still fills the panel.
-- S3 has no directories and no rename, and both show: an empty directory is a
-  zero-byte object whose key ends in `/`, which is the convention every other
-  tool uses, and renaming copies and then deletes, server side, which is why
-  renaming a large object is not instant. A single upload is held in memory
-  and refused past 512 MB; multipart upload is not built.
-- **WebDAV**, over `dav://`, `davs://`, or the `https://` URL you copied out of
-  a browser. Listing, reading, writing, `MKCOL`, `DELETE` and server-side
-  `MOVE` for rename. No locking: holding and refreshing a lock for as long as a
-  panel is open is a background obligation this program does not otherwise
-  have, and without it two writers can overwrite each other exactly as they can
-  over FTP or on a share.
+- SFTP, FTP/FTPS, SMB2/3, S3 and WebDAV, all in process, with no `ssh` command
+  or `libsmbclient`.
+- Credentials from an agent, a key, or the system keyring; saved hosts in
+  `hosts.toml`.
+- A connected panel behaves like a local one: copy, move, view, search, and
+  browse an archive that lives on it.
+- SMB signing, encryption and share enumeration; S3 SigV4 with paged listings;
+  WebDAV `MKCOL`, `MOVE` and `DELETE`.
 
 ## Search
 
-- By name (glob or regex) and by content, over local trees, remote connections
-  and inside archives.
-- Runs in process on ripgrep's own libraries: `ignore` for the walk,
-  `grep-searcher` and `grep-regex` for matching. Nothing is spawned.
-- Results are a panel. Rows appear as they are found and can be acted on while
-  the walk is still running.
-- Optional respect for `.gitignore`; off by default, because a file manager
-  should find what is on the disk.
-- Searches can be saved and reloaded.
+- By name (glob or regex) and by content, over local trees, remote hosts and
+  inside archives.
+- Runs in process on ripgrep's own libraries; nothing is spawned.
+- Results are a panel whose rows appear, and can be acted on, while the walk is
+  still running.
+- Optional `.gitignore` respect, off by default. Searches can be saved and
+  reloaded.
 
-## Viewer
+## Viewer (`F3`)
 
-- Three modes, chosen by content and switchable with `1`, `2` and `3`: text,
-  hex, and a document mode that renders JSON, HTML and Markdown as a document
-  rather than as source. A binary the templates recognise is rendered there
-  too, as its fields; one they do not still shows what can be read of it.
-- An APK's `AndroidManifest.xml` is compiled binary XML, not text, and opens as
-  the XML it was built from. Recognised by its own header rather than its name,
-  which a compiled manifest and a written one share. `1` and `2` still read the
-  file's real bytes at their real offsets.
-- A UTF-16 file with no byte order mark opens as text rather than as a hex
-  dump. Recognised by its shape - one ASCII byte and one NUL per character -
-  which `chardetng` does not answer.
-- In hex mode a template paints the regions it knows, and stepping the cursor
-  into one reads it out in the status bar: what the field is, and its value.
-- **Git history as a directory.** `Alt+V` opens the repository's history:
-  commits are folders named by their short id and subject. Entering one lists
-  the files that commit changed, each flagged with what it did to them - added,
-  modified, deleted or renamed - rather than the whole tree as it stood, which
-  buried the handful of rows the commit was about. Files open with `F3`, diff
-  with `Alt+D` against the previous commit, or copy out with `F5`. Read-only.
-  `Alt+V` again leaves it, and `Backspace` from the commit list puts you back
-  in the folder you started from. It reads the object store directly, no `git`
-  process.
-- A commit's listing asks for its own columns - the name, the size, the date
-  and the state - so no cell is spent on an extension already in the path or on
-  permissions a commit does not have.
-- **Diffs.** `Alt+D` shows the file's diff against `HEAD`, and `Alt+Shift+F2`
-  diffs the file under each panel's cursor. Unified format, `+` and `-`
-  coloured, unchanged runs collapsed behind `... 27 unchanged lines` and
-  expandable.
-- The diff lives in the document mode rather than in one of its own, so `1` and
-  `2` still give the file's own text and bytes and find still searches what is
-  on screen. **The file's own format wins**: a modified `.md` opens as
-  markdown and `Alt+D` swaps to the diff, while a file no renderer claims -
-  most source code - opens on the diff directly, there being no document for it
-  to displace.
-- The status line says what git knows: `git modified`, or `git unmodified` for
-  a tracked file you have not touched, so a toggle that does nothing is
-  explained rather than mysterious.
-- Git's object store is read directly, loose objects and packfiles alike. No
-  `git` process is started.
 - Streaming: a 40 GB file opens as fast as a 4 KB one, and memory is bounded by
-  the window rather than the file.
-- Syntax highlighting (`syntect`) with the active theme.
-- Find and find-next, with the last search shared with Find Files, so `F3` on a
-  search result walks the matches inside it. Find searches whatever the mode is
-  showing: the file's text or bytes in modes 1 and 2, and in document mode the
-  rendered text itself - so a JSON key you can see is a key you can search for,
-  in the form it is drawn rather than the form it is stored in.
-- Encoding detection with a manual override ring.
-- Selection, including column selection, and copy to the system clipboard via
-  OSC 52.
-- `i` in hex mode opens a reading of the bytes under the cursor: every width
-  from one to eight, signed and unsigned, both byte orders, `f32`, `f64` and a
-  timestamp where the number plausibly is one. It follows the cursor, so
-  walking a header with the arrow keys reads it field by field with nothing to
-  select first.
-- Wrap toggle, tab width, and a configurable hex grouping.
-- The mode a file opens in is decided by the file, not by the last one viewed,
-  so a text file never opens in hex because the file before it was binary.
-  Whether a recognised document opens in document mode is configurable.
+  the window, not the file.
+- Three modes, chosen by content and switchable with `1`/`2`/`3`: text, hex, and
+  a document mode for JSON, HTML, Markdown and compiled Android XML.
+- Syntax highlighting in the active theme; wrap toggle, tab width, configurable
+  hex grouping.
+- Find and find-next, shared with Find Files; in document mode it searches the
+  rendered text.
+- Selection including column selection, copied via OSC 52; encoding detection
+  with a manual override.
+- `i` in hex reads the bytes under the cursor as every integer width, float and
+  timestamp, following the cursor field by field.
+- Binary templates paint the regions they know in hex and name each field in the
+  status bar.
+
+## Git
+
+- File status in the listing and the branch in the status line, read straight
+  from the object store with no `git` process.
+- History as directories (`Alt+V`): commits are folders named by short id and
+  subject; enter one to list the files it changed.
+- Diffs against `HEAD` (`Alt+D`) or between the two panels (`Alt+Shift+F2`),
+  unified and coloured, with unchanged runs collapsed and expandable.
 
 ## Knowing what a file is
 
-`Shift+F9` on a panel, or `F9` in the viewer, describes the file under the
-cursor: its name, size, attributes and date, and then what its contents turn
-out to be.
-
-The second half comes from 109 binary templates covering boot records and
-partition tables, filesystems, executables and libraries, images, audio and
-video, archives, fonts, virtual disks, firmware, bytecode, forensic artefacts
-and a few ROM formats. They are compiled into the binary, so this works on a
-machine with no configuration at all.
-
-A template that carries a summary reports facts rather than fields: a PNG says
-`1920 x 1080 px`, `RGBA`, `deflate`; a WAV says `44.1 kHz`, `stereo`; an AVI
-names its codec from the FourCC; an ELF says `x86-64`, `shared object`; a Java
-class says `Java 21`. Where a value has no name in the table the raw number is
-shown rather than a guess, and a field the file ends inside says so.
-
-A file no template recognises still gets its own facts and a line saying the
-contents were not recognised, which is most files and is not a failure.
+- `Shift+F9` on a panel, or `F9` in the viewer, describes the file: name, size,
+  attributes and date, then what its bytes actually are.
+- 109 built-in binary templates covering images, audio and video, executables
+  and libraries, filesystems, fonts, firmware, bytecode and more, compiled into
+  the binary.
+- Templates report facts, not just fields: a PNG says `1920 x 1080 px`, `RGBA`;
+  a WAV says `44.1 kHz`, `stereo`; an ELF says `x86-64`.
 
 ## Console
 
 - `Ctrl+O` gives a persistent shell the whole screen and takes it back, with
-  scrollback preserved across the switch.
-- A command typed on the command line that keeps the terminal takes the screen
-  while it runs and gives the panels back when it finishes - a `git clone`
-  shows its progress and hands them over. A console opened with `Ctrl+O` was
-  asked for and stays until it is dismissed the same way.
-- The shell's directory and the active panel stay in step, both ways, using
-  OSC 7 and OSC 133 prompt hooks installed for bash and zsh.
-- Before a shell starts (or where one cannot), a built-in command line with its
-  own history stands in.
-- The completion indicator needs a shell that can say when a command *starts*:
-  zsh, or bash 4.4 and later. macOS ships bash 3.2 as `/bin/bash`, so under
-  that shell everything works except the indicator. Its own default shell, zsh,
-  is unaffected.
-- The active file or path can be inserted at the caret, quoted for the shell
-  exactly once.
+  scrollback preserved.
+- A terminal-holding command such as `git clone` takes the screen while it runs
+  and hands the panels back when it finishes.
+- The shell's directory and the active panel stay in step, both ways (OSC 7 and
+  OSC 133 hooks for bash and zsh).
+- A built-in command line with its own history stands in before a shell starts.
 
 ## Interface
 
-- 21 themes, plus a 16-colour fallback for terminals that need it, and a
-  truecolor/256/16 ladder chosen by detection.
-- `Alt+T` previews each theme as the cursor moves over it, applies it on
-  `Enter` and writes it into `config.toml` so it survives a restart. `Esc` puts
-  back the one you started with.
-- The picker lists your own `themes/*.toml` beside the built-in ones, then adds
-  - marked with a trailing `+` - the themes the project's repository has and
-  this machine does not. `Enter` on such a name fetches it, checks it parses as
-  a theme before writing anything, writes it into `themes/`, and applies it. A
-  machine with no network simply sees the themes it already has, and every
-  network failure is a line in the status bar and nothing more.
-- On an [Omarchy](https://omarchy.org/) desktop, an extra `omarchy` theme reads
-  the desktop's own live colour scheme, so the panel follows whatever theme the
-  rest of the desktop is on. It appears in the picker only where Omarchy is
-  installed, and a running session recolours in place when the desktop theme
-  changes: adopting it installs a small `theme-set.d` hook that signals hcmd to
-  re-read its configuration, so no restart is needed. The hook is best-effort
-  and safe to delete.
-- `HCMD_THEME=<name>` forces a theme for one run without touching the config, so
-  a screenshot or a demo can pin a look. It overrides the configured theme the
-  way `HCMD_KEYBOARD_PROTOCOL` overrides key detection.
-- Every command binding is rebindable per context in `keymap.toml`, including
-  cancel, accept, and moving between a dialog's controls. The arrow, page and
-  Home/End keys inside a dialog's own list move that widget's cursor and are
-  the same in every dialog by design.
-- A `keymap.toml` written by an older version is noticed at startup: it predates
-  every binding added since and silently shadows them, so one line says so and
-  points at the fix rather than leaving keys that appear to do nothing.
-- The `F1` reference is *generated from your keymap*, so it shows your bindings,
-  and marks any that this terminal cannot deliver alongside the fallback that
-  works.
-- A menu bar, a context menu, dialogs with mnemonic accelerators, and a job
-  queue.
-- Alt+U asks GitHub whether there is a newer release and tells you once per
-  version, with the exact command that installs it. It downloads nothing and
-  never replaces the binary.
-- Mouse support, bracketed paste, and a panic hook that always restores the
-  terminal.
+- 21 themes plus a 16-colour fallback, with a truecolor/256/16 ladder chosen by
+  detection.
+- Live-preview theme picker (`Alt+T`) that also offers themes from the project
+  repository, fetched on demand, and on an [Omarchy](https://omarchy.org/)
+  desktop a dynamic `omarchy` theme that follows the desktop's colours live.
+- Every command binding is rebindable per context in `keymap.toml`; the `F1`
+  reference is generated from your keymap and marks any key this terminal cannot
+  deliver.
+- Menu bar, context menu, mnemonic dialogs, a job queue, mouse support and
+  bracketed paste.
+- Update check at startup and on demand (`Alt+U`): tells you once per version,
+  with the install command. It downloads nothing and never replaces the binary.
 - Works down to 60 columns, with an ASCII spelling of every piece of chrome for
   terminals without box drawing.
 
 ## Configuration
 
-TOML in `~/.config/holoscommander/`, written commented-out on first run so the
-file documents itself and every default is visible. An unknown key is a warning
-with a line number, never a refusal to start. `hcmd --check-config` validates
-without starting.
-
-`hcmd --update-config` brings an older file up to date: the options you set stay
-live at your own values, everything you have not touched is rewritten commented
-so it keeps tracking the default, and options added since your file was written
-appear. The old file is kept beside it, dated. `keymap.toml` gets the same
-treatment against the shipped layout, and a binding written under a different
-section than the shipped file happens to declare it in is carried over rather
-than dropped. A file the parser cannot read is left alone and the fault
-reported, rather than rewritten at the defaults.
-
-The reference file and the validator are generated from the same walk of the
-configuration structs, so an option cannot reach the file without the validator
-knowing it.
+- Commented TOML in `~/.config/holoscommander/`, written self-documenting on
+  first run. An unknown key is a warning with a line number, never a refusal to
+  start.
+- `hcmd --check-config` validates without starting; `hcmd --update-config`
+  migrates an older file, keeping your values and comments and adding options
+  that have since appeared.
+- The reference file and the validator are generated from one walk of the config
+  structs, so an option cannot reach the file without the validator knowing it.
 
 ## Deliberately not included
 
-- **No subprocesses for the program's own work.** Search, archives, device
-  enumeration and file associations all run in process. The only processes
-  started are the shell you asked for and the editor or application you opened a
-  file with.
-- **No writing to disk images.** Read-only, and not as a first step towards
-  writing.
-- **No `.rar` creation.** The format is not ours to write.
-- **No configuration file that the program rewrites behind you**, apart from
-  what you change through the UI: the three lists (hotlist, hosts, saved
-  searches), the one line in `update.toml` noting which release you have been
-  told about, and the theme, which `Alt+T` writes into `config.toml` as a single
-  line. Your comments, spacing and every other setting are left exactly as you
-  wrote them.
+- No subprocesses for the program's own work; only the shell and the apps you
+  open files with.
+- No writing to disk images. Read-only, and not a step towards writing.
+- No `.rar` creation.
+- No configuration file rewritten behind you, beyond what you change through the
+  UI: the hotlist, hosts and saved searches, the theme line, and the one line in
+  `update.toml`.
