@@ -53,10 +53,12 @@
 //!
 //! # Where the box lands
 //!
-//! The dialog draws the six titles across the first row of its own interior and
-//! hangs the dropdown under the open one, so it asks for exactly the room those
-//! two use: the wider of the bar and the open dropdown across, and a row for
-//! the bar plus the open menu's rows down (see [`MenuDialog::size_hint`]). It
+//! The dialog draws the six titles across the first row of its own interior, a
+//! `├──┤` rule under them, and the open menu's rows filling the full width
+//! below - so the box's own border frames the rows and no space is left empty
+//! beside them. It asks for exactly the room those use: the wider of the bar
+//! and the open menu's longest row across, and a row for the bar, a row for the
+//! rule and the menu's rows down (see [`MenuDialog::size_hint`]). It
 //! is a bar, so it belongs where a bar lives - it declares
 //! [`crate::dialog::Dialog::top_left`] and the framework pins it to the
 //! screen's top-left rather than [`crate::dialog::centred`]. That is the whole
@@ -81,7 +83,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::widgets::Paragraph;
 
 use super::{ellipsis, row};
 use crate::config::KeyContext;
@@ -590,19 +592,6 @@ impl MenuDialog {
         self.cells().iter().map(|(_, cell)| text::width(cell)).sum()
     }
 
-    /// How far to the right the open dropdown reaches: its title's column plus
-    /// the width it wants there, frame included - the same start and width
-    /// [`Self::dropdown_rect`] draws it at, so the box is wide enough that the
-    /// dropdown never has to slide left to fit.
-    fn open_span(&self) -> usize {
-        let start = self.cells().get(self.open).map_or(0, |(start, _)| *start);
-        // Two for the dropdown's frame, exactly as `dropdown_rect` adds.
-        let width = self
-            .menu()
-            .map_or(0, |menu| menu.natural_width().saturating_add(2));
-        start.saturating_add(width)
-    }
-
     /// The rows of `items` visible in a window of `rows`, keeping the cursor
     /// inside it.
     ///
@@ -653,71 +642,76 @@ impl MenuDialog {
         f.render_widget(Paragraph::new(Line::from(spans)).style(style.body()), area);
     }
 
-    /// Where the dropdown hangs, inside the interior `area`: under the open
-    /// title, shifted left only as far as it must be to fit.
+    /// Where the dropdown's rows land, inside the interior `area`: the full
+    /// width of it, below the bar and the rule that divides them. The rows fill
+    /// the box rather than hanging under the open title, so the box's own
+    /// border is their frame and no space is left empty beside them.
     fn dropdown_rect(&self, area: Rect) -> Option<Rect> {
         let menu = self.menu()?;
-        if area.height <= 1 || area.width == 0 {
+        // A row for the bar and a row for the rule under it come first, and a
+        // gutter column each side needs at least three columns to sit in.
+        if area.height <= 2 || area.width <= 2 {
             return None;
         }
-        let start = self.cells().get(self.open).map_or(0, |(start, _)| *start);
-        let available = usize::from(area.width);
-        // Two for the frame it is drawn in.
-        let want = menu.natural_width().saturating_add(2).min(available);
-        let x = start.min(available.saturating_sub(want));
-        let rows = usize::from(area.height).saturating_sub(1);
-        let height = menu
-            .items
-            .len()
-            .min(MAX_ROWS)
-            .saturating_add(2)
-            .min(rows)
-            .max(1);
-        let rect = Rect::new(
-            area.x
-                .saturating_add(u16::try_from(x).unwrap_or(u16::MAX))
-                .min(area.right()),
-            area.y.saturating_add(1),
-            u16::try_from(want).unwrap_or(u16::MAX),
+        let rows = usize::from(area.height).saturating_sub(2);
+        let height = menu.items.len().min(MAX_ROWS).min(rows).max(1);
+        // A one-cell gutter each side, so a row does not touch the border the
+        // way the bar above it does not.
+        Some(Rect::new(
+            area.x.saturating_add(1),
+            area.y.saturating_add(2),
+            area.width.saturating_sub(2),
             u16::try_from(height).unwrap_or(u16::MAX),
-        );
-        (rect.width > 0 && rect.height > 0).then_some(rect)
+        ))
     }
 
-    /// The dropdown: a frame when there is room for one, and the rows.
+    /// The `├──┤` between the bar and the rows, drawn across the dialog's own
+    /// border columns so it joins them and needs no frame of the dropdown's.
+    fn draw_rule(&self, f: &mut Frame, area: Rect, style: &DialogStyle) {
+        let glyphs = Glyphs::new(style.ascii);
+        let width = usize::from(area.width);
+        let mut body = String::with_capacity(width.saturating_add(2).saturating_mul(3));
+        body.push_str(glyphs.tee_left());
+        for _ in 0..width {
+            body.push_str(glyphs.horizontal());
+        }
+        body.push_str(glyphs.tee_right());
+        // One column left and one column wider than the interior, so its ends
+        // land on the two border columns the framework drew.
+        let rule = Rect::new(
+            area.x.saturating_sub(1),
+            area.y.saturating_add(1),
+            area.width.saturating_add(2),
+            1,
+        );
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                body,
+                Style::new().fg(style.border).bg(style.bg),
+            ))),
+            rule,
+        );
+    }
+
+    /// The dropdown: the rule under the bar, then the rows filling the box.
     fn draw_dropdown(&self, f: &mut Frame, area: Rect, style: &DialogStyle) {
         let Some(menu) = self.menu() else { return };
+        if area.height <= 1 {
+            return;
+        }
+        self.draw_rule(f, area, style);
         let Some(rect) = self.dropdown_rect(area) else {
             return;
         };
         let glyphs = Glyphs::new(style.ascii);
-        // A frame needs a cell of border on each side and one row of content
-        // between them. Below that the rows are drawn bare, which is still a
-        // usable menu on a terminal the design barely supports.
-        let inner = if rect.width >= 4 && rect.height >= 3 {
-            let block = Block::default()
-                .borders(Borders::ALL)
-                .border_set(glyphs.border_set())
-                .border_style(Style::new().fg(style.border).bg(style.bg))
-                .style(Style::new().bg(style.bg));
-            let inner = block.inner(rect);
-            f.render_widget(block, rect);
-            inner
-        } else {
-            rect
-        };
-        if inner.width == 0 || inner.height == 0 {
-            return;
-        }
-
-        let rows = usize::from(inner.height);
+        let rows = usize::from(rect.height);
         let range = Self::window(self.cursor, menu.items.len(), rows);
         // One column is given up to the scroll markers only when there is
         // something off the top or the bottom to mark.
         let scrolls = menu.items.len() > rows;
-        let width = usize::from(inner.width).saturating_sub(usize::from(scrolls));
+        let width = usize::from(rect.width).saturating_sub(usize::from(scrolls));
         for (offset, index) in range.clone().enumerate() {
-            let Some(rect) = row(inner, u16::try_from(offset).unwrap_or(u16::MAX)) else {
+            let Some(row_rect) = row(rect, u16::try_from(offset).unwrap_or(u16::MAX)) else {
                 break;
             };
             let Some(item) = menu.items.get(index) else {
@@ -735,20 +729,20 @@ impl MenuDialog {
                 Crop::End,
                 ellipsis(style.ascii),
             );
-            draw_text(f, rect, &text, row_style, style.ascii);
+            draw_text(f, row_rect, &text, row_style, style.ascii);
         }
         if !scrolls {
             return;
         }
-        let marker_x = inner.right().saturating_sub(1);
+        let marker_x = rect.right().saturating_sub(1);
         if range.start > 0
-            && let Some(top) = row(inner, 0)
+            && let Some(top) = row(rect, 0)
         {
             let at = Rect::new(marker_x, top.y, 1, 1);
             draw_text(f, at, glyphs.arrow_up(), style.body(), style.ascii);
         }
         if range.end < menu.items.len()
-            && let Some(bottom) = row(inner, inner.height.saturating_sub(1))
+            && let Some(bottom) = row(rect, rect.height.saturating_sub(1))
         {
             let at = Rect::new(marker_x, bottom.y, 1, 1);
             draw_text(f, at, glyphs.arrow_down(), style.body(), style.ascii);
@@ -769,25 +763,27 @@ impl Dialog for MenuDialog {
     ///
     /// Width is the wider of the two things the interior draws: the six title
     /// cells end to end (what [`Self::bar_width`] measures, the same cells
-    /// [`Self::draw_bar`] lays out) and the open dropdown, which hangs at its
-    /// title's column and wants its own width there (what [`Self::open_span`]
-    /// measures from the same [`Self::cells`] and [`Menu::natural_width`]
-    /// [`Self::dropdown_rect`] uses). Asking for that much means the dropdown
-    /// never has to slide left to fit, so it is never clipped and never scrolls
-    /// sideways. Both gain two for the frame the framework draws around the
+    /// [`Self::draw_bar`] lays out) and the open menu's longest row
+    /// ([`Menu::natural_width`]), since the rows fill the whole width. Both gain
+    /// two for the frame the framework draws around the
     /// interior.
     ///
-    /// Height is one row for the bar plus the **open** menu's own rows, capped
-    /// at [`MAX_ROWS`] and scrolling past it, plus the frames: the dropdown's
-    /// own two and the box's own two. The open menu's and not the longest, so
-    /// the box is the size of what is on screen. The box is pinned to the
+    /// Height is one row for the bar, one for the rule under it, and the
+    /// **open** menu's own rows, capped at [`MAX_ROWS`] and scrolling past it,
+    /// plus the box's own two frame rows. The open menu's and not the longest,
+    /// so the box is the size of what is on screen. The box is pinned to the
     /// screen's top-left by [`Dialog::top_left`], so a taller or shorter open
     /// menu grows the box downward without ever moving the bar.
     fn size_hint(&self) -> (u16, u16) {
-        let width = self.bar_width().max(self.open_span()).saturating_add(2);
+        // The open menu's longest row plus its two gutter cells, or the bar,
+        // whichever is wider, and then the box's own frame.
+        let content = self
+            .menu()
+            .map_or(0, |menu| menu.natural_width().saturating_add(2));
+        let width = self.bar_width().max(content).saturating_add(2);
         let rows = self.menu().map_or(0, |menu| menu.items.len()).min(MAX_ROWS);
-        // A row for the bar, the dropdown's own frame, and the box's own frame.
-        let height = rows.saturating_add(5);
+        // The box's frame, the bar, the rule under it, and the item rows.
+        let height = rows.saturating_add(4);
         (
             u16::try_from(width).unwrap_or(u16::MAX),
             u16::try_from(height).unwrap_or(u16::MAX),
@@ -1185,23 +1181,29 @@ mod tests {
     }
 
     #[test]
-    fn the_dropdown_hangs_under_the_open_title() {
-        // the bar, drawn as a bar: the open menu's box starts at the
-        // column its title starts at, and only slides left when it would
-        // otherwise run off the edge.
+    fn the_dropdown_fills_the_full_width_below_the_bar_and_the_rule() {
+        // The rows fill the box rather than hanging under the open title: the
+        // box's own border is their frame, so there is no space left empty
+        // beside them whichever menu is open.
         let mut d = dialog();
         d.handle_key(&alt('m'));
         let area = Rect::new(0, 0, 120, 30);
-        let cells = d.cells();
-        let start = cells.get(1).map(|(start, _)| *start).expect("Mark's cell");
         let rect = d.dropdown_rect(area).expect("a dropdown");
-        assert_eq!(usize::from(rect.x), start);
-        assert_eq!(rect.y, 1, "directly under the bar");
+        // A one-cell gutter each side of the full interior width.
+        assert_eq!(rect.x, area.x + 1, "one cell in from the left border");
+        assert_eq!(
+            rect.width,
+            area.width - 2,
+            "and the width less both gutters"
+        );
+        // A row for the bar and a row for the rule come first.
+        assert_eq!(rect.y, area.y + 2, "below the bar and the rule");
 
-        // The last menu is far enough right that its box has to slide left.
+        // The last, right-most menu fills the same width, not a box slid left.
         d.handle_key(&alt('o'));
         let rect = d.dropdown_rect(area).expect("a dropdown");
-        assert!(rect.right() <= area.right(), "{rect:?}");
+        assert_eq!(rect.x, area.x + 1);
+        assert_eq!(rect.width, area.width - 2);
     }
 
     #[test]
@@ -1344,8 +1346,8 @@ mod tests {
         let (_, net_h) = net.size_hint();
         let (_, files_h) = files.size_hint();
         assert!(net_h < files_h, "Net {net_h} vs Files {files_h}");
-        // The bar row, Net's single item, the dropdown's frame and the box's.
-        assert_eq!(usize::from(net_h), 1 + 1 + 2 + 2);
+        // The box's frame, the bar row, the rule under it, and Net's one item.
+        assert_eq!(usize::from(net_h), 2 + 1 + 1 + 1);
     }
 
     #[test]
