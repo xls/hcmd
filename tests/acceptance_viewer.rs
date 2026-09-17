@@ -368,6 +368,9 @@ impl Session {
         // a bare pty answers no capability query, and `Ctrl+G`
         // only exists as a distinguishable sequence under the Kitty protocol.
         cmd.env("HCMD_KEYBOARD_PROTOCOL", "enhanced");
+        // No network at startup: the update check would phone GitHub every
+        // launch and could paint a notice over a status bar an assertion reads.
+        cmd.env("HCMD_NO_UPDATE_CHECK", "1");
         cmd.env("HCMD_NO_FS_WATCH", "1");
         cmd.env("XDG_CONFIG_HOME", &home);
         cmd.env("XDG_STATE_HOME", &home);

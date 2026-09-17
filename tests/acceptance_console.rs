@@ -270,6 +270,9 @@ impl Session {
         // a bare pty answers no capability query, and criterion 6
         // needs `Ctrl+Enter`, which only the Kitty protocol can express.
         cmd.env("HCMD_KEYBOARD_PROTOCOL", "enhanced");
+        // No network at startup: the update check would phone GitHub every
+        // launch and could paint a notice over a status bar an assertion reads.
+        cmd.env("HCMD_NO_UPDATE_CHECK", "1");
         // No filesystem watch under the harness: these tests run a real shell
         // in the panel's own directory, so a command that touches a file would
         // trigger a rescan and move the cursor out from under an assertion.

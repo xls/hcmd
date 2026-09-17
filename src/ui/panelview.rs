@@ -868,21 +868,28 @@ fn draw_status(
     let tag_w = text::width(&tag).min(usize::from(area.width));
     let left_w = usize::from(area.width).saturating_sub(tag_w);
 
-    let left = status_text(app, side);
+    let status = status_line(app, side);
     // A message is middle-cropped, everything else end-cropped. End-cropping a
     // message throws away its verdict and keeps only its subject - a narrow
     // panel would show `Copy the selection to the other panel: …` and hide the
     // `not implemented until v0.4` that is the entire reason for the line.
     // Counts read from the left, so they keep the end crop.
-    let crop = if status_is_message(app, side) {
+    let crop = if matches!(status, StatusLine::Message(_)) {
         Crop::Middle
     } else {
         Crop::End
     };
-    let left = text::fit_left(&left, left_w, crop, g.ellipsis());
+    let left = text::fit_left(status.text(), left_w, crop, g.ellipsis());
 
+    // The update notice pulses between the bright header colour and the plain
+    // status colour so it reads as blinking without ever vanishing; everything
+    // else is the plain status colour.
+    let left_fg = match status {
+        StatusLine::Update(_) if update_blink_on(app) => theme.panel.header_fg,
+        _ => theme.panel.status_fg,
+    };
     let line = Line::from(vec![
-        Span::styled(left, Style::new().fg(color(theme.panel.status_fg))),
+        Span::styled(left, Style::new().fg(color(left_fg))),
         Span::styled(
             text::take_front(&tag, tag_w),
             Style::new().fg(color(theme.panel.header_fg)),
@@ -938,10 +945,44 @@ fn reading_with_bar(done: u64, total: u64, ascii: bool) -> String {
 /// name filled the line end to end and the panel reported nothing about itself
 /// at all.
 pub fn status_text(app: &App, side: Side) -> String {
+    status_line(app, side).into_text()
+}
+
+/// What a panel's status line is showing, so the drawer can crop and colour it
+/// without re-deciding: a transient message is middle-cropped, the update
+/// notice pulses, and everything else is plain end-cropped text.
+enum StatusLine {
+    /// A transient [`App::message`] on the active panel.
+    Message(String),
+    /// The blinking "a newer release is out" notice on the right panel.
+    Update(String),
+    /// Search labels, virtual-listing counts, `reading…`, or the ordinary
+    /// counts - everything with no special colour or crop.
+    Plain(String),
+}
+
+impl StatusLine {
+    /// The text to draw, whichever kind it is.
+    fn text(&self) -> &str {
+        match self {
+            StatusLine::Message(s) | StatusLine::Update(s) | StatusLine::Plain(s) => s,
+        }
+    }
+
+    /// The text, owned - for the [`status_text`] callers that only want it.
+    fn into_text(self) -> String {
+        match self {
+            StatusLine::Message(s) | StatusLine::Update(s) | StatusLine::Plain(s) => s,
+        }
+    }
+}
+
+/// The status line's text and kind, highest priority first.
+fn status_line(app: &App, side: Side) -> StatusLine {
     if app.active_side == side
         && let Some(message) = app.message.as_deref()
     {
-        return message.to_string();
+        return StatusLine::Message(message.to_string());
     }
     let panel = app.panel(side);
     // One implementation of the search label, in `input::quicksearch`, so the
@@ -951,13 +992,13 @@ pub fn status_text(app: &App, side: Side) -> String {
     // `search: Tho [Aa]`, and `Tho` under the default smart mode is
     // case-sensitive, so `[Aa]` is the sensitive marker.
     if let Some(label) = crate::input::panel_status(panel, app.config.panel.quick_search_case) {
-        return label;
+        return StatusLine::Plain(label);
     }
     // the live count, above the cropped name: a search that is
     // still filling is a statement about what the panel is *doing*, and a
     // cropped filename is a statement about one row.
     if let Some(text) = virtual_status(app, side) {
-        return text;
+        return StatusLine::Plain(text);
     }
     // **Entries** stream in and are drawn as they arrive; the
     // **counts** wait for the listing to finish.
@@ -975,20 +1016,29 @@ pub fn status_text(app: &App, side: Side) -> String {
         // take seconds; the bar says how far, where the plain word would only
         // say that something is happening.
         if let Some((done, total)) = app.download_progress() {
-            return reading_with_bar(done, total, ascii);
+            return StatusLine::Plain(reading_with_bar(done, total, ascii));
         }
-        return if ascii {
+        return StatusLine::Plain(if ascii {
             "reading...".to_string()
         } else {
             "reading\u{2026}".to_string()
-        };
+        });
     }
-    counts_text(
+    // The update notice sits on the right panel's idle status line, so it does
+    // not fight the transient messages that land on the active (usually left)
+    // panel: below the panel's own activity - a search or a read still owns the
+    // line - and above the counts it briefly stands in for.
+    if side == Side::Right
+        && let Some(tag) = app.update_available.as_deref()
+    {
+        return StatusLine::Update(crate::app::update::short_notice(tag));
+    }
+    StatusLine::Plain(counts_text(
         tab,
         &app.config.panel,
         app.config.ui.ascii_borders,
         &app.jobs.sizes,
-    )
+    ))
 }
 
 /// The status line of a panel showing a virtual listing.
@@ -1037,12 +1087,22 @@ fn sorted_column_is_drawn(key: crate::panel::SortKey, allocated: &[Allocated]) -
     }
 }
 
-/// Is the status line currently showing [`App::message`] rather than counts?
+/// Which half of the blink the update notice is in, read off the launch clock.
 ///
-/// The crop rule differs, so the two callers have to agree on which it is.
-pub fn status_is_message(app: &App, side: Side) -> bool {
-    app.active_side == side && app.message.is_some()
+/// A ~1.2s cycle - bright for the first ~600 ms, plain for the next - so it
+/// pulses rather than flashes. The event loop wakes on the same cadence while
+/// the notice is up (`blink_tick`), which is what turns this into motion.
+fn update_blink_on(app: &App) -> bool {
+    blink_phase(app.animation.elapsed())
 }
+
+/// The pure core of [`update_blink_on`]: which half of the ~1.2s cycle a given
+/// elapsed time falls in.
+fn blink_phase(elapsed: std::time::Duration) -> bool {
+    const HALF_MS: u128 = 600;
+    (elapsed.as_millis() / HALF_MS).is_multiple_of(2)
+}
+
 /// The panel status line's counts, forwarded to the model.
 ///
 /// `sizes` is the session's directory-size cache: it is what decides whether
@@ -1106,6 +1166,38 @@ mod tests {
         app.config.ui.ascii_borders = false;
         app.left.active_tab_mut().loading = false;
         assert!(status_text(&app, Side::Left).contains("in "));
+    }
+
+    #[test]
+    fn a_newer_release_shows_on_the_right_panel_only() {
+        let mut app = App::headless(
+            crate::config::Config::default(),
+            crate::config::Keymap::builtin(),
+            crate::config::Theme::blue(),
+        );
+        // Neither panel is mid-read, so the status line is the idle counts...
+        app.left.active_tab_mut().loading = false;
+        app.right.active_tab_mut().loading = false;
+        assert!(!status_text(&app, Side::Left).contains("is out"));
+
+        // ...until a newer release is found, which shows on the right - where
+        // it does not fight the transient messages that land on the active
+        // (left) panel - and not on the left.
+        app.update_available = Some("v9.9.9".to_string());
+        assert_eq!(status_text(&app, Side::Right), "hcmd v9.9.9 is out");
+        assert!(
+            !status_text(&app, Side::Left).contains("v9.9.9"),
+            "the notice does not double up on the left"
+        );
+    }
+
+    #[test]
+    fn the_notice_pulses_rather_than_holds_one_colour() {
+        // The two halves of the ~1.2s cycle differ, which is what the wake in
+        // the event loop turns into a blink.
+        assert!(super::blink_phase(std::time::Duration::from_millis(0)));
+        assert!(!super::blink_phase(std::time::Duration::from_millis(600)));
+        assert!(super::blink_phase(std::time::Duration::from_millis(1200)));
     }
 
     use super::*;

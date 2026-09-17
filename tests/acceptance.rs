@@ -370,6 +370,9 @@ impl Session {
         // a bare pty answers no capability query, and criteria 2
         // and 6 need keys that only the Kitty protocol can express.
         cmd.env("HCMD_KEYBOARD_PROTOCOL", "enhanced");
+        // No network at startup: the update check would phone GitHub every
+        // launch and could paint a notice over a status bar an assertion reads.
+        cmd.env("HCMD_NO_UPDATE_CHECK", "1");
         // No filesystem watch under the harness: an inotify thread per session,
         // times the number running in parallel, perturbs the screen-settle
         // timing these tests poll on. What the watch does is covered by unit

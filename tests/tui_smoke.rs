@@ -193,6 +193,9 @@ fn run_in_pty(run: Run<'_>) -> (vt100::Parser, bool) {
     // tests exercise the legacy encodings deliberately rather than by accident.
     //
     cmd.env("HCMD_KEYBOARD_PROTOCOL", "legacy");
+    // No network at startup: the update check would phone GitHub every launch
+    // and could paint a notice over a status bar an assertion reads.
+    cmd.env("HCMD_NO_UPDATE_CHECK", "1");
     cmd.env("HCMD_NO_FS_WATCH", "1");
     // Keep the test off the developer's real configuration, and off its saved
     // tab state - a restored tab would change what the panel is showing.

@@ -154,6 +154,11 @@ pub struct UiConfig {
     pub split_ratio: f32,
     /// Prompt before quitting.
     pub confirm_exit: bool,
+    /// Ask GitHub once at startup whether a newer release is out, and blink a
+    /// notice on the right status bar if so. Downloads nothing and replaces
+    /// nothing - the same check the update key runs by hand. Set false to make
+    /// no network call at launch.
+    pub check_for_updates: bool,
 }
 
 impl Default for UiConfig {
@@ -166,6 +171,7 @@ impl Default for UiConfig {
             mouse: false,
             split_ratio: 0.5,
             confirm_exit: true,
+            check_for_updates: true,
         }
     }
 }

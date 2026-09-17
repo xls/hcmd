@@ -209,6 +209,14 @@ pub async fn event_loop() -> Result<()> {
         crate::config::omarchy::ensure_hook();
     }
 
+    // Ask GitHub once, off the render thread, whether a newer release is out, so
+    // one lights the blinking notice on the right status bar without the user
+    // having to ask. Opt-out (`ui.check_for_updates`), silent on any failure,
+    // and never blocking: the queue is serviced by the loop like a keystroke's.
+    if crate::app::update::startup_check_allowed(app.config.ui.check_for_updates) {
+        app.queue_update_check_quietly();
+    }
+
     // Signals first, before raw mode exists to leak. `Term::init` enables raw
     // mode as its very first action and can then sit in the keyboard capability
     // query for up to half a second on a terminal that never answers; a
@@ -771,6 +779,13 @@ pub async fn event_loop() -> Result<()> {
             .download_progress()
             .is_some()
             .then(|| std::time::Instant::now() + Duration::from_millis(100));
+        // While the "a newer release is out" notice is up, wake to step its
+        // blink on the right status bar, the same way the animations above are
+        // stepped - and only while it is up, so an idle panel still sleeps.
+        let blink_tick = app
+            .update_available
+            .is_some()
+            .then(|| std::time::Instant::now() + Duration::from_millis(300));
         let deadline = [
             app.console_switch_deadline(),
             app.console_settle_deadline(),
@@ -778,6 +793,7 @@ pub async fn event_loop() -> Result<()> {
             app.drives_deadline(),
             walk_tick,
             download_tick,
+            blink_tick,
             // The filesystem-watch debounce: wake when the quiet after a change
             // is up, so the panel re-reads on its own with nothing else going
             // on to keep the loop turning.

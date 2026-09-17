@@ -32,6 +32,19 @@ use crate::error::{Error, Result};
 /// The file the announced version is remembered in.
 pub const UPDATE_FILE: &str = "update.toml";
 
+/// Force the startup check off for one run, whatever `ui.check_for_updates`
+/// says. Any value disables it. There so a launch can be kept off the network
+/// without editing the config - which is what the test harnesses need, and the
+/// same escape hatch `HCMD_THEME` and `HCMD_KEYBOARD_PROTOCOL` are.
+pub const NO_STARTUP_CHECK_ENV: &str = "HCMD_NO_UPDATE_CHECK";
+
+/// Whether the startup check may run: the config asks for it and nothing in the
+/// environment has forced it off.
+#[must_use]
+pub fn startup_check_allowed(configured: bool) -> bool {
+    configured && std::env::var_os(NO_STARTUP_CHECK_ENV).is_none()
+}
+
 /// The one key inside it.
 const ACKED_KEY: &str = "acknowledged";
 
@@ -75,10 +88,19 @@ pub enum UpdateCheck {
     /// Nothing asked for.
     #[default]
     Idle,
-    /// A keystroke asked; the event loop has not started it yet.
-    Queued,
+    /// A keystroke, or the startup check, asked; the event loop has not started
+    /// it yet.
+    Queued {
+        /// The startup check, which lights the notice on a newer release and
+        /// says nothing on any other answer.
+        quiet: bool,
+    },
     /// A request is out.
-    Running,
+    Running {
+        /// Carried through from [`UpdateCheck::Queued`] so the answer knows
+        /// whether to stay quiet.
+        quiet: bool,
+    },
 }
 
 /// The tag of the latest release, out of the JSON GitHub answers with.
@@ -287,6 +309,14 @@ pub fn notice(tag: &str) -> String {
     format!("hcmd {tag} is out - install it with: {INSTALL_COMMAND}")
 }
 
+/// The short form for the blinking notice on the right status line: the
+/// version alone, without the install command the full [`notice`] carries.
+/// The command is one keystroke away - the check key surfaces it - and the
+/// status line is narrow.
+pub fn short_notice(tag: &str) -> String {
+    format!("hcmd {tag} is out")
+}
+
 impl App {
     /// The version this build is.
     ///
@@ -299,28 +329,51 @@ impl App {
 
     /// Ask for the version check the keystroke wants.
     ///
-    /// Queued rather than carried out, for the reason every read is queued:
-    /// `dispatch` may not touch the network.
+    /// A notice already blinking on the right status line is dismissed into a
+    /// one-shot message rather than asking again, so the key both surfaces the
+    /// install command and stops the blink. Otherwise the check is queued
+    /// rather than carried out, for the reason every read is queued: `dispatch`
+    /// may not touch the network.
     pub fn request_update_check(&mut self) {
+        if let Some(tag) = self.update_available.take() {
+            self.message = Some(notice(&tag));
+            return;
+        }
+        self.queue_update_check(false);
+    }
+
+    /// Ask for the quiet check the event loop runs at startup: it lights the
+    /// notice on a newer release and says nothing otherwise, so a launch with
+    /// no update - or with no network - never touches the status line.
+    pub fn queue_update_check_quietly(&mut self) {
+        self.queue_update_check(true);
+    }
+
+    /// The shared body of the two entry points above.
+    fn queue_update_check(&mut self, quiet: bool) {
         match self.update_check {
             UpdateCheck::Idle => {
-                self.update_check = UpdateCheck::Queued;
-                self.message = Some("asking GitHub for the latest release...".to_string());
+                self.update_check = UpdateCheck::Queued { quiet };
+                if !quiet {
+                    self.message = Some("asking GitHub for the latest release...".to_string());
+                }
             }
             // Pressing the key again while an answer is outstanding must not
             // put a second request on the network.
-            UpdateCheck::Queued | UpdateCheck::Running => {
-                self.message = Some("already asking - the answer is not back yet".to_string());
+            UpdateCheck::Queued { .. } | UpdateCheck::Running { .. } => {
+                if !quiet {
+                    self.message = Some("already asking - the answer is not back yet".to_string());
+                }
             }
         }
     }
 
     /// Start the check the keystroke queued. Called by the event loop.
     pub fn service_update_check(&mut self, tx: &mpsc::Sender<UpdateEvent>) {
-        if self.update_check != UpdateCheck::Queued {
+        let UpdateCheck::Queued { quiet } = self.update_check else {
             return;
-        }
-        self.update_check = UpdateCheck::Running;
+        };
+        self.update_check = UpdateCheck::Running { quiet };
         let tx = tx.clone();
         let current = Self::version().to_string();
         tokio::task::spawn_blocking(move || {
@@ -328,15 +381,39 @@ impl App {
         });
     }
 
-    /// Put the answer in the status line.
+    /// Take the answer: light the right-panel notice on a newer release, and
+    /// put anything a keystroke asked about into the status line.
+    ///
+    /// The startup check is quiet - it lights the blink on a newer release and
+    /// says nothing on any other answer - so a launch with nothing to report,
+    /// or no network, never touches the status line.
     pub fn apply_update_event(&mut self, event: UpdateEvent) {
+        let quiet = matches!(self.update_check, UpdateCheck::Running { quiet: true });
         self.update_check = UpdateCheck::Idle;
-        self.message = Some(match event {
-            UpdateEvent::Newer(tag) => notice(&tag),
-            UpdateEvent::Known(tag) => format!("hcmd {tag} is out, and you have been told once"),
-            UpdateEvent::Current(tag) => format!("hcmd {tag} is the latest release"),
-            UpdateEvent::Failed(problem) => problem,
-        });
+        match event {
+            UpdateEvent::Newer(tag) => {
+                // The persistent, blinking notice on the right status bar, lit
+                // the same way whether the check was asked for or ran at start.
+                self.update_available = Some(tag.clone());
+                // A check the user asked for also drops the full command into
+                // the active panel's message at once; the startup check leaves
+                // only the blink until the user looks at it.
+                if !quiet {
+                    self.message = Some(notice(&tag));
+                }
+            }
+            UpdateEvent::Known(tag) if !quiet => {
+                self.message = Some(format!("hcmd {tag} is out, and you have been told once"));
+            }
+            UpdateEvent::Current(tag) if !quiet => {
+                self.message = Some(format!("hcmd {tag} is the latest release"));
+            }
+            UpdateEvent::Failed(problem) if !quiet => {
+                self.message = Some(problem);
+            }
+            // A quiet answer with nothing to announce leaves the line alone.
+            UpdateEvent::Known(_) | UpdateEvent::Current(_) | UpdateEvent::Failed(_) => {}
+        }
     }
 }
 

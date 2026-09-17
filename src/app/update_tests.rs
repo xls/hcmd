@@ -118,18 +118,73 @@ fn the_key_queues_one_check_and_not_two() {
     );
     assert_eq!(app.update_check, UpdateCheck::Idle);
     app.request_update_check();
-    assert_eq!(app.update_check, UpdateCheck::Queued);
+    assert_eq!(app.update_check, UpdateCheck::Queued { quiet: false });
     app.request_update_check();
-    assert_eq!(app.update_check, UpdateCheck::Queued);
+    assert_eq!(app.update_check, UpdateCheck::Queued { quiet: false });
+    // Pretend the loop started it, so the answer knows it was asked for out
+    // loud and puts the full command on the line.
+    app.update_check = UpdateCheck::Running { quiet: false };
     app.apply_update_event(UpdateEvent::Newer("v0.1.1".to_string()));
     assert_eq!(app.update_check, UpdateCheck::Idle);
     let said = app.message.clone().unwrap_or_default();
     assert!(said.contains("v0.1.1"), "{said}");
     assert!(said.contains("install.sh"), "{said}");
+    // And a newer release lights the persistent, blinking right-panel notice.
+    assert_eq!(app.update_available.as_deref(), Some("v0.1.1"));
     // A failure is one status line and nothing else.
+    app.update_check = UpdateCheck::Running { quiet: false };
     app.apply_update_event(UpdateEvent::Failed("no route to host".to_string()));
     assert_eq!(app.message.as_deref(), Some("no route to host"));
     assert_eq!(app.update_check, UpdateCheck::Idle);
+}
+
+#[test]
+fn the_startup_check_is_silent_unless_there_is_something_new() {
+    let mut app = App::headless(
+        crate::config::Config::default(),
+        crate::config::Keymap::builtin(),
+        crate::config::Theme::blue(),
+    );
+    // Queued quietly: no "asking..." message on the way out.
+    app.queue_update_check_quietly();
+    assert_eq!(app.update_check, UpdateCheck::Queued { quiet: true });
+    assert_eq!(app.message, None);
+
+    // A newer release lights the blink but says nothing on the status line,
+    // so a launch does not shove a message in front of what the user is doing.
+    app.update_check = UpdateCheck::Running { quiet: true };
+    app.apply_update_event(UpdateEvent::Newer("v9.9.9".to_string()));
+    assert_eq!(app.update_available.as_deref(), Some("v9.9.9"));
+    assert_eq!(app.message, None);
+
+    // Nothing new: neither a blink nor a message.
+    app.update_available = None;
+    app.update_check = UpdateCheck::Running { quiet: true };
+    app.apply_update_event(UpdateEvent::Current("v0.1.0".to_string()));
+    assert_eq!(app.update_available, None);
+    assert_eq!(app.message, None);
+    // A quiet failure - no network - is not reported either.
+    app.update_check = UpdateCheck::Running { quiet: true };
+    app.apply_update_event(UpdateEvent::Failed("no route to host".to_string()));
+    assert_eq!(app.message, None);
+}
+
+#[test]
+fn the_key_dismisses_a_blinking_notice_into_a_one_shot_message() {
+    let mut app = App::headless(
+        crate::config::Config::default(),
+        crate::config::Keymap::builtin(),
+        crate::config::Theme::blue(),
+    );
+    app.update_available = Some("v9.9.9".to_string());
+    // The key does not go to the network while a notice is up: it clears the
+    // blink and drops the full install command into the status line.
+    app.request_update_check();
+    assert_eq!(app.update_available, None);
+    assert_eq!(app.update_check, UpdateCheck::Idle);
+    let said = app.message.clone().unwrap_or_default();
+    assert!(said.contains("v9.9.9"), "{said}");
+    assert!(said.contains("install.sh"), "{said}");
 }
 
 #[test]

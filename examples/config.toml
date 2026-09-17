@@ -24,6 +24,11 @@ mouse = false
 split_ratio = 0.5
 # Prompt before quitting.
 confirm_exit = true
+# Ask GitHub once at startup whether a newer release is out, and blink a
+# notice on the right status bar if so. Downloads nothing and replaces
+# nothing - the same check the update key runs by hand. Set false to make
+# no network call at launch.
+check_for_updates = true
 
 # Everything about how a panel renders and behaves.
 [panel]

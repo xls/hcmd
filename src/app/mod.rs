@@ -671,6 +671,12 @@ pub struct App {
     container_attempts: HashMap<u64, ContainerAttempt>,
     /// The status-line message, cleared on the next key.
     pub message: Option<String>,
+    /// A newer release is out, by tag: the persistent, blinking notice on the
+    /// right panel's status line. Unlike [`App::message`] it survives keypresses
+    /// and is not tied to the active panel, so a startup check can surface an
+    /// update without it vanishing the moment the user does anything. Cleared by
+    /// the check key, which dismisses it into a one-shot message.
+    pub update_available: Option<String>,
     /// Set by the quit action; the event loop reads it.
     pub should_quit: bool,
     /// What the terminal's keyboard protocol has reported.
@@ -946,6 +952,7 @@ impl App {
             router,
             container_attempts: HashMap::new(),
             message: None,
+            update_available: None,
             should_quit: false,
             keyboard: crate::input::Keyboard::default(),
             clipboard: None,

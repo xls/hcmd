@@ -161,6 +161,9 @@ impl Session {
         cmd.env("LANG", "en_US.UTF-8");
         cmd.env("LC_ALL", "en_US.UTF-8");
         cmd.env("HCMD_KEYBOARD_PROTOCOL", "enhanced");
+        // No network at startup: the update check would phone GitHub every
+        // launch and could paint a notice over a status bar an assertion reads.
+        cmd.env("HCMD_NO_UPDATE_CHECK", "1");
         cmd.env("HCMD_NO_FS_WATCH", "1");
         cmd.env("XDG_CONFIG_HOME", &home);
         cmd.env("XDG_STATE_HOME", &home);
