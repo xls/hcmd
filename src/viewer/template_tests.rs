@@ -176,6 +176,89 @@ offset = 4
     );
 }
 
+/// A chunked template: a RIFF-shaped header, then one field inside a `blob`
+/// chunk. Used by the chunk tests below.
+const CHUNKED: &str = r#"
+name   = "chunked"
+endian = "little"
+chunks = { after = 4, scheme = "riff" }
+[[field]]
+name = "tag"
+type = "char"
+size = 4
+offset = 0
+[[field]]
+name  = "value"
+type  = "u16"
+chunk = "blob"
+offset = 8
+"#;
+
+#[test]
+fn a_chunk_field_is_read_from_its_chunk_wherever_the_walk_finds_it() {
+    let template = Template::parse(CHUNKED).expect("parses");
+    // `head` (4 bytes), then a `pad ` chunk of 6 bytes shifting everything,
+    // then the `blob` chunk whose payload holds 0x1234.
+    let mut bytes = b"head".to_vec();
+    bytes.extend_from_slice(b"pad ");
+    bytes.extend_from_slice(&6_u32.to_le_bytes());
+    bytes.extend_from_slice(&[0xFF; 6]);
+    bytes.extend_from_slice(b"blob");
+    bytes.extend_from_slice(&2_u32.to_le_bytes());
+    bytes.extend_from_slice(&0x1234_u16.to_le_bytes());
+
+    let readings = applied(&template, &bytes, 0);
+    // The value reads from inside `blob`, past the `pad ` chunk, not from the
+    // fixed offset the `pad ` chunk's bytes sit at.
+    let value = readings.iter().find(|r| r.name == "value");
+    assert_eq!(value.map(|r| r.value.as_str()), Some("4660")); // 0x1234
+    // And its span lands on the two payload bytes, not on `pad `.
+    let blob_payload = bytes.len() - 2;
+    assert_eq!(value.map(|r| r.offset), Some(blob_payload as u64));
+
+    // A file that does not contain the chunk simply omits the field.
+    let readings = applied(&template, b"head", 0);
+    assert!(readings.iter().all(|r| r.name != "value"));
+}
+
+#[test]
+fn extents_place_a_chunk_field_where_the_walk_finds_it() {
+    let template = Template::parse(CHUNKED).expect("parses");
+    let mut bytes = b"head".to_vec();
+    bytes.extend_from_slice(b"blob");
+    bytes.extend_from_slice(&2_u32.to_le_bytes());
+    bytes.extend_from_slice(&0_u16.to_le_bytes());
+    // `blob` payload begins at 4 (head) + 8 (id + size) = 12.
+    let spans = extents(&template, &bytes, 0, 1000);
+    let value = spans.iter().find(|s| s.name == "value");
+    assert_eq!(value.map(|s| (s.offset, s.size)), Some((12, 2)));
+}
+
+#[test]
+fn a_chunk_field_without_a_chunks_declaration_is_refused() {
+    let err = Template::parse(
+        "name=\"t\"\n[[field]]\nname=\"n\"\ntype=\"u16\"\nchunk=\"blob\"\noffset=0\n",
+    )
+    .expect_err("a chunk field needs a container to find it in");
+    assert!(err.to_string().contains("declares no [chunks]"), "{err}");
+}
+
+#[test]
+fn a_chunk_id_that_is_not_four_bytes_is_refused() {
+    let err = Template::parse(
+        "name=\"t\"\nchunks={scheme=\"riff\"}\n[[field]]\nname=\"n\"\ntype=\"u16\"\nchunk=\"fmt\"\n",
+    )
+    .expect_err("a three-byte id is not a chunk id");
+    assert!(err.to_string().contains("exactly four bytes"), "{err}");
+}
+
+#[test]
+fn an_unknown_chunk_scheme_is_refused() {
+    let err =
+        Template::parse("name=\"t\"\nchunks={scheme=\"xyzzy\"}\n").expect_err("no such scheme");
+    assert!(err.to_string().contains("not a chunk scheme"), "{err}");
+}
+
 #[test]
 fn applying_at_an_offset_reports_offsets_in_the_same_buffer() {
     let template = Template::parse(PNG).expect("parses");
@@ -390,8 +473,11 @@ fn every_shipped_template_parses() {
     // what the walk in `Template::parse` maintains.
     for template in &templates {
         for field in &template.fields {
+            // A chunk field's offset is measured from its chunk, found only
+            // when the file is read, not from the structure the span covers -
+            // so the span check is for the fixed fields alone.
             assert!(
-                field.offset.saturating_add(field.size) <= template.span,
+                field.chunk.is_some() || field.offset.saturating_add(field.size) <= template.span,
                 "{}: {} runs past the span",
                 template.name,
                 field.name
@@ -883,7 +969,7 @@ offset = 8
 
 #[test]
 fn extents_place_every_field_without_reading_a_byte() {
-    let spans = extents(&spaced(), 0, 1000);
+    let spans = extents(&spaced(), &[], 0, 1000);
     let placed: Vec<(&str, u64, usize)> = spans
         .iter()
         .map(|s| (s.name.as_str(), s.offset, s.size))
@@ -893,7 +979,7 @@ fn extents_place_every_field_without_reading_a_byte() {
 
 #[test]
 fn extents_are_relative_to_where_the_template_is_applied() {
-    let spans = extents(&spaced(), 0x40, 1000);
+    let spans = extents(&spaced(), &[], 0x40, 1000);
     assert_eq!(spans.first().map(|s| s.offset), Some(0x40));
     assert_eq!(spans.last().map(|s| s.offset), Some(0x48));
 }
@@ -901,17 +987,17 @@ fn extents_are_relative_to_where_the_template_is_applied() {
 #[test]
 fn extents_never_point_past_the_end_of_the_file() {
     // The file ends in the middle of `b`.
-    let spans = extents(&spaced(), 0, 5);
+    let spans = extents(&spaced(), &[], 0, 5);
     assert_eq!(spans.len(), 2);
     assert_eq!(spans.last().map(|s| (s.offset, s.size)), Some((2, 3)));
     // And a template applied past the end places nothing at all.
-    assert!(extents(&spaced(), 5000, 100).is_empty());
-    assert!(extents(&spaced(), 0, 0).is_empty());
+    assert!(extents(&spaced(), &[], 5000, 100).is_empty());
+    assert!(extents(&spaced(), &[], 0, 0).is_empty());
 }
 
 #[test]
 fn field_at_works_on_extents_as_well_as_on_readings() {
-    let spans = extents(&spaced(), 0, 1000);
+    let spans = extents(&spaced(), &[], 0, 1000);
     assert_eq!(field_at(&spans, 3).map(|s| s.name.as_str()), Some("b"));
     assert_eq!(field_at(&spans, 9).map(|s| s.name.as_str()), Some("c"));
     // The gap at 6 and 7 belongs to nothing, and neither does 10.
@@ -921,14 +1007,14 @@ fn field_at_works_on_extents_as_well_as_on_readings() {
 
 #[test]
 fn coverage_merges_fields_that_touch_and_keeps_the_gap() {
-    let spans = extents(&spaced(), 0, 1000);
+    let spans = extents(&spaced(), &[], 0, 1000);
     // a and b abut, so they are one run; c is separate.
     assert_eq!(coverage(&spans, 0, 16), vec![0..6, 8..10]);
 }
 
 #[test]
 fn coverage_is_relative_to_the_row_and_clipped_to_it() {
-    let spans = extents(&spaced(), 0, 1000);
+    let spans = extents(&spaced(), &[], 0, 1000);
     // A row starting at 4: the tail of b, then c.
     assert_eq!(coverage(&spans, 4, 8), vec![0..2, 4..6]);
     // A row that ends inside a field.
@@ -937,6 +1023,7 @@ fn coverage_is_relative_to_the_row_and_clipped_to_it() {
     let wide = extents(
         &Template::parse("name=\"t\"\n[[field]]\nname=\"big\"\ntype=\"bytes\"\nsize=64\n")
             .expect("parses"),
+        &[],
         0,
         1000,
     );
@@ -945,7 +1032,7 @@ fn coverage_is_relative_to_the_row_and_clipped_to_it() {
 
 #[test]
 fn coverage_of_a_row_before_and_after_everything_is_empty() {
-    let spans = extents(&spaced(), 100, 1000);
+    let spans = extents(&spaced(), &[], 100, 1000);
     assert!(coverage(&spans, 0, 16).is_empty());
     assert!(coverage(&spans, 500, 16).is_empty());
     assert!(coverage(&[] as &[FieldSpan], 0, 16).is_empty());
@@ -960,7 +1047,7 @@ fn coverage_agrees_with_a_scan_over_every_row_of_a_long_structure() {
         text.push_str(&format!("\n[[field]]\nname = \"f{i}\"\ntype = \"u32\"\n"));
     }
     let template = Template::parse(&text).expect("parses");
-    let spans = extents(&template, 7, 10_000);
+    let spans = extents(&template, &[], 7, 10_000);
     for row in 0..40_u64 {
         let from = row.saturating_mul(16);
         let got = coverage(&spans, from, 16);

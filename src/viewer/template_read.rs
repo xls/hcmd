@@ -11,7 +11,7 @@ use crate::error::{Error, Result};
 use crate::viewer::hex::ascii_glyph;
 use crate::viewer::inspect;
 
-use super::{Extent, Field, FieldReading, FieldSpan, FieldType, Template};
+use super::{ChunkScheme, Extent, Field, FieldReading, FieldSpan, FieldType, Template};
 
 impl Template {
     /// Read a template from a file, naming the file if it will not parse.
@@ -110,6 +110,77 @@ fn value_of(field: &Field, bytes: &[u8]) -> String {
     }
 }
 
+/// The most chunks a container walk enumerates, so a corrupt or hostile file
+/// whose chunk sizes point in a circle cannot spin the walk forever. Far more
+/// than any real file's chunk count.
+const MAX_CHUNKS: usize = 4096;
+
+/// Walk a chunk container from `start` within `bytes`, returning each chunk's
+/// four-byte id and the offset of its first byte, in file order.
+///
+/// Bounded three ways against a malformed file: it stops at the end of the
+/// buffer, at [`MAX_CHUNKS`] chunks, and the moment a size would carry the
+/// position past the end of `usize`.
+fn walk_chunks(bytes: &[u8], start: usize, scheme: ChunkScheme) -> Vec<([u8; 4], usize)> {
+    match scheme {
+        ChunkScheme::Riff => walk_riff(bytes, start),
+    }
+}
+
+/// The RIFF walk: `[four-byte id][little-endian u32 size][size bytes][pad byte
+/// when the size is odd]`, over and over.
+fn walk_riff(bytes: &[u8], start: usize) -> Vec<([u8; 4], usize)> {
+    let mut out = Vec::new();
+    let mut pos = start;
+    while out.len() < MAX_CHUNKS {
+        let Some(header) = bytes.get(pos..pos.saturating_add(8)) else {
+            break;
+        };
+        let id = [header[0], header[1], header[2], header[3]];
+        let size = u32::from_le_bytes([header[4], header[5], header[6], header[7]]) as usize;
+        out.push((id, pos));
+        // The eight-byte header, the payload, and a pad byte when the payload
+        // is an odd number of bytes long.
+        let step = 8usize.saturating_add(size).saturating_add(size & 1).max(8);
+        let Some(next) = pos.checked_add(step) else {
+            break;
+        };
+        pos = next;
+    }
+    out
+}
+
+/// Every field of `template` paired with where it begins within `bytes`, in
+/// ascending order of that offset, with a chunk field whose chunk the file
+/// does not contain left out.
+///
+/// `at` is where the structure starts within `bytes`. A fixed field is `at`
+/// plus its own offset; a chunk field is the start of its chunk - found by
+/// walking the container once - plus its offset. The result is sorted because a
+/// chunk can put a later-declared field before an earlier one, and
+/// [`field_at`]'s binary search needs the fields in offset order.
+fn field_layout<'a>(template: &'a Template, bytes: &[u8], at: usize) -> Vec<(usize, &'a Field)> {
+    let chunks = template.chunks.map_or_else(Vec::new, |chunks| {
+        walk_chunks(bytes, at.saturating_add(chunks.after), chunks.scheme)
+    });
+    let mut out: Vec<(usize, &Field)> = template
+        .fields
+        .iter()
+        .filter_map(|field| {
+            let start = match field.chunk {
+                Some(id) => {
+                    let (_, chunk_start) = chunks.iter().find(|(cid, _)| *cid == id)?;
+                    chunk_start.saturating_add(field.offset)
+                }
+                None => at.saturating_add(field.offset),
+            };
+            Some((start, field))
+        })
+        .collect();
+    out.sort_by_key(|(start, _)| *start);
+    out
+}
+
 /// Decode every field of `template` that `bytes` reaches, from `at`.
 ///
 /// `at` is where the structure starts inside `bytes`, and the offsets that
@@ -122,9 +193,9 @@ fn value_of(field: &Field, bytes: &[u8]) -> String {
 /// is, and the last header in a file is usually cut off.
 #[must_use]
 pub fn applied(template: &Template, bytes: &[u8], at: usize) -> Vec<FieldReading> {
-    let mut out = Vec::with_capacity(template.fields.len());
-    for field in &template.fields {
-        let start = at.saturating_add(field.offset);
+    let layout = field_layout(template, bytes, at);
+    let mut out = Vec::with_capacity(layout.len());
+    for (start, field) in layout {
         let end = start.saturating_add(field.size);
         let Some(slice) = bytes.get(start..end).or_else(|| bytes.get(start..)) else {
             break;
@@ -164,18 +235,24 @@ pub fn field_at<T: Extent>(fields: &[T], offset: u64) -> Option<&T> {
     (offset >= found.first_byte() && offset < end).then_some(found)
 }
 
-/// Where every field of `template` falls when it is applied at `at`.
+/// Where every field of `template` falls when its structure begins at file
+/// offset `at`, given `bytes` read from that same `at`.
 ///
-/// No bytes are read and none are needed: a field's offset and width are the
-/// template's, not the file's. `len` is the file's length, and it is what
-/// stops a span pointing at a byte that is not there - a field the file ends
-/// inside comes back with the part that exists, and one that starts past the
-/// end is not mentioned at all.
+/// For a fixed-layout template no bytes are needed - a field's offset and width
+/// are the template's - and `bytes` may be empty. A chunked template needs them
+/// to walk its chunks and find where each field's chunk begins; a field whose
+/// chunk is not within `bytes` is left out, the same as one past the end.
+/// `len` is the file's length, and it is what stops a span pointing at a byte
+/// that is not there - a field the file ends inside comes back with the part
+/// that exists.
 #[must_use]
-pub fn extents(template: &Template, at: u64, len: u64) -> Vec<FieldSpan> {
-    let mut out = Vec::with_capacity(template.fields.len());
-    for field in &template.fields {
-        let start = at.saturating_add(field.offset as u64);
+pub fn extents(template: &Template, bytes: &[u8], at: u64, len: u64) -> Vec<FieldSpan> {
+    // `bytes` begins at the structure, so the layout is taken from its front
+    // and each field's file offset is `at` plus its place within it.
+    let layout = field_layout(template, bytes, 0);
+    let mut out = Vec::with_capacity(layout.len());
+    for (start, field) in layout {
+        let start = at.saturating_add(start as u64);
         if start >= len {
             break;
         }

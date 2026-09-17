@@ -317,6 +317,47 @@ fn the_wav_summary_says_the_sample_rate_the_way_it_is_written_down() {
 }
 
 #[test]
+fn the_wav_summary_reads_past_junk_and_bext_chunks_to_the_real_format() {
+    // The shape a sampler or DAW writes: a `JUNK` padding chunk, a `fact` and a
+    // `bext` chunk all sit before `fmt ` and `data`, so the canonical 44-byte
+    // offsets fall inside the `JUNK` chunk's zero-fill. The chunk walk finds
+    // `fmt ` and `data` wherever they end up.
+    let chunk = |id: &[u8], payload: &[u8]| {
+        let mut out = id.to_vec();
+        out.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        out.extend_from_slice(payload);
+        if payload.len() % 2 == 1 {
+            out.push(0); // RIFF pads an odd payload to an even boundary.
+        }
+        out
+    };
+    let mut fmt = Vec::new();
+    fmt.extend_from_slice(&1_u16.to_le_bytes()); // PCM
+    fmt.extend_from_slice(&2_u16.to_le_bytes()); // stereo
+    fmt.extend_from_slice(&44100_u32.to_le_bytes());
+    fmt.extend_from_slice(&264_600_u32.to_le_bytes()); // 44100 * 2ch * 3 bytes
+    fmt.extend_from_slice(&6_u16.to_le_bytes()); // block align
+    fmt.extend_from_slice(&24_u16.to_le_bytes()); // 24-bit
+
+    let mut wav = b"RIFF".to_vec();
+    wav.extend_from_slice(&1_000_000_u32.to_le_bytes());
+    wav.extend_from_slice(b"WAVE");
+    wav.extend_from_slice(&chunk(b"JUNK", &[0u8; 28])); // the shifting chunk
+    wav.extend_from_slice(&chunk(b"fmt ", &fmt));
+    wav.extend_from_slice(&chunk(b"fact", &500_u32.to_le_bytes()));
+    wav.extend_from_slice(&chunk(b"bext", &[0u8; 602])); // broadcast metadata
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&123_456_u32.to_le_bytes()); // the audio's real size
+
+    let out = lines("WAV (RIFF)", &wav);
+    assert_eq!(value(&out, "Format"), "PCM");
+    assert_eq!(value(&out, "Channels"), "stereo");
+    assert_eq!(value(&out, "Sample rate"), "44.1 kHz");
+    assert_eq!(value(&out, "Bit depth"), "24 bit");
+    assert_eq!(value(&out, "Audio data"), "121 KB");
+}
+
+#[test]
 fn the_avi_summary_gives_the_codec_as_its_four_characters() {
     let mut avi = b"RIFF".to_vec();
     avi.extend_from_slice(&100_000_u32.to_le_bytes());

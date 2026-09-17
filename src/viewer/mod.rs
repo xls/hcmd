@@ -1243,13 +1243,25 @@ impl Viewer {
     /// function of the template and the anchor and of nothing that changes
     /// while looking at it. Nothing per frame and nothing per byte.
     fn anchor_template(&mut self, at: u64) {
-        let Some(template) = self.template.as_ref() else {
+        // Cloned to free the borrow on `self`, so the window below can be read
+        // through `self.source`. Done once per application, not per frame, so
+        // the clone is not on any hot path.
+        let Some(template) = self.template.clone() else {
             self.template_spans.clear();
             self.template_at = None;
             return;
         };
         let len = self.source.len().unwrap_or(u64::MAX);
-        self.template_spans = template::extents(template, at, len);
+        // A chunked template needs the bytes at the structure to find where its
+        // chunks - and so its fields - fall; a fixed one needs none and is not
+        // read for.
+        let window = if template.chunks.is_some() {
+            self.source.read_window(at, source::WindowLen::MAX).ok()
+        } else {
+            None
+        };
+        let bytes = window.as_ref().map_or(&[][..], |w| w.bytes());
+        self.template_spans = template::extents(&template, bytes, at, len);
         self.template_at = Some(at);
     }
 

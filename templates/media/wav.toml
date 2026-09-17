@@ -1,11 +1,17 @@
-# The canonical 44-byte header. A file with an extra chunk before fmt or
-# between fmt and data has the same first twelve bytes and different offsets
-# after them, which the chunk ids at 12 and 36 will show.
+# A RIFF file: the twelve-byte header, then a flat run of chunks. The audio
+# parameters live in the `fmt ` chunk and the sample bytes in the `data` chunk,
+# and neither is at a fixed offset - a `JUNK`, `bext` or `fact` chunk before
+# them, which samplers and DAWs write freely, moves everything after it. So the
+# fields anchor to their chunk by id and the walk finds it wherever it is,
+# rather than trusting the canonical 44-byte layout that only the simplest
+# files actually have.
 
 name   = "WAV (RIFF)"
 endian = "little"
 magic  = { offset = 8, bytes = "57415645" }
+chunks = { after = 12, scheme = "riff" }
 
+# The RIFF header itself is fixed at the front.
 [[field]]
 name   = "riff"
 type   = "char"
@@ -23,57 +29,70 @@ type   = "char"
 size   = 4
 offset = 8
 
+# The format chunk. Offsets are from the chunk's first byte, so its four-byte
+# id is 0, its size word 4, and its payload begins at 8.
 [[field]]
 name   = "fmt_chunk_id"
 type   = "char"
 size   = 4
-offset = 12
+chunk  = "fmt "
+offset = 0
 
 [[field]]
 name   = "fmt_chunk_size"
 type   = "u32"
-offset = 16
+chunk  = "fmt "
+offset = 4
 
 [[field]]
 name   = "audio_format"
 type   = "u16"
-offset = 20
+chunk  = "fmt "
+offset = 8
 
 [[field]]
 name   = "num_channels"
 type   = "u16"
-offset = 22
+chunk  = "fmt "
+offset = 10
 
 [[field]]
 name   = "sample_rate"
 type   = "u32"
-offset = 24
+chunk  = "fmt "
+offset = 12
 
 [[field]]
 name   = "byte_rate"
 type   = "u32"
-offset = 28
+chunk  = "fmt "
+offset = 16
 
 [[field]]
 name   = "block_align"
 type   = "u16"
-offset = 32
+chunk  = "fmt "
+offset = 20
 
 [[field]]
 name   = "bits_per_sample"
 type   = "u16"
-offset = 34
+chunk  = "fmt "
+offset = 22
 
+# The data chunk. Its size word is the number of sample bytes.
 [[field]]
 name   = "data_chunk_id"
 type   = "char"
 size   = 4
-offset = 36
+chunk  = "data"
+offset = 0
 
 [[field]]
 name   = "data_chunk_size"
 type   = "u32"
-offset = 40
+chunk  = "data"
+offset = 4
 
 [summary]
 title = "WAV audio"

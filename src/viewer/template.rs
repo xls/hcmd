@@ -45,6 +45,33 @@
 //! byte 1024. An `offset` may skip forward over reserved bytes; it may not
 //! move backwards, which would let two fields claim the same byte.
 //!
+//! # Chunked formats
+//!
+//! Some formats do not put their fields at fixed offsets. A RIFF file - WAV,
+//! AVI, WebP - is a header and then a run of chunks, each `[four-byte id][u32
+//! size][payload]`, and a `JUNK` or `bext` chunk a writer inserts moves
+//! everything after it. A template declares how to walk the chunks and its
+//! fields anchor to one by id, so the walk finds the field wherever the chunk
+//! turns out to be:
+//!
+//! ```toml
+//! # After the 12-byte RIFF header, the file is a run of RIFF chunks.
+//! chunks = { after = 12, scheme = "riff" }
+//!
+//! [[field]]
+//! name   = "sample_rate"
+//! type   = "u32"
+//! chunk  = "fmt "       # this field lives in the `fmt ` chunk
+//! offset = 12           # from the chunk's first byte: id 0, size 4, payload 8
+//! ```
+//!
+//! A chunk field's `offset` is measured from the chunk's own first byte - its
+//! four-byte id - so `8` is the first byte of the payload. A field whose chunk
+//! the file does not contain is simply not read, the same as one past the end.
+//! The one scheme today is `riff`; IFF, AIFF and PNG are the same idea with a
+//! different size encoding and belong here as more schemes when a format needs
+//! them.
+//!
 //! # Why truncation is not an error
 //!
 //! A file shorter than the template is the ordinary case, not the broken one:
@@ -143,10 +170,56 @@ pub struct Field {
     pub kind: FieldType,
     /// How many bytes it occupies. Never zero.
     pub size: usize,
-    /// Where it starts, relative to the start of the structure.
+    /// Where it starts. Relative to the start of the structure, or - when
+    /// [`Field::chunk`] is set - relative to the start of that chunk, its
+    /// four-byte id included, so `offset = 8` is the first byte of the
+    /// chunk's payload.
     pub offset: usize,
+    /// The chunk this field lives in, for a format whose fields are not at
+    /// fixed positions but inside content-addressed chunks (a RIFF `fmt `, a
+    /// `data`). `None` for a field at a fixed offset from the structure start,
+    /// which is every field of a format that has no [`Template::chunks`]. A
+    /// field whose chunk the file does not contain is simply not read.
+    pub chunk: Option<[u8; 4]>,
     /// The byte order it is read in, the template's default already applied.
     pub endian: Endian,
+}
+
+/// How a container lays its chunks out, for a format whose fields live inside
+/// content-addressed chunks rather than at fixed offsets.
+///
+/// One scheme today and room for more: IFF and AIFF are the same walk with a
+/// big-endian size, and PNG puts the length before the id. Each is a way of
+/// answering the one question a [`Field::chunk`] asks - where does the chunk
+/// with this id begin - so they belong together behind one enum rather than as
+/// scattered special cases.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChunkScheme {
+    /// RIFF: a flat run of `[four-byte id][little-endian u32 size][size bytes
+    /// of payload][a pad byte when the size is odd]`. WAV, AVI, WebP and ANI.
+    Riff,
+}
+
+impl ChunkScheme {
+    /// The scheme name as it is written in a template.
+    fn parse(text: &str) -> Result<Self> {
+        match text {
+            "riff" => Ok(Self::Riff),
+            other => Err(Error::msg(format!(
+                "{other:?} is not a chunk scheme; the schemes are: riff"
+            ))),
+        }
+    }
+}
+
+/// How to find the chunks a [`Field::chunk`] names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Chunks {
+    /// Where the chunk run begins, relative to the start of the structure. The
+    /// twelve-byte RIFF header comes first, so a WAV's is `12`.
+    pub after: usize,
+    /// How the chunks are laid out.
+    pub scheme: ChunkScheme,
 }
 
 /// How a format is recognised.
@@ -168,6 +241,10 @@ pub struct Template {
     pub offset: usize,
     /// How the format is recognised, where it declares a way.
     pub magic: Option<Magic>,
+    /// How to walk the format's chunks, for a format whose fields live inside
+    /// content-addressed chunks. `None` for a fixed-layout format, which is
+    /// most of them.
+    pub chunks: Option<Chunks>,
     /// The fields, in the order they were declared.
     pub fields: Vec<Field>,
     /// How many bytes the whole structure spans, from its start to the end of

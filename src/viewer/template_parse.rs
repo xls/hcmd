@@ -11,7 +11,7 @@ use serde::Deserialize;
 use crate::error::{Error, Result};
 use crate::viewer::summary::RawSummary;
 
-use super::{Endian, Field, FieldType, Magic, Template};
+use super::{ChunkScheme, Chunks, Endian, Field, FieldType, Magic, Template};
 
 /// The TOML shape, before it is checked.
 ///
@@ -26,9 +26,19 @@ struct RawTemplate {
     #[serde(default)]
     offset: usize,
     magic: Option<RawMagic>,
+    chunks: Option<RawChunks>,
     #[serde(default, rename = "field")]
     fields: Vec<RawField>,
     summary: Option<RawSummary>,
+}
+
+/// The `chunks` table, before it is checked.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawChunks {
+    #[serde(default)]
+    after: usize,
+    scheme: String,
 }
 
 /// The `magic` table, before it is checked.
@@ -50,6 +60,20 @@ struct RawField {
     size: Option<usize>,
     endian: Option<String>,
     offset: Option<usize>,
+    chunk: Option<String>,
+}
+
+/// A chunk id as a template writes it - four bytes, a trailing space and all
+/// (`"fmt "`). Refused unless it is exactly four bytes, because that is what a
+/// chunk id is and a three- or five-byte one would never match anything.
+fn chunk_id(text: &str) -> Result<[u8; 4]> {
+    let bytes = text.as_bytes();
+    <[u8; 4]>::try_from(bytes).map_err(|_| {
+        Error::msg(format!(
+            "chunk id {text:?} must be exactly four bytes, not {}",
+            bytes.len()
+        ))
+    })
 }
 
 /// Hex digits to bytes, whitespace ignored.
@@ -92,12 +116,25 @@ fn field_from(raw: RawField, default: Endian, cursor: usize) -> Result<Field> {
         }
         (None, Some(size)) => size,
     };
-    let offset = raw.offset.unwrap_or(cursor);
-    if offset < cursor {
-        return Err(Error::msg(format!(
-            "field {name:?}: offset {offset} is behind the field before it, which ends at {cursor}"
-        )));
-    }
+    let chunk = match raw.chunk {
+        Some(ref text) => Some(chunk_id(text)?),
+        None => None,
+    };
+    // A chunk field is placed inside its chunk, wherever that chunk turns out
+    // to be, so it starts at its own offset from the chunk and is not bound by
+    // the field before it. A fixed field follows the one before it unless it
+    // declares an offset, and may not step backwards over it.
+    let offset = if chunk.is_some() {
+        raw.offset.unwrap_or(0)
+    } else {
+        let offset = raw.offset.unwrap_or(cursor);
+        if offset < cursor {
+            return Err(Error::msg(format!(
+                "field {name:?}: offset {offset} is behind the field before it, which ends at {cursor}"
+            )));
+        }
+        offset
+    };
     let endian = match raw.endian {
         Some(text) => Endian::parse(&text)?,
         None => default,
@@ -107,6 +144,7 @@ fn field_from(raw: RawField, default: Endian, cursor: usize) -> Result<Field> {
         kind,
         size,
         offset,
+        chunk,
         endian,
     })
 }
@@ -126,12 +164,28 @@ impl Template {
             }),
             None => None,
         };
+        let chunks = match raw.chunks {
+            Some(raw_chunks) => Some(Chunks {
+                after: raw_chunks.after,
+                scheme: ChunkScheme::parse(&raw_chunks.scheme)?,
+            }),
+            None => None,
+        };
         let mut fields = Vec::with_capacity(raw.fields.len());
         let mut cursor = 0_usize;
         for raw_field in raw.fields {
             let field = field_from(raw_field, default, cursor)?;
-            cursor = field.offset.saturating_add(field.size);
+            // A chunk field is not laid end to end with the fixed fields, so it
+            // does not advance the cursor the next fixed field follows.
+            if field.chunk.is_none() {
+                cursor = field.offset.saturating_add(field.size);
+            }
             fields.push(field);
+        }
+        if chunks.is_none() && fields.iter().any(|field| field.chunk.is_some()) {
+            return Err(Error::msg(
+                "a field names a chunk, but the template declares no [chunks] to find it in",
+            ));
         }
         let summary = match raw.summary {
             Some(section) => {
@@ -144,6 +198,7 @@ impl Template {
             name: raw.name,
             offset: raw.offset,
             magic,
+            chunks,
             fields,
             span: cursor,
             summary,
