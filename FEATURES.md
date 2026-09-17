@@ -325,6 +325,13 @@ contents were not recognised, which is most files and is not a failure.
   a theme before writing anything, writes it into `themes/`, and applies it. A
   machine with no network simply sees the themes it already has, and every
   network failure is a line in the status bar and nothing more.
+- On an [Omarchy](https://omarchy.org/) desktop, an extra `omarchy` theme reads
+  the desktop's own live colour scheme, so the panel follows whatever theme the
+  rest of the desktop is on and changes with it. It appears in the picker only
+  where Omarchy is installed.
+- `HCMD_THEME=<name>` forces a theme for one run without touching the config, so
+  a screenshot or a demo can pin a look. It overrides the configured theme the
+  way `HCMD_KEYBOARD_PROTOCOL` overrides key detection.
 - Every command binding is rebindable per context in `keymap.toml`, including
   cancel, accept, and moving between a dialog's controls. The arrow, page and
   Home/End keys inside a dialog's own list move that widget's cursor and are

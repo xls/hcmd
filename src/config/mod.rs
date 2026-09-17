@@ -21,6 +21,7 @@ pub mod catalogue;
 pub mod config;
 pub mod emit;
 pub mod keymap;
+pub mod omarchy;
 pub mod paths;
 pub mod persist;
 pub mod theme;
@@ -48,6 +49,22 @@ pub use units::{ByteSize, Timeout};
 /// configured one. For a screenshot, a demo, or a test that needs a known
 /// theme whatever the shipped default is.
 pub const THEME_ENV: &str = "HCMD_THEME";
+
+/// The shipped default theme, for the paths that need a theme to fall back to
+/// when the one asked for cannot be produced. The compiled-in default, so it
+/// needs no file on disk; the ultimate `blue` ground truth if even that is
+/// somehow gone.
+fn default_theme(warnings: &mut Vec<String>) -> Theme {
+    let name = crate::config::config::UiConfig::default().theme;
+    match builtin_theme(&name) {
+        Some(text) => {
+            let (theme, w) = Theme::parse(text, &name);
+            warnings.extend(w);
+            theme
+        }
+        None => Theme::blue(),
+    }
+}
 
 /// The theme to load: the one [`THEME_ENV`] forces, or the configured one.
 ///
@@ -160,6 +177,12 @@ pub fn available_theme_names() -> Vec<String> {
 /// cannot run is how the last few defects stayed hidden.
 pub fn theme_names_in(dir: Option<&Path>) -> Vec<String> {
     let mut names: Vec<String> = theme_names().into_iter().map(str::to_string).collect();
+    // The dynamic `omarchy` theme, offered only where the desktop that backs it
+    // is installed, so the picker on any other machine is not cluttered with a
+    // theme that would only fall back to the default.
+    if omarchy::is_available() {
+        names.push(omarchy::NAME.to_string());
+    }
     if let Some(dir) = dir
         && let Ok(entries) = std::fs::read_dir(dir.join("themes"))
     {
@@ -306,6 +329,21 @@ pub fn load_from(dir: &Path) -> Loaded {
             warnings.extend(w);
             theme
         }
+        // The dynamic `omarchy` theme, built from the desktop's live palette
+        // rather than a file. A `themes/omarchy.toml` above still wins, so a
+        // person who wants to pin it can; without one, this follows the
+        // desktop. A machine with no Omarchy gets the default and a warning.
+        None if config.ui.theme == omarchy::NAME => match omarchy::theme() {
+            Some(theme) => theme,
+            None => {
+                warnings.push(format!(
+                    "{}: Omarchy's palette was not found ({}); using the default theme",
+                    omarchy::NAME,
+                    "~/.local/state/omarchy/current/theme/colors.toml"
+                ));
+                default_theme(&mut warnings)
+            }
+        },
         // No file of that name, so try the compiled-in set before giving up.
         None => match builtin_theme(&config.ui.theme) {
             Some(text) => {
@@ -1607,9 +1645,13 @@ mod tests {
 
     #[test]
     fn no_directory_is_the_shipped_set_and_no_complaint() {
-        assert_eq!(theme_names_in(None).len(), theme_names().len());
+        // The shipped set, plus the dynamic `omarchy` theme where the desktop
+        // that backs it is installed - so the count is the same on a machine
+        // with Omarchy and one without.
+        let shipped = theme_names().len() + usize::from(omarchy::is_available());
+        assert_eq!(theme_names_in(None).len(), shipped);
         let missing = std::env::temp_dir().join("hcmd-themescan-does-not-exist");
-        assert_eq!(theme_names_in(Some(&missing)).len(), theme_names().len());
+        assert_eq!(theme_names_in(Some(&missing)).len(), shipped);
     }
 
     use super::*;
