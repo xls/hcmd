@@ -151,7 +151,8 @@ Detection is by content, so a database with any name opens on `Ctrl+PgDn`.
   database - and each value sorts as a number or as text as its type dictates.
 - The first column is the row's id under the name the table gives it - an
   `INTEGER PRIMARY KEY` reads as `id`, not as "Name" - and stays as narrow as an
-  id needs while the first text column takes the leftover width.
+  id needs. The columns pack to their own widths like a grid, rather than one
+  stretching across the panel and leaving a gap.
 - Read directly with the SQLite library, so the write-ahead log, overflow pages
   and `WITHOUT ROWID` tables are all handled. Read-only, entirely: there is no
   write path.

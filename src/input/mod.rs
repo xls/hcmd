@@ -1386,6 +1386,7 @@ mod tests {
             ],
             name: None,
             flex: None,
+            pack: false,
         });
         run_action(
             &mut app,

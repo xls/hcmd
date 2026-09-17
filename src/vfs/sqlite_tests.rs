@@ -87,8 +87,8 @@ async fn a_table_lists_its_rows_named_for_their_id_and_carrying_sortable_cells()
     );
     assert_eq!(plan.header(ColumnId::Custom(0)), "firstname");
     assert_eq!(plan.header(ColumnId::Custom(1)), "lastname");
-    // The first data column takes the leftover width, so the id stays narrow.
-    assert_eq!(plan.flex_column(), ColumnId::Custom(0));
+    // The columns pack to their own widths rather than one stretching across.
+    assert!(plan.pack, "a table is a packed grid");
 
     // And each row carries its data columns' values, typed - the age is an
     // integer, so it will sort as one - with the id no longer among them.
@@ -305,7 +305,7 @@ fn an_integer_primary_key_titles_the_name_column_and_narrows_it() {
         plan.name.is_some(),
         "the Name column carries the id's width and header"
     );
-    assert_eq!(plan.flex_column(), ColumnId::Custom(0));
+    assert!(plan.pack, "the columns pack rather than one stretching");
     assert!(
         !plan.custom.iter().any(|c| c.header == "id"),
         "the id is not also a data column"
@@ -316,16 +316,15 @@ fn an_integer_primary_key_titles_the_name_column_and_narrows_it() {
 #[test]
 fn a_table_without_an_integer_key_keeps_the_plain_name_column() {
     // `notes` is `WITHOUT ROWID` with a text key, so its rows are named by
-    // position and no column aliases that. The Name column stays "Name" and
-    // the flexible one, and `key` is a data column of its own.
+    // position and no column aliases that. The first column stays "Name", and
+    // `key` is a data column of its own.
     let Some((file, fs)) = fixture("plainname") else {
         return;
     };
     let notes = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/notes");
     let plan = fs.column_plan(&notes).expect("a plan");
     assert_eq!(plan.header(ColumnId::Name), "Name");
-    assert!(plan.name.is_none());
-    assert_eq!(plan.flex_column(), ColumnId::Name);
+    assert!(plan.pack, "a table is a packed grid");
     assert_eq!(plan.header(ColumnId::Custom(0)), "key");
     let _ = std::fs::remove_dir_all(file.parent().unwrap_or(&file));
 }

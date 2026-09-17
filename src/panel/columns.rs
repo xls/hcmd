@@ -215,8 +215,15 @@ pub struct ColumnPlan {
     /// column by default; a listing whose Name is a short id nominates a data
     /// column instead, so the id stays as narrow as it needs while the text
     /// column takes the room. A `Custom` id the plan does not draw falls back
-    /// to Name.
+    /// to Name. Ignored when [`ColumnPlan::pack`] is set.
     pub flex: Option<ColumnId>,
+    /// Pack the columns to their own widths and leave the leftover empty,
+    /// rather than stretching one column across it. A filesystem panel has one
+    /// long column - the name - and fixed short ones, so stretching the name
+    /// is right; a database table is a grid of columns that are each already
+    /// as wide as they need to be, and stretching any one of them across the
+    /// panel is the gap this avoids. The Name column is still never dropped.
+    pub pack: bool,
 }
 
 impl ColumnPlan {
@@ -228,6 +235,7 @@ impl ColumnPlan {
             custom: Vec::new(),
             name: None,
             flex: None,
+            pack: false,
         }
     }
 
@@ -289,6 +297,11 @@ pub fn allocate(cfg: &PanelConfig, inner_width: usize, plan: Option<&ColumnPlan>
         plan.and_then(|p| p.custom(id))
             .map_or_else(|| super::format::align_of(id), |c| c.align)
     };
+    // A grid packs its columns and leaves the leftover empty; only a panel with
+    // one long column stretches it.
+    if plan.is_some_and(|p| p.pack) {
+        return allocate_packed(cfg, inner_width, plan, &order, &align);
+    }
     // The column that takes the leftover and is never dropped: Name, unless a
     // plan nominated a data column so its own short id column stays narrow.
     let flex = plan.map_or(ColumnId::Name, ColumnPlan::flex_column);
@@ -399,6 +412,86 @@ pub fn allocate(cfg: &PanelConfig, inner_width: usize, plan: Option<&ColumnPlan>
                 };
             }
         }
+    }
+}
+
+/// Lay out a grid: each column at its own width, packed from the left, the
+/// leftover left empty. No column is stretched across the panel, which is the
+/// mid-table gap a database table would otherwise show. The Name column - the
+/// row id - is still never dropped; when even it does not fit it is capped to
+/// the interior so the layout never overflows.
+fn allocate_packed<F: Fn(ColumnId) -> Align>(
+    cfg: &PanelConfig,
+    inner_width: usize,
+    plan: Option<&ColumnPlan>,
+    order: &[ColumnId],
+    align: &F,
+) -> Allocation {
+    let mut hidden: Vec<ColumnId> = Vec::new();
+    let columns = loop {
+        let mut cols: Vec<Allocated> = Vec::new();
+        for id in order {
+            if hidden.contains(id) {
+                continue;
+            }
+            let width = requested_width(cfg, *id, inner_width, plan);
+            if width == 0 {
+                hidden.push(*id);
+                continue;
+            }
+            cols.push(Allocated {
+                id: *id,
+                width,
+                align: align(*id),
+            });
+        }
+        let separators = cols.len().saturating_sub(1).saturating_mul(SEPARATOR_WIDTH);
+        let total = cols
+            .iter()
+            .map(|c| c.width)
+            .sum::<usize>()
+            .saturating_add(separators);
+        if total <= inner_width {
+            break cols;
+        }
+        // Too wide: drop the lowest-priority column, never the id/Name one.
+        let victim = cfg
+            .columns
+            .hide_priority
+            .iter()
+            .copied()
+            .find(|c| *c != ColumnId::Name && order.contains(c) && !hidden.contains(c))
+            .or_else(|| {
+                order
+                    .iter()
+                    .rev()
+                    .copied()
+                    .find(|c| *c != ColumnId::Name && !hidden.contains(c))
+            });
+        match victim {
+            Some(id) => hidden.push(id),
+            // Only the id column is left and it still overflows: cap it to the
+            // interior rather than draw past the border.
+            None => {
+                break vec![Allocated {
+                    id: ColumnId::Name,
+                    width: inner_width,
+                    align: align(ColumnId::Name),
+                }];
+            }
+        }
+    };
+    let ext_visible = columns.iter().any(|c| c.id == ColumnId::Ext);
+    let crop = match cfg.effective_name_truncate() {
+        NameTruncate::End => Crop::End,
+        NameTruncate::Middle => Crop::Middle,
+        NameTruncate::Auto if ext_visible => Crop::End,
+        NameTruncate::Auto => Crop::Middle,
+    };
+    Allocation {
+        columns,
+        inner_width,
+        crop,
     }
 }
 
@@ -682,6 +775,7 @@ mod plan_tests {
             ],
             name: None,
             flex: None,
+            pack: false,
         }
     }
 
@@ -728,6 +822,7 @@ mod plan_tests {
             custom: Vec::new(),
             name: None,
             flex: None,
+            pack: false,
         };
         let a = allocate(&cfg(), 60, Some(&plan));
         assert!(a.is_visible(ColumnId::Custom(3)));
@@ -752,6 +847,7 @@ mod plan_tests {
                 min_chars: 6,
             }),
             flex: Some(ColumnId::Custom(0)),
+            pack: false,
         };
         let a = allocate(&cfg(), 80, Some(&plan));
         assert_eq!(
@@ -787,6 +883,7 @@ mod plan_tests {
                 min_chars: 6,
             }),
             flex: Some(ColumnId::Custom(0)),
+            pack: false,
         };
         for inner in 0..=120usize {
             let a = allocate(&cfg(), inner, Some(&plan));
@@ -794,6 +891,61 @@ mod plan_tests {
             assert!(
                 a.is_visible(ColumnId::Custom(0)),
                 "inner {inner}: the flex column is never dropped",
+            );
+        }
+    }
+
+    fn packed_grid() -> ColumnPlan {
+        ColumnPlan {
+            columns: vec![ColumnId::Name, ColumnId::Custom(0), ColumnId::Custom(1)],
+            custom: vec![
+                CustomColumn {
+                    header: "birth_date".to_string(),
+                    align: Align::Left,
+                    min_chars: 11,
+                },
+                CustomColumn {
+                    header: "gender".to_string(),
+                    align: Align::Left,
+                    min_chars: 7,
+                },
+            ],
+            name: Some(CustomColumn {
+                header: "id".to_string(),
+                align: Align::Left,
+                min_chars: 6,
+            }),
+            flex: None,
+            pack: true,
+        }
+    }
+
+    #[test]
+    fn a_packed_grid_takes_each_columns_own_width_and_leaves_the_rest_empty() {
+        // The gap a database table used to show: no column stretches, so on a
+        // wide panel the columns keep their own widths and the leftover is
+        // simply not allocated.
+        let plan = packed_grid();
+        let a = allocate(&cfg(), 200, Some(&plan));
+        assert_eq!(a.width_of(ColumnId::Name), Some(6), "the id stays narrow");
+        assert_eq!(a.width_of(ColumnId::Custom(0)), Some(11), "not stretched");
+        assert_eq!(a.width_of(ColumnId::Custom(1)), Some(7), "nor this one");
+        assert!(
+            a.total_width() < 200,
+            "the leftover is empty, not given to a column: {}",
+            a.total_width()
+        );
+    }
+
+    #[test]
+    fn a_packed_grid_never_overflows_and_keeps_the_id_column() {
+        let plan = packed_grid();
+        for inner in 0..=120usize {
+            let a = allocate(&cfg(), inner, Some(&plan));
+            assert!(a.total_width() <= inner, "inner {inner}: {a:?}");
+            assert!(
+                a.is_visible(ColumnId::Name),
+                "inner {inner}: the id column is never dropped",
             );
         }
     }

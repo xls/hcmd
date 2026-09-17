@@ -166,30 +166,29 @@ impl SqliteFs {
             custom.push(CustomColumn {
                 header: name.clone(),
                 align: Align::Left,
-                min_chars: 12,
+                min_chars: data_width(name),
             });
         }
-        // When the table names its id, the Name column takes that name, stays
-        // as narrow as an id needs, and yields the leftover width to the first
-        // data column instead of hogging it. Without a named id it is "Name"
-        // and the flexible column, exactly as every other listing's is.
-        let (name, flex) = match &alias {
-            Some(id) => (
-                Some(CustomColumn {
-                    header: id.clone(),
-                    align: Align::Left,
-                    min_chars: id_width(id),
-                }),
-                columns.get(1).copied(),
-            ),
-            None => (None, None),
-        };
+        // A table is a grid: every column is sized to itself and packed from the
+        // left, rather than one column stretching across the panel and leaving a
+        // gap. The first column is the row id, headed by the name the table
+        // gives it - an INTEGER primary key reads as `id`, not "Name" - and kept
+        // as narrow as an id needs.
+        let header = alias
+            .clone()
+            .unwrap_or_else(|| ColumnId::Name.header().to_string());
+        let name = Some(CustomColumn {
+            header,
+            align: Align::Left,
+            min_chars: id_width(alias.as_deref().unwrap_or("")),
+        });
         Ok((
             ColumnPlan {
                 columns,
                 custom,
                 name,
-                flex,
+                flex: None,
+                pack: true,
             },
             shown,
         ))
@@ -346,6 +345,17 @@ fn id_width(header: &str) -> u16 {
     u16::try_from(header.chars().count())
         .unwrap_or(u16::MAX)
         .clamp(6, 16)
+}
+
+/// How wide a data column is drawn: room for its header, since that is what the
+/// column is known to hold before a single row is read. Values wider than this
+/// crop, the same as an over-long file name does, and narrower tables pack
+/// tight rather than stretching one column across the panel.
+fn data_width(header: &str) -> u16 {
+    u16::try_from(header.chars().count())
+        .unwrap_or(u16::MAX)
+        .saturating_add(1)
+        .clamp(6, 24)
 }
 
 /// Whether a table has an addressable rowid. A `WITHOUT ROWID` table does not,
