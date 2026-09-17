@@ -2943,3 +2943,45 @@ fn a_backend_hint_selects_the_format_for_an_extensionless_name() {
         Some(crate::viewer::render::RenderKind::Json)
     );
 }
+
+#[test]
+fn a_page_within_reach_of_an_edge_lands_on_the_edge() {
+    // "mid page at the top, PgUp goes to the beginning; past the end, PgDn to
+    // the end." A page that cannot scroll because the window is already at an
+    // edge jumps the cursor to that edge instead of doing nothing.
+    let body = "l0\nl1\nl2\nl3\nl4\nl5\n";
+
+    // Text mode: the whole short file is on one tall page.
+    let mut v = open(body);
+    v.layout(10, 40).expect("layout");
+    for _ in 0..3 {
+        v.move_cursor(Motion::Down, Extend::None).expect("down");
+    }
+    assert!(v.cursor() > 0, "the cursor is mid-file");
+    v.move_cursor(Motion::PageUp, Extend::None)
+        .expect("page up");
+    assert_eq!(v.cursor(), 0, "PgUp at the top reaches the beginning");
+    // PgDn reaches the end of the file and then holds there.
+    v.move_cursor(Motion::PageDown, Extend::None)
+        .expect("page down");
+    let end = v.cursor();
+    assert!(end > 0, "PgDn reaches the end, got {end}");
+    v.move_cursor(Motion::PageDown, Extend::None)
+        .expect("page down again");
+    assert_eq!(v.cursor(), end, "already at the end, PgDn holds there");
+
+    // Hex mode: the same, over the same bytes.
+    let mut h = open(body);
+    h.set_mode(ViewerMode::Hex).expect("hex");
+    h.layout(10, 40).expect("layout");
+    for _ in 0..3 {
+        h.move_cursor(Motion::Down, Extend::None).expect("down");
+    }
+    assert!(h.cursor() > 0, "the hex cursor is mid-file");
+    h.move_cursor(Motion::PageUp, Extend::None)
+        .expect("page up");
+    assert_eq!(h.cursor(), 0, "PgUp at the top reaches the first byte");
+    h.move_cursor(Motion::PageDown, Extend::None)
+        .expect("page down");
+    assert!(h.cursor() > 0, "PgDn reaches the last byte");
+}

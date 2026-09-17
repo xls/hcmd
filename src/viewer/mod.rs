@@ -1359,6 +1359,29 @@ impl Viewer {
             ViewerMode::Hex => self.move_hex(motion)?,
             ViewerMode::Text | ViewerMode::Render => self.move_text(motion)?,
         };
+        // A page within reach of an edge lands on the edge. When `PgUp` cannot
+        // move the cursor because the window is already at the top - or `PgDn`
+        // because it is at the end - the page becomes a jump to the file's start
+        // or end, which is what the eye expects the press to do. Dispatched as
+        // the edge motion itself, so it lands exactly where `Home`/`End` would,
+        // and only when the edge is actually ahead of the cursor, so it never
+        // walks backwards over the last byte the way a jump to the end could.
+        if moved.head == before.0 {
+            let start = if self.mode == ViewerMode::Hex {
+                0
+            } else {
+                self.bom_len
+            };
+            let last = self.source.len().unwrap_or(before.0).saturating_sub(1);
+            let edge = match motion {
+                Motion::PageUp if before.0 > start => Some(Motion::FileStart),
+                Motion::PageDown if before.0 < last => Some(Motion::FileEnd),
+                _ => None,
+            };
+            if let Some(edge) = edge {
+                return self.move_cursor(edge, extend);
+            }
+        }
         if !motion.keeps_goal_column() {
             self.goal_col = moved.col;
         }
