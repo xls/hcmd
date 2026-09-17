@@ -34,7 +34,7 @@ use crate::net;
 /// The released binary and the repository are not the same age, so this is
 /// deliberately the branch and not the tag the program was built from: a
 /// theme added after a release is the whole reason to ask.
-const BRANCH: &str = "master";
+const BRANCH: &str = "main";
 
 /// Where the list of themes in the repository comes from.
 pub fn contents_url() -> String {

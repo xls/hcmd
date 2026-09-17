@@ -1,7 +1,7 @@
 #!/bin/sh
 # Install hcmd.
 #
-#   curl -fsSL https://raw.githubusercontent.com/xls/hcmd/master/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/xls/hcmd/main/install.sh | sh
 #
 # Downloads the build for this platform, checks it against the published
 # SHA256SUMS, and installs to ~/.local/bin. No root, and nothing outside the

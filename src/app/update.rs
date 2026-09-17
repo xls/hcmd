@@ -49,7 +49,7 @@ const RELEASE_URL_PREFIX: &str = "https://api.github.com/repos/";
 /// The same installer the README names, spelled exactly, because a command
 /// the user has to correct before it works is worse than no command at all.
 pub const INSTALL_COMMAND: &str =
-    "curl -fsSL https://raw.githubusercontent.com/xls/hcmd/master/install.sh | sh";
+    "curl -fsSL https://raw.githubusercontent.com/xls/hcmd/main/install.sh | sh";
 
 /// What the worker found, on its way back to the status line.
 #[derive(Debug, Clone, PartialEq, Eq)]

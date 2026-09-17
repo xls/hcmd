@@ -1,10 +1,10 @@
 use super::*;
 
 /// Two elements of a real answer from
-/// `api.github.com/repos/xls/hcmd/contents/themes?ref=master`, trimmed of the
+/// `api.github.com/repos/xls/hcmd/contents/themes?ref=main`, trimmed of the
 /// fields the scan does not read but keeping the ones that could be mistaken
 /// for a name: `path` and `download_url` both end in `.toml`.
-const REAL: &str = r#"[{"name":"ayu-dark.toml","path":"themes/ayu-dark.toml","sha":"a39aab68","size":2375,"url":"https://api.github.com/repos/xls/hcmd/contents/themes/ayu-dark.toml?ref=master","download_url":"https://raw.githubusercontent.com/xls/hcmd/master/themes/ayu-dark.toml","type":"file","_links":{"self":"https://api.github.com/repos/xls/hcmd/contents/themes/ayu-dark.toml?ref=master","git":"https://api.github.com/repos/xls/hcmd/git/blobs/a39aab68","html":"https://github.com/xls/hcmd/blob/master/themes/ayu-dark.toml"}},{"name":"tokyo-night.toml","path":"themes/tokyo-night.toml","sha":"b1","size":2400,"type":"file","_links":{"self":"x"}}]"#;
+const REAL: &str = r#"[{"name":"ayu-dark.toml","path":"themes/ayu-dark.toml","sha":"a39aab68","size":2375,"url":"https://api.github.com/repos/xls/hcmd/contents/themes/ayu-dark.toml?ref=main","download_url":"https://raw.githubusercontent.com/xls/hcmd/main/themes/ayu-dark.toml","type":"file","_links":{"self":"https://api.github.com/repos/xls/hcmd/contents/themes/ayu-dark.toml?ref=main","git":"https://api.github.com/repos/xls/hcmd/git/blobs/a39aab68","html":"https://github.com/xls/hcmd/blob/main/themes/ayu-dark.toml"}},{"name":"tokyo-night.toml","path":"themes/tokyo-night.toml","sha":"b1","size":2400,"type":"file","_links":{"self":"x"}}]"#;
 
 #[test]
 fn a_real_listing_yields_one_name_per_element() {
@@ -61,11 +61,11 @@ fn the_same_name_twice_is_offered_once() {
 fn the_urls_name_the_project_repository() {
     assert_eq!(
         contents_url(),
-        "https://api.github.com/repos/xls/hcmd/contents/themes?ref=master"
+        "https://api.github.com/repos/xls/hcmd/contents/themes?ref=main"
     );
     assert_eq!(
         theme_url("dracula"),
-        "https://raw.githubusercontent.com/xls/hcmd/master/themes/dracula.toml"
+        "https://raw.githubusercontent.com/xls/hcmd/main/themes/dracula.toml"
     );
 }
 

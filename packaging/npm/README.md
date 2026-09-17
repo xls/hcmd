@@ -28,5 +28,5 @@ download the tarball for your platform from
 [Releases](https://github.com/xls/hcmd/releases), or use the shell equivalent:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/xls/hcmd/master/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/xls/hcmd/main/install.sh | sh
 ```

@@ -9,7 +9,7 @@ const RELEASE_JSON: &str = r#"{
   "html_url": "https://github.com/xls/hcmd/releases/tag/v0.1.1",
   "id": 207234131,
   "tag_name": "v0.1.1",
-  "target_commitish": "master",
+  "target_commitish": "main",
   "name": "v0.1.1",
   "draft": false,
   "prerelease": false,
@@ -105,7 +105,7 @@ fn the_message_names_the_version_and_the_command_that_installs_it() {
     assert!(said.contains("v0.1.1"), "{said}");
     assert!(
         said.contains(
-            "curl -fsSL https://raw.githubusercontent.com/xls/hcmd/master/install.sh | sh"
+            "curl -fsSL https://raw.githubusercontent.com/xls/hcmd/main/install.sh | sh"
         ),
         "{said}"
     );

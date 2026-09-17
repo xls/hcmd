@@ -24,7 +24,7 @@ with tabbed panels, background jobs and a built-in shell to keep you moving.
 **Get started on Linux or macOS:**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/xls/hcmd/master/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/xls/hcmd/main/install.sh | sh
 hcmd
 ```
 
