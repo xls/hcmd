@@ -328,3 +328,44 @@ fn a_table_without_an_integer_key_keeps_the_plain_name_column() {
     assert_eq!(plan.header(ColumnId::Custom(0)), "key");
     let _ = std::fs::remove_dir_all(file.parent().unwrap_or(&file));
 }
+
+#[test]
+fn a_column_widens_to_fit_its_values_not_only_its_header() {
+    // `note` has a short header but long values; `code` has a long header but
+    // short values. Each column is drawn for what it actually holds, and a
+    // very long value is capped rather than running across the panel.
+    let dir = std::env::temp_dir().join(format!("hcmd-sqlite-widths-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let file = dir.join("w.sqlite");
+    let conn = Connection::open(&file).expect("open");
+    // `note` holds a 20-char value; `code` a 1-char one; `huge` a value far
+    // past the cap.
+    conn.execute_batch(
+        "CREATE TABLE t (id INTEGER PRIMARY KEY, note TEXT, code TEXT, huge TEXT);
+         INSERT INTO t (note, code, huge) VALUES \
+           ('a medium-length note', 'X', \
+            'this value is far longer than any column should ever be drawn at all');",
+    )
+    .expect("seed");
+    drop(conn);
+    let base = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/");
+    let fs = SqliteFs::open(base).expect("open db");
+    let table = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/t");
+    let plan = fs.column_plan(&table).expect("a plan");
+
+    // 20-char value + 4 margin = 24, driven by the value, not the 4-char header.
+    let note = plan.custom(ColumnId::Custom(0)).expect("note column");
+    assert_eq!(note.header, "note");
+    assert_eq!(note.min_chars, 24, "the column fits its longest value");
+
+    // A one-character value under a 4-char header stays at the floor.
+    let code = plan.custom(ColumnId::Custom(1)).expect("code column");
+    assert_eq!(code.header, "code");
+    assert_eq!(code.min_chars, 8, "a short column stays tight");
+
+    // A value far past the cap is capped, not drawn full width.
+    let huge = plan.custom(ColumnId::Custom(2)).expect("huge column");
+    assert_eq!(huge.min_chars, 40, "an over-long value is capped");
+    let _ = std::fs::remove_dir_all(&dir);
+}

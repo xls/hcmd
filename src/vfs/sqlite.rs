@@ -43,6 +43,25 @@ const MAX_TABLE_COLUMNS: usize = 5;
 /// and so a listing dropped early stops reading rather than running to the end.
 const PAGE: usize = 512;
 
+/// How many rows a column's width is measured over.
+///
+/// A column is drawn wide enough for the values it actually holds, not just its
+/// header, so a `last_name` column is not cropped the moment a long name scrolls
+/// into view. The whole table is not measured - that would read millions of
+/// rows before the first is drawn - so a value longer than any in this many
+/// opening rows can still crop; the margin below is the slack that covers it.
+const WIDTH_SAMPLE: usize = 500;
+
+/// Extra cells added to a column beyond the widest value measured, as slack for
+/// a longer value deeper in the table that the sample did not see.
+const WIDTH_MARGIN: usize = 4;
+
+/// The narrowest and widest a data column is drawn. The floor keeps a one-letter
+/// column legible under its header; the cap stops a single long-text column from
+/// running the width of the panel.
+const WIDTH_FLOOR: u16 = 8;
+const WIDTH_CAP: u16 = 40;
+
 /// One open database, read-only.
 #[derive(Debug, Clone)]
 pub struct SqliteFs {
@@ -159,6 +178,7 @@ impl SqliteFs {
             .take(MAX_TABLE_COLUMNS)
             .cloned()
             .collect();
+        let widths = sample_widths(&conn, table, &shown);
         let mut columns = vec![ColumnId::Name];
         let mut custom = Vec::new();
         for (i, name) in shown.iter().enumerate() {
@@ -166,7 +186,7 @@ impl SqliteFs {
             custom.push(CustomColumn {
                 header: name.clone(),
                 align: Align::Left,
-                min_chars: data_width(name),
+                min_chars: data_width(name, widths.get(i).copied().unwrap_or(0)),
             });
         }
         // A table is a grid: every column is sized to itself and packed from the
@@ -347,15 +367,58 @@ fn id_width(header: &str) -> u16 {
         .clamp(6, 16)
 }
 
-/// How wide a data column is drawn: room for its header, since that is what the
-/// column is known to hold before a single row is read. Values wider than this
-/// crop, the same as an over-long file name does, and narrower tables pack
-/// tight rather than stretching one column across the panel.
-fn data_width(header: &str) -> u16 {
-    u16::try_from(header.chars().count())
+/// How wide a data column is drawn: room for its header and for the widest
+/// value seen in the opening rows, plus a margin, clamped to sane bounds. A
+/// column of short codes stays tight; a column of long names widens to fit
+/// them rather than cropping every one.
+fn data_width(header: &str, content: usize) -> u16 {
+    let header = header.chars().count();
+    u16::try_from(header.max(content).saturating_add(WIDTH_MARGIN))
         .unwrap_or(u16::MAX)
-        .saturating_add(1)
-        .clamp(6, 24)
+        .clamp(WIDTH_FLOOR, WIDTH_CAP)
+}
+
+/// The widest value, in characters, in each of `shown` over the table's first
+/// [`WIDTH_SAMPLE`] rows. `length` counts characters, which is the width the
+/// value draws in near enough. Zero for a column, or an error, that offers no
+/// measure - the header then decides the width on its own.
+fn sample_widths(conn: &Connection, table: &str, shown: &[String]) -> Vec<usize> {
+    let zeros = vec![0usize; shown.len()];
+    if shown.is_empty() {
+        return zeros;
+    }
+    let inner: Vec<String> = shown
+        .iter()
+        .enumerate()
+        .map(|(i, c)| format!("\"{}\" AS c{i}", escape(c)))
+        .collect();
+    let maxes: Vec<String> = (0..shown.len())
+        .map(|i| format!("max(length(c{i}))"))
+        .collect();
+    let sql = format!(
+        "SELECT {} FROM (SELECT {} FROM \"{}\" LIMIT {WIDTH_SAMPLE})",
+        maxes.join(", "),
+        inner.join(", "),
+        escape(table)
+    );
+    let Ok(mut stmt) = conn.prepare(&sql) else {
+        return zeros;
+    };
+    let Ok(mut rows) = stmt.query([]) else {
+        return zeros;
+    };
+    match rows.next() {
+        Ok(Some(row)) => (0..shown.len())
+            .map(|i| {
+                row.get::<_, Option<i64>>(i)
+                    .ok()
+                    .flatten()
+                    .and_then(|n| usize::try_from(n).ok())
+                    .unwrap_or(0)
+            })
+            .collect(),
+        _ => zeros,
+    }
 }
 
 /// Whether a table has an addressable rowid. A `WITHOUT ROWID` table does not,
