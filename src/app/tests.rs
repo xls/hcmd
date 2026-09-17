@@ -1424,3 +1424,61 @@ async fn entering_a_sqlite_table_ends_with_its_columns_not_the_configured_ones()
     assert_eq!(plan.header(crate::panel::ColumnId::Custom(1)), "lastname");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[cfg(feature = "sqlite")]
+#[tokio::test]
+async fn a_sqlite_table_gets_its_columns_before_a_single_row_is_read() {
+    use crate::app::reads::PlanEvent;
+    use crate::vfs::BackendKind;
+    // The eager plan probe: the table's columns reach the tab from the path
+    // alone, before the read produces a row. This is what the event loop's
+    // `probe_plan` does the instant a read starts, and it is why a large table
+    // no longer shows the configured columns while its rows stream in.
+    let dir = std::env::temp_dir().join(format!("hcmd-app-eager-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("dir");
+    let file = dir.join("emp.db");
+    let conn = rusqlite::Connection::open(&file).expect("open");
+    conn.execute_batch(
+        "CREATE TABLE employee (id INTEGER PRIMARY KEY, firstname TEXT, lastname TEXT);
+         INSERT INTO employee (firstname, lastname) VALUES ('a', 'b');",
+    )
+    .expect("seed");
+    drop(conn);
+
+    let mut app = App::headless(Config::default(), Keymap::builtin(), Theme::blue());
+    let table = VfsPath::local(&file).with_segment(BackendKind::Sqlite, "/employee");
+    app.navigate(Side::Left, table);
+
+    // Take the queued read but do NOT service it - no rows, no `Done`. Only the
+    // eager probe runs, exactly as the event loop spawns it beside the read.
+    let request = app
+        .take_pending_reads()
+        .into_iter()
+        .next()
+        .expect("navigating queues a read");
+    let plan = app.vfs.column_plan(&request.path);
+    let title = app.vfs.describe(&request.path);
+    app.apply_plan_event(PlanEvent {
+        side: request.side,
+        tab: request.tab,
+        generation: request.generation,
+        plan,
+        title,
+    });
+
+    let tab = app.left.active_tab();
+    let plan = tab
+        .column_plan
+        .as_ref()
+        .expect("the columns reached the tab before any row did");
+    assert_eq!(plan.header(crate::panel::ColumnId::Name), "id");
+    assert_eq!(plan.header(crate::panel::ColumnId::Custom(0)), "firstname");
+    assert!(plan.pack, "and it is the table's own packed grid");
+    assert_eq!(
+        tab.described.as_deref(),
+        Some("[employee: emp.db]"),
+        "the panel title is the listing's own, up front too"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

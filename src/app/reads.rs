@@ -42,7 +42,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::app::{App, ReadRequest, VfsEvent, leaving_name};
-use crate::panel::Side;
+use crate::panel::{ColumnPlan, Side};
 use crate::remote::RemoteId;
 use crate::vfs::{BackendKind, Capabilities, Vfs, VfsPath};
 use tokio::sync::mpsc;
@@ -180,6 +180,71 @@ pub async fn probe_capabilities(
             tab,
             generation,
             caps,
+            plan,
+            title,
+        })
+        .await;
+}
+
+/// The question "what does this listing call its columns and its panel", asked
+/// the moment a read starts rather than when it finishes.
+///
+/// A listing's columns and its title are a view it has of itself from the path
+/// alone - a table's schema, a commit's shape - and owe nothing to the rows
+/// having been read. Asking on read completion, the way capabilities must, left
+/// a large table showing the configured columns for the seconds its rows took
+/// to arrive and then re-formatting; asking here lets the panel draw the
+/// listing's own columns on its first painted row. It rides the same
+/// `(side, tab, generation)` staleness contract a [`ReadRequest`] does.
+#[derive(Debug, Clone)]
+pub struct PlanRequest {
+    /// Which panel asked.
+    pub side: Side,
+    /// Which of that panel's tabs.
+    pub tab: usize,
+    /// The read this answer belongs to.
+    pub generation: u64,
+    /// The path to ask about.
+    pub path: VfsPath,
+}
+
+/// A finished [`PlanRequest`], on its way back to the event loop.
+#[derive(Debug, Clone)]
+pub struct PlanEvent {
+    /// Which panel asked.
+    pub side: Side,
+    /// Which of that panel's tabs.
+    pub tab: usize,
+    /// The read this answer belongs to.
+    pub generation: u64,
+    /// The listing's own columns, or `None` for the configured set.
+    pub plan: Option<ColumnPlan>,
+    /// The listing's own panel title, or `None` for the path's own.
+    pub title: Option<String>,
+}
+
+/// Answer a [`PlanRequest`] off the thread that draws.
+///
+/// [`Vfs::column_plan`] and [`Vfs::describe`] read only metadata, but resolving
+/// the backend to ask can still open a file - a database, an archive - so this
+/// runs on the blocking pool like [`probe_capabilities`], not inline.
+pub async fn probe_plan(vfs: Arc<dyn Vfs>, request: PlanRequest, tx: mpsc::Sender<PlanEvent>) {
+    let PlanRequest {
+        side,
+        tab,
+        generation,
+        path,
+    } = request;
+    let Ok((plan, title)) =
+        tokio::task::spawn_blocking(move || (vfs.column_plan(&path), vfs.describe(&path))).await
+    else {
+        return;
+    };
+    let _ = tx
+        .send(PlanEvent {
+            side,
+            tab,
+            generation,
             plan,
             title,
         })
@@ -861,6 +926,26 @@ impl App {
         }
         self.router.capability_cache().remember(&path, event.caps);
         self.refresh_caps(event.side, event.tab);
+    }
+
+    /// Fold a finished [`PlanRequest`] into the tab that asked, so its columns
+    /// and panel title are the listing's own from the first row drawn.
+    ///
+    /// The generation check drops an answer for a tab pointed elsewhere since,
+    /// the same as [`App::apply_caps_event`]. Capabilities are left untouched:
+    /// those still ride the read that opens the backend and land on `Done`,
+    /// where a cache the read filled answers them without a second open.
+    pub fn apply_plan_event(&mut self, event: PlanEvent) {
+        let Some(tab) = self.panel(event.side).tab(event.tab) else {
+            return;
+        };
+        if tab.generation != event.generation {
+            return;
+        }
+        if let Some(tab) = self.panel_mut(event.side).tab_mut(event.tab) {
+            tab.column_plan = event.plan;
+            tab.described = event.title;
+        }
     }
 }
 

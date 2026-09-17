@@ -23,7 +23,7 @@ use ratatui::layout::Rect;
 use tokio::sync::mpsc;
 
 use crate::app::drives::{DrivesEvent, probe_drives};
-use crate::app::reads::{CapsEvent, probe_capabilities};
+use crate::app::reads::{CapsEvent, PlanEvent, PlanRequest, probe_capabilities, probe_plan};
 use crate::app::update::UpdateEvent;
 use crate::app::{
     App, ConnectRequest, InputRoute, RemoteEvent, StartedSearch, VfsEvent, ViewRequest, stream_read,
@@ -335,6 +335,10 @@ pub async fn event_loop() -> Result<()> {
     // asked here and answered off this thread; the tab shows its backend's own
     // conservative answer until this arrives.
     let (caps_tx, mut caps_rx) = mpsc::channel::<CapsEvent>(CAPS_CHANNEL_DEPTH);
+    // The listing's own columns and title, asked the moment a read starts so
+    // the panel draws them on its first row instead of the configured columns
+    // until the read finishes. Answered off this thread, like the capabilities.
+    let (plan_tx, mut plan_rx) = mpsc::channel::<PlanEvent>(CAPS_CHANNEL_DEPTH);
     // `hosts.toml` and `hotlist.toml`, written on the blocking pool. Only the
     // failures come back, and only to the status line: the design keeps
     // configuration problems non-fatal.
@@ -637,6 +641,19 @@ pub async fn event_loop() -> Result<()> {
         // file on screen.
         for request in app.take_pending_reads() {
             let (side, tab) = (request.side, request.tab);
+            // The listing's columns and title, asked up front and in parallel:
+            // they are the backend's view of the path, not of the rows, so the
+            // panel need not wait out the read to stop showing configured ones.
+            tokio::spawn(probe_plan(
+                Arc::clone(&app.vfs),
+                PlanRequest {
+                    side,
+                    tab,
+                    generation: request.generation,
+                    path: request.path.clone(),
+                },
+                plan_tx.clone(),
+            ));
             let task = tokio::spawn(stream_read(Arc::clone(&app.vfs), request, vfs_tx.clone()));
             // The handle, so the *next* read of this tab can stop this walk
             // instead of leaving it to fill a channel whose every batch the
@@ -806,6 +823,12 @@ pub async fn event_loop() -> Result<()> {
                 // pool. Dropped inside `apply_caps_event` when the tab has
                 // moved on, the same generation check a listing gets.
                 app.apply_caps_event(event);
+            }
+            Some(event) = plan_rx.recv() => {
+                // The listing's own columns and title, back from the blocking
+                // pool and folded in the instant they arrive, so a large
+                // table's columns are right before its rows finish streaming.
+                app.apply_plan_event(event);
             }
             Some(written) = config_rx.recv() => {
                 // A configuration file has been written. Nothing to show
