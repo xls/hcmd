@@ -9,6 +9,8 @@ Browse, search, preview and move files across local folders, archives and remote
 
 **Linux + macOS** &nbsp; | &nbsp; **x86_64 + arm64** &nbsp; | &nbsp; **MIT licensed**
 
+[![Built for Omarchy](https://raw.githubusercontent.com/tcballard/omarchy-badges/85f859029e236e784e7b05ada6dbe73506d07a91/badges/v1/built-for-omarchy.svg)](https://github.com/tcballard/omarchy-badges)
+
 [Install](#install) &nbsp; / &nbsp; [Explore the features](#made-for-more-than-moving-files) &nbsp; / &nbsp; [First steps](#your-first-minute) &nbsp; / &nbsp; [Releases](https://github.com/xls/holos/releases)
 
 </div>
