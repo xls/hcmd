@@ -234,10 +234,17 @@ impl App {
         if wanted == self.theme.name {
             return;
         }
-        let Some(text) = crate::config::builtin_theme(wanted) else {
+        // The dynamic `omarchy` theme previews like any other; everything else
+        // the picker previews is a built-in.
+        let previewed = if wanted == crate::config::omarchy::NAME {
+            crate::config::omarchy::theme()
+        } else {
+            crate::config::builtin_theme(wanted)
+                .map(|text| crate::config::Theme::parse(text, wanted).0)
+        };
+        let Some(theme) = previewed else {
             return;
         };
-        let (theme, _warnings) = crate::config::Theme::parse(text, wanted);
         self.theme = theme;
     }
 
@@ -269,8 +276,12 @@ impl App {
         if name == self.theme.name {
             return;
         }
-        if let Some(text) = crate::config::builtin_theme(name) {
-            let (theme, _warnings) = crate::config::Theme::parse(text, name);
+        let restored = if name == crate::config::omarchy::NAME {
+            crate::config::omarchy::theme()
+        } else {
+            crate::config::builtin_theme(name).map(|text| crate::config::Theme::parse(text, name).0)
+        };
+        if let Some(theme) = restored {
             self.theme = theme;
         }
     }

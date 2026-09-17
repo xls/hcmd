@@ -171,7 +171,11 @@ pub fn store_theme_text(dir: &Path, name: &str, text: &str) -> Result<PathBuf> {
 
 /// Is `name` a theme this machine can already load?
 fn installed_in(dir: &Path, name: &str) -> bool {
-    crate::config::builtin_theme(name).is_some()
+    // The dynamic `omarchy` theme is built from the desktop's palette, not a
+    // file, so it is never fetched - asking the repository for an
+    // `omarchy.toml` that does not exist is the 404 this guards against.
+    name == crate::config::omarchy::NAME
+        || crate::config::builtin_theme(name).is_some()
         || dir.join("themes").join(format!("{name}.toml")).is_file()
 }
 
@@ -207,12 +211,17 @@ pub fn installed_theme(dir: Option<&Path>, name: &str) -> Option<Theme> {
     let on_disk = dir
         .map(|dir| dir.join("themes").join(format!("{name}.toml")))
         .and_then(|path| std::fs::read_to_string(path).ok());
-    let text = match on_disk {
-        Some(text) => text,
-        None => crate::config::builtin_theme(name)?.to_string(),
-    };
-    let (theme, _warnings) = Theme::parse(&text, name);
-    Some(theme)
+    if let Some(text) = on_disk {
+        // A file of that name on disk wins, so `omarchy` can still be pinned to
+        // a fixed `themes/omarchy.toml` by anyone who wants to.
+        return Some(Theme::parse(&text, name).0);
+    }
+    // The dynamic `omarchy` theme, built from the desktop's live palette.
+    if name == crate::config::omarchy::NAME {
+        return crate::config::omarchy::theme();
+    }
+    let text = crate::config::builtin_theme(name)?.to_string();
+    Some(Theme::parse(&text, name).0)
 }
 
 #[cfg(test)]

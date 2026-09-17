@@ -119,6 +119,17 @@ fn a_theme_that_is_already_here_is_never_fetched() {
 }
 
 #[test]
+fn the_dynamic_omarchy_theme_is_never_fetched() {
+    // It is built from the desktop's palette, not a file, so the accept path
+    // must treat it as already here rather than ask the repository for an
+    // `omarchy.toml` that does not exist. No network in the suite, so this
+    // returning at all is the assertion.
+    let dir = temp_dir("omarchy");
+    assert!(ensure_installed_in(&dir, crate::config::omarchy::NAME).is_ok());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn a_file_beats_the_built_in_of_the_same_name() {
     let dir = temp_dir("override");
     let text = crate::config::builtin_theme("dracula").expect("dracula ships");
