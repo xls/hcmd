@@ -58,6 +58,12 @@
 //! number the file ended inside - the raw value is shown. Inventing a name
 //! would be worse than the number, and hiding the line would leave a person
 //! wondering what was there.
+//!
+//! A line may add `deferred_when = { field = "flags", bit = 3 }`: when that bit
+//! of the named field is set, the line shows a word - `"deferred"` by default,
+//! or a `label` the table gives - instead of its own value. A ZIP header whose
+//! sizes follow the data holds a zero the number would read as `0 B`; the flag
+//! says the real value is in the central directory, so the line says so.
 
 use std::collections::BTreeMap;
 
@@ -90,6 +96,21 @@ pub struct LineSpec {
     pub join: String,
     /// How the value is written out.
     pub style: Style,
+    /// When a flag bit says this line's value is not really here - a ZIP whose
+    /// sizes follow the data rather than sitting in the local header - the line
+    /// says so instead of printing the zero the header actually holds.
+    pub deferred_when: Option<Condition>,
+}
+
+/// A test on a flag bit that, when set, replaces a line's value with a word.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Condition {
+    /// The field whose bits are tested.
+    pub field: String,
+    /// Which bit, counted from zero.
+    pub bit: u32,
+    /// The word shown when the bit is set.
+    pub label: String,
 }
 
 /// A template's summary: a heading and the lines under it.
@@ -125,6 +146,16 @@ struct RawLine {
     values: Option<BTreeMap<String, String>>,
     flags: Option<BTreeMap<String, String>>,
     base: Option<u32>,
+    deferred_when: Option<RawCondition>,
+}
+
+/// A `deferred_when` table, before it is checked.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawCondition {
+    field: String,
+    bit: u32,
+    label: Option<String>,
 }
 
 /// A table of decimal keys to names, with the keys parsed.
@@ -159,13 +190,22 @@ impl RawSummary {
         let mut lines = Vec::with_capacity(self.lines.len());
         for raw in self.lines {
             let label = raw.label;
-            for named in [Some(&raw.field), raw.with.as_ref()].into_iter().flatten() {
+            let condition_field = raw.deferred_when.as_ref().map(|c| &c.field);
+            for named in [Some(&raw.field), raw.with.as_ref(), condition_field]
+                .into_iter()
+                .flatten()
+            {
                 if !fields.iter().any(|f| f == named) {
                     return Err(Error::msg(format!(
                         "summary line {label:?}: there is no field called {named:?}"
                     )));
                 }
             }
+            let deferred_when = raw.deferred_when.map(|c| Condition {
+                field: c.field,
+                bit: c.bit,
+                label: c.label.unwrap_or_else(|| "deferred".to_string()),
+            });
             let render = match raw.render {
                 Some(ref text) => Render::parse(text).ok_or_else(|| {
                     Error::msg(format!(
@@ -188,6 +228,7 @@ impl RawSummary {
                 with: raw.with,
                 join: raw.join.unwrap_or_else(|| " x ".to_string()),
                 style,
+                deferred_when,
             });
         }
         Ok(Summary {
@@ -229,6 +270,16 @@ fn render_line(
     readings: &[super::template::FieldReading],
     bytes: &[u8],
 ) -> Option<String> {
+    // A flag can say the value is not really in this field - a ZIP's sizes sit
+    // in the central directory when the header's are zero - so the line says
+    // so rather than printing the zero the header holds.
+    if let Some(cond) = &line.deferred_when
+        && cond.bit < 128
+        && let Some(flags) = cell(&cond.field, readings, bytes, None).and_then(|c| c.number)
+        && flags & (1_i128 << cond.bit) != 0
+    {
+        return Some(cond.label.clone());
+    }
     let first = cell(&line.field, readings, bytes, line.style.base)?;
     let head = line.style.render(first);
     let Some(second) = line.with.as_ref() else {

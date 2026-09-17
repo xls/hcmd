@@ -71,15 +71,20 @@ field  = "compression_method"
 render = "enum"
 enum   = { 0 = "stored", 1 = "shrunk", 6 = "imploded", 8 = "deflate", 9 = "deflate64", 12 = "bzip2", 14 = "LZMA", 93 = "Zstandard", 95 = "XZ", 96 = "JPEG", 98 = "PPMd" }
 
+# When flag bit 3 is set the sizes and CRC are zero here and follow the data in
+# a descriptor, with the real values in the central directory - so the header's
+# zero is not the size, and the line says the size is deferred rather than "0".
 [[summary.line]]
-label  = "Compressed"
-field  = "compressed_size"
-render = "size"
+label         = "Compressed"
+field         = "compressed_size"
+render        = "size"
+deferred_when = { field = "flags", bit = 3 }
 
 [[summary.line]]
-label  = "Uncompressed"
-field  = "uncompressed_size"
-render = "size"
+label         = "Uncompressed"
+field         = "uncompressed_size"
+render        = "size"
+deferred_when = { field = "flags", bit = 3 }
 
 [[summary.line]]
 label  = "Flags"

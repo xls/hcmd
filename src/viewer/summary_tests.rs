@@ -481,15 +481,17 @@ fn the_zip_and_gzip_summaries_name_the_compression() {
     zip.extend_from_slice(&0x0808_u16.to_le_bytes()); // sizes follow, UTF-8 name
     zip.extend_from_slice(&8_u16.to_le_bytes()); // deflate
     zip.extend_from_slice(&[0; 4]);
+    zip.extend_from_slice(&0_u32.to_le_bytes()); // sizes are zero in the header,
+    zip.extend_from_slice(&0_u32.to_le_bytes()); // because bit 3 defers them
     zip.extend_from_slice(&0_u32.to_le_bytes());
-    zip.extend_from_slice(&4096_u32.to_le_bytes());
-    zip.extend_from_slice(&16384_u32.to_le_bytes());
     zip.extend_from_slice(&5_u16.to_le_bytes());
     zip.extend_from_slice(&0_u16.to_le_bytes());
     let out = lines("ZIP local file header", &zip);
     assert_eq!(value(&out, "Compression"), "deflate");
-    assert_eq!(value(&out, "Compressed"), "4.0 KB");
-    assert_eq!(value(&out, "Uncompressed"), "16 KB");
+    // Bit 3 is set, so the sizes are not in this header - the line says so
+    // rather than printing the zero the header holds.
+    assert_eq!(value(&out, "Compressed"), "deferred");
+    assert_eq!(value(&out, "Uncompressed"), "deferred");
     assert_eq!(value(&out, "Flags"), "sizes follow the data, UTF-8 name");
 
     let mut gzip = vec![0x1F, 0x8B, 0x08, 0x08];
@@ -500,6 +502,25 @@ fn the_zip_and_gzip_summaries_name_the_compression() {
     assert_eq!(value(&out, "Compressed on"), "Unix");
     assert_eq!(value(&out, "Original modified"), "2023-11-14 22:13:20");
     assert_eq!(value(&out, "Header"), "original name");
+}
+
+#[test]
+fn the_zip_summary_shows_the_sizes_when_the_header_actually_holds_them() {
+    // Bit 3 clear: the sizes are in the local header, and the lines read them.
+    let mut zip = vec![0x50, 0x4B, 0x03, 0x04];
+    zip.extend_from_slice(&20_u16.to_le_bytes());
+    zip.extend_from_slice(&0x0800_u16.to_le_bytes()); // UTF-8 name, no data descriptor
+    zip.extend_from_slice(&8_u16.to_le_bytes()); // deflate
+    zip.extend_from_slice(&[0; 4]);
+    zip.extend_from_slice(&0_u32.to_le_bytes()); // crc
+    zip.extend_from_slice(&4096_u32.to_le_bytes());
+    zip.extend_from_slice(&16384_u32.to_le_bytes());
+    zip.extend_from_slice(&5_u16.to_le_bytes());
+    zip.extend_from_slice(&0_u16.to_le_bytes());
+    let out = lines("ZIP local file header", &zip);
+    assert_eq!(value(&out, "Compressed"), "4.0 KB");
+    assert_eq!(value(&out, "Uncompressed"), "16 KB");
+    assert_eq!(value(&out, "Flags"), "UTF-8 name");
 }
 
 #[test]
