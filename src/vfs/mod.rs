@@ -252,6 +252,15 @@ impl VfsPath {
         self.rest.last_mut().unwrap_or(&mut self.head)
     }
 
+    /// The outermost segment: the real local file or directory this path was
+    /// launched from. For a nested path - an archive member, a database row -
+    /// this is the container the kernel *can* open, where [`VfsPath::tail`] is
+    /// the container-internal path it cannot. Every path this program builds
+    /// has a `Local` outermost segment.
+    pub fn outermost(&self) -> &(BackendKind, PathBuf) {
+        &self.head
+    }
+
     /// The `index`th segment from the outside, or `None` past the end.
     fn segment(&self, index: usize) -> Option<&(BackendKind, PathBuf)> {
         match index.checked_sub(1) {

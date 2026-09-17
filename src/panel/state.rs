@@ -108,6 +108,41 @@ pub fn load() -> (SavedState, Vec<String>) {
     }
 }
 
+/// The local directory a tab reopens in next session.
+///
+/// A virtual tab (search results, a git branch view) and a connected tab are
+/// persisted as **the real directory they came from**, never as their `list:`
+/// or `Remote(3)` path: those name a listing or a connection that will not
+/// exist next session, and the panel would open on an error instead of on a
+/// directory. Reconnecting on startup would also need credentials before the
+/// UI exists.
+///
+/// A tab nested inside a container - an archive member, a disk image, a
+/// database row - is persisted as the directory that **holds the container
+/// file**, not its container-internal path: an `emp.db#sqlite/employee`
+/// restored as `/employee` names nothing the kernel can open, and the panel
+/// would fall back to the home directory. Reopening beside the file is where
+/// the design says leaving a container lands anyway.
+fn restore_directory(tab: &Tab) -> String {
+    if let Some(origin) = tab
+        .remote_view()
+        .map(|view| &view.origin)
+        .or_else(|| tab.virtual_view().map(|view| &view.origin))
+    {
+        return origin.tail().to_string_lossy().into_owned();
+    }
+    // The outermost segment is the real local path that was entered. For a
+    // plain local tab it is the directory itself; for a container it is the
+    // container file, whose parent is the directory to return to.
+    let outer = tab.path.outermost().1.as_path();
+    let dir = if tab.path.depth() > 1 {
+        outer.parent().unwrap_or(outer)
+    } else {
+        outer
+    };
+    dir.to_string_lossy().into_owned()
+}
+
 /// Snapshot one panel.
 pub fn snapshot(panel: &Panel) -> SavedPanel {
     SavedPanel {
@@ -116,25 +151,7 @@ pub fn snapshot(panel: &Panel) -> SavedPanel {
             .tabs()
             .iter()
             .map(|tab| SavedTab {
-                // A virtual tab is persisted as **the directory it came
-                // from**, never as its `list:` path.
-                // A `list:/7` restored next session names a listing that does
-                // not exist, and the panel would open on an error instead of
-                // on a directory. This is a one-line rule and the kind that is
-                // otherwise discovered six months later.
-                // A connected tab is persisted the same way and for the same
-                // reason: a `Remote(3)` path restored next session names
-                // nothing, and reconnecting on startup would need credentials
-                // before the UI exists (
-                // the design).
-                path: tab
-                    .remote_view()
-                    .map(|view| &view.origin)
-                    .or_else(|| tab.virtual_view().map(|view| &view.origin))
-                    .unwrap_or(&tab.path)
-                    .tail()
-                    .to_string_lossy()
-                    .into_owned(),
+                path: restore_directory(tab),
                 sort: match tab.sort.key {
                     SortKey::Unsorted => "unsorted".to_string(),
                     SortKey::Column(c) => c.id().to_string(),
@@ -303,6 +320,48 @@ mod tests {
         let mut p = Panel::new(Side::Left, VfsPath::local("/"));
         assert!(restore(&mut p, &saved, 9));
         assert_eq!(p.active_tab().sort.key, SortKey::default());
+    }
+
+    #[test]
+    fn a_tab_inside_a_container_is_saved_beside_the_container_file() {
+        use crate::vfs::BackendKind;
+        // Sitting inside a database at `/home/t/emp.db`, on the table `employee`.
+        // The saved path is the directory holding the file, not the
+        // container-internal `/employee`, which names nothing on restart.
+        let inside =
+            VfsPath::local("/home/t/emp.db").with_segment(BackendKind::Sqlite, "/employee");
+        let p = Panel::new(Side::Left, inside);
+        let saved = snapshot(&p);
+        assert_eq!(
+            saved.tabs.first().map(|t| t.path.as_str()),
+            Some("/home/t"),
+            "a container tab reopens in the folder the file is in"
+        );
+
+        // And it restores to a real local directory, not the bogus inner path.
+        let mut restored = Panel::new(Side::Right, VfsPath::local("/"));
+        assert!(restore(&mut restored, &saved, 9));
+        assert_eq!(
+            restored.active_tab().path,
+            VfsPath::local("/home/t"),
+            "restored to the file's directory"
+        );
+    }
+
+    #[test]
+    fn a_deeply_nested_container_still_saves_the_outermost_directory() {
+        use crate::vfs::BackendKind;
+        // An archive inside an archive: the real local file is the outer one,
+        // and its directory is where the tab returns.
+        let nested = VfsPath::local("/data/pkgs/outer.zip")
+            .with_segment(BackendKind::Archive, "/inner.zip")
+            .with_segment(BackendKind::Archive, "/sub/file");
+        let p = Panel::new(Side::Left, nested);
+        let saved = snapshot(&p);
+        assert_eq!(
+            saved.tabs.first().map(|t| t.path.as_str()),
+            Some("/data/pkgs")
+        );
     }
 
     #[test]
