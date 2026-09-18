@@ -2,6 +2,13 @@
 
 Notable changes per release, one line each. Newest first.
 
+## v0.15.0
+
+- `dav://` connections work: the WebDAV client's HTTP library refused `PROPFIND`, `MKCOL` and `MOVE` as methods HTTP/1.1 does not define, so every WebDAV connect failed at its first listing; proven by hcmd connecting to its own `Ctrl+N` share.
+- `Ctrl+N` listens on `serve.port` (8080; any free port when that is taken, and the dialog says so) so a firewall rule can name it; the dialog names the host firewall that is on - ufw, firewalld, nftables or iptables - says whether it blocks the port, and shows the command that opens it.
+- The serve dialog has a Stop serving button, a ten-row request log, and a fixed size that truncates long lines instead of growing.
+- In the rendered view the focused link is the one the cursor stands in: `Tab` finds the next link after the cursor and puts the cursor on it, and moving off a link drops its underline and marker.
+
 ## v0.14.0
 
 - `Ctrl+N` serves the selected files and folders over HTTP and WebDAV for as long as its dialog is open: the dialog lists the addresses to reach it on and logs the last five requests; the index page is plain HTML with name, size and date, downloads resume, and another copy of hcmd can connect to it as a `dav://` remote.

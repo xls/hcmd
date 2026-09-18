@@ -140,6 +140,18 @@ The protocols run in process, without an external `ssh` command or
 
 **Remote connections (`Ctrl+F`).** Quick connect or choose a saved host, then browse and copy through an ordinary panel.
 
+**Share the other way (`Ctrl+N`).** Select files or folders and hcmd serves them
+over **HTTP and WebDAV** for as long as the dialog is open. A browser gets a
+plain index page with names, sizes and dates; another hcmd (or Finder, Explorer,
+rclone) connects to the same address as `dav://`; downloads resume. Read-only.
+The dialog shows the addresses to hand out and the last requests, and - since
+the host firewall is what usually stops the next machine - which firewall is on
+and the command that opens the port (`serve.port`, 8080 by default). Closing
+the dialog stops serving.
+
+**Fetch a URL (`Ctrl+D`).** Download into a per-session folder (`Alt+J`) as a
+background job with a progress bar; a partial file resumes.
+
 ### Look inside files of any size
 
 Press **F3** for a streaming viewer that starts displaying a file without waiting
