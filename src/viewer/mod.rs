@@ -71,6 +71,7 @@ pub mod summary_render;
 pub mod template;
 pub mod template_data;
 pub mod text;
+pub mod textlinks;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

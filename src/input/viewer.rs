@@ -496,7 +496,13 @@ fn viewer_action(app: &mut App, action: Action, extend: Extend) -> Result<()> {
             // A focused link under the cursor takes `Enter` first: a file link
             // is offered as a download, a page link goes to the browser.
             // Anywhere else the key means fold, as it always has.
-            if let Some(target) = viewer.focused_link().map(|link| link.target.clone()) {
+            // In mode 3 that is the focused link; in mode 1 it is whatever
+            // URL the byte cursor is standing in.
+            let target = viewer
+                .focused_link()
+                .map(|link| link.target.clone())
+                .or_else(|| viewer.url_under_cursor());
+            if let Some(target) = target {
                 app.follow_web_link(&target);
                 return Ok(());
             }
@@ -505,20 +511,28 @@ fn viewer_action(app: &mut App, action: Action, extend: Extend) -> Result<()> {
             return Ok(());
         }
         A::LinkNext | A::LinkPrev => {
-            if viewer.mode() != crate::config::ViewerMode::Render {
-                app.message =
-                    Some("links: mode 3 only - press 3 for the rendered view".to_string());
-                return Ok(());
-            }
-            let said = viewer
-                .step_link(action == A::LinkNext)
-                .unwrap_or_else(|| "no links in this document".to_string());
+            let forward = action == A::LinkNext;
+            let said = match viewer.mode() {
+                crate::config::ViewerMode::Render => viewer
+                    .step_link(forward)
+                    .unwrap_or_else(|| "no links in this document".to_string()),
+                crate::config::ViewerMode::Text => viewer
+                    .step_text_link(forward)?
+                    .unwrap_or_else(|| "no web link that way within reach".to_string()),
+                crate::config::ViewerMode::Hex => {
+                    "links: text or rendered view - press 1 or 3".to_string()
+                }
+            };
             app.message = Some(said);
             return Ok(());
         }
         A::LinkOpen => {
-            let Some(target) = viewer.focused_link().map(|link| link.target.clone()) else {
-                app.message = Some("no link focused - tab moves to one".to_string());
+            let target = viewer
+                .focused_link()
+                .map(|link| link.target.clone())
+                .or_else(|| viewer.url_under_cursor());
+            let Some(target) = target else {
+                app.message = Some("no link here - tab moves to one".to_string());
                 return Ok(());
             };
             app.open_link_in_browser(&target);
@@ -635,7 +649,7 @@ fn viewer_action(app: &mut App, action: Action, extend: Extend) -> Result<()> {
         // did nothing would look broken.
         A::HexSide => {
             // `Tab` is the mode's focus key: hex sides in mode 2, the next
-            // link in mode 3.
+            // link in modes 1 and 3.
             match viewer.mode() {
                 crate::config::ViewerMode::Hex => viewer.switch_hex_side(),
                 crate::config::ViewerMode::Render => {
@@ -645,8 +659,10 @@ fn viewer_action(app: &mut App, action: Action, extend: Extend) -> Result<()> {
                     app.message = Some(said);
                 }
                 crate::config::ViewerMode::Text => {
-                    app.message =
-                        Some("hex side: hex mode only - 2 or F4 switches to it".to_string());
+                    let said = viewer
+                        .step_text_link(true)?
+                        .unwrap_or_else(|| "no web link ahead within reach".to_string());
+                    app.message = Some(said);
                 }
             }
             return Ok(());

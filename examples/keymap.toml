@@ -439,15 +439,16 @@ goto_offset       = ["ctrl+g"]
 cycle_encoding    = ["f8"]
 # tab is the mode's focus key: between the two hex sides in mode 2, where
 # nothing else changes -- the cursor stays on the same byte and the selection
-# over the same bytes -- and from link to link in mode 3. It is other_panel in
-# [global]; context resolves that by context, and there is no other panel to
-# move to from a full-screen viewer.
+# over the same bytes -- and from link to link in modes 1 and 3. It is
+# other_panel in [global]; context resolves that by context, and there is no
+# other panel to move to from a full-screen viewer.
 hex_side          = ["tab"]
-# Links, in mode 3. tab (above) focuses the next one and shift+tab the
-# previous, wrapping; the focused link is painted like the current match.
-# enter on it downloads a file link (after asking) or opens a page link in the
-# browser; shift+enter always opens the browser. link_next is reached through
-# tab, so it carries no key of its own by default.
+# Links. In mode 3 they are the document's own; in mode 1 any http(s):// in the
+# text. tab (above) goes to the next one and shift+tab the previous; a focused
+# link in mode 3 is painted like the current match. enter on a link downloads a
+# file link (after asking) or opens a page link in the browser; shift+enter
+# always opens the browser. link_next is reached through tab, so it carries no
+# key of its own by default.
 link_next         = []
 link_prev         = ["shift+tab"]
 link_open         = ["shift+enter"]

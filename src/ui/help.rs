@@ -1092,11 +1092,13 @@ fn dialog_help(id: DialogId) -> (&'static str, &'static str) {
         ),
         DialogId::DownloadLink => (
             "Download this link?",
-            "Enter on a focused link in the viewer's rendered view (mode 3).\n\
-             Tab and Shift+Tab move between links; a link to a file asks this,\n\
-             and a link to a page opens in the browser instead. Download fetches\n\
-             it into the downloads folder (Alt+J) as a background job; Cancel\n\
- leaves everything as it was. Shift+Enter always opens the browser.",
+            "Enter on a link in the viewer: the focused one in the rendered\n\
+             view (mode 3), or the http(s):// the cursor stands in as text\n\
+             (mode 1). Tab and Shift+Tab move between links; a link to a file\n\
+             asks this, and a link to a page opens in the browser instead.\n\
+             Download fetches it into the downloads folder (Alt+J) as a\n\
+             background job; Cancel leaves everything as it was. Shift+Enter\n\
+ always opens the browser.",
         ),
         DialogId::Menu => (
             "Menu bar",
