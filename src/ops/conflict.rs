@@ -234,6 +234,7 @@ impl Policy {
                     dest_mtime: existing.modified().ok(),
                     both_dirs,
                     dest_is_dir: existing.is_dir(),
+                    resumable: false,
                 };
                 match ctx.ask(request) {
                     Some(Decision::Conflict {

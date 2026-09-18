@@ -366,6 +366,10 @@ pub struct ConflictRequest {
     /// answered by recursively removing that directory
     /// ([`conflict::Plan::Refuse`]).
     pub dest_is_dir: bool,
+    /// The source is a stream that can be continued from where the
+    /// destination stops - a download - so the dialog offers `Append` as
+    /// *Resume*. False for a copy, where appending is appending.
+    pub resumable: bool,
 }
 
 /// The UI's answer to a [`JobEvent::NeedsDecision`].

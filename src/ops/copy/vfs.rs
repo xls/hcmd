@@ -410,6 +410,7 @@ fn resolve_via_vfs(
                 dest_mtime: existing.mtime,
                 both_dirs: false,
                 dest_is_dir,
+                resumable: false,
             };
             match ctx.ask(request) {
                 Some(Decision::Conflict {

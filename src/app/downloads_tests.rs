@@ -89,3 +89,39 @@ fn a_link_with_a_file_extension_is_a_download_and_a_page_is_not() {
         assert!(!url_is_file(url), "{url} is a page");
     }
 }
+
+#[test]
+fn a_second_request_for_a_file_already_being_fetched_is_refused() {
+    let mut app = App::headless(
+        crate::config::Config::default(),
+        crate::config::Keymap::builtin(),
+        crate::config::Theme::blue(),
+    );
+    app.request_download("https://host/big.iso");
+    assert!(
+        app.message
+            .as_deref()
+            .is_some_and(|m| m.starts_with("downloading big.iso")),
+        "{:?}",
+        app.message
+    );
+    // Queued and not yet taken by the loop, it still counts as in progress:
+    // two jobs writing one file would race each other.
+    app.request_download("https://host/big.iso");
+    assert!(
+        app.message
+            .as_deref()
+            .is_some_and(|m| m.contains("already downloading big.iso")),
+        "{:?}",
+        app.message
+    );
+    // A different file is a different download.
+    app.request_download("https://host/other.iso");
+    assert!(
+        app.message
+            .as_deref()
+            .is_some_and(|m| m.starts_with("downloading other.iso")),
+        "{:?}",
+        app.message
+    );
+}

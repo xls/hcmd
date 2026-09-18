@@ -1087,7 +1087,9 @@ fn dialog_help(id: DialogId) -> (&'static str, &'static str) {
              Alt+J opens. Redirects are followed; the transfer runs as a\n\
              background job with a progress bar and can be cancelled or sent to\n\
              the background like a copy. Nothing is opened or run - the file is\n\
-             just put in the folder, and F5 copies it out to keep it. The\n\
+             just put in the folder, and F5 copies it out to keep it. A URL\n\
+             whose file is already there asks the copy's own question - Resume\n\
+             continues the partial file, or Overwrite, Rename, Skip. The\n\
  downloads folder is emptied when hcmd exits.",
         ),
         DialogId::DownloadLink => (

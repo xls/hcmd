@@ -1313,6 +1313,7 @@ mod tests {
                 dest_mtime: None,
                 both_dirs: false,
                 dest_is_dir: false,
+                resumable: false,
             }));
         }
 

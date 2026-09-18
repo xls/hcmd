@@ -223,6 +223,16 @@ impl ConflictDialog {
         }
     }
 
+    /// A choice's button text. On a resumable source - a download - `Append`
+    /// is a resume, and says so; everywhere else the choice's own label.
+    fn choice_label(&self, choice: ConflictChoice) -> &'static str {
+        if choice == ConflictChoice::Append && self.request.resumable {
+            "Resume"
+        } else {
+            choice.label()
+        }
+    }
+
     /// The conflict being resolved.
     pub const fn request(&self) -> &ConflictRequest {
         &self.request
@@ -638,7 +648,7 @@ impl Dialog for ConflictDialog {
                         .choices
                         .iter()
                         .take(split)
-                        .map(|c| (c.label(), self.mnemonic_of(Control::Choice(*c))))
+                        .map(|c| (self.choice_label(*c), self.mnemonic_of(Control::Choice(*c))))
                         .collect();
                     draw_mnemonic_buttons(f, rect, &labels, index, style);
                 }
@@ -647,7 +657,7 @@ impl Dialog for ConflictDialog {
                         .choices
                         .iter()
                         .skip(split)
-                        .map(|c| (c.label(), self.mnemonic_of(Control::Choice(*c))))
+                        .map(|c| (self.choice_label(*c), self.mnemonic_of(Control::Choice(*c))))
                         .collect();
                     labels.push(("Cancel", Some('n')));
                     let focus = index.checked_sub(split).map_or(usize::MAX, |i| {
@@ -719,6 +729,7 @@ mod tests {
             dest_mtime: base.checked_sub(Duration::from_secs(86_400)),
             both_dirs,
             dest_is_dir: both_dirs,
+            resumable: false,
         })
     }
 
@@ -933,6 +944,29 @@ mod tests {
         typed(&mut d, "sorpa");
         assert_eq!(d.rename_to(), "sorpa", "the letters typed, not chose");
         assert!(!d.apply_to_all(), "and `a` did not toggle the checkbox");
+    }
+
+    #[test]
+    fn on_a_resumable_source_append_is_offered_as_resume() {
+        // A copy appends; a download continues from where the partial file
+        // stopped. Same choice, same key, the word that is true for each.
+        let copy = dump(&render(&dialog(), 100, 20, false));
+        assert!(copy.contains("Append"), "{copy}");
+        assert!(!copy.contains("Resume"), "{copy}");
+
+        let mut resumable = request(false);
+        resumable.resumable = true;
+        let d = ConflictDialog::new(
+            JobId(1),
+            resumable,
+            "report (2).txt",
+            &PanelConfig::default(),
+        );
+        let download = dump(&render(&d, 100, 20, false));
+        assert!(download.contains("Resume"), "{download}");
+        assert!(!download.contains("Append"), "{download}");
+        // And the button still answers to its key.
+        assert!(d.choices().contains(&ConflictChoice::Append));
     }
 
     #[test]

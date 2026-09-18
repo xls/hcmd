@@ -935,6 +935,7 @@ mod tests {
             dest_mtime: Some(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000)),
             both_dirs: false,
             dest_is_dir: false,
+            resumable: false,
         };
 
         vec![

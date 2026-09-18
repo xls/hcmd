@@ -513,6 +513,7 @@ mod tests {
                 dest_mtime: None,
                 both_dirs: false,
                 dest_is_dir: false,
+                resumable: false,
             }),
         });
         assert_eq!(
@@ -730,6 +731,7 @@ mod tests {
                 dest_mtime: None,
                 both_dirs: false,
                 dest_is_dir: false,
+                resumable: false,
             }),
         });
         let jobs = vec![waiting, started(2, JobKind::Copy)];

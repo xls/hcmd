@@ -834,6 +834,7 @@ mod tests {
                 dest_mtime: None,
                 both_dirs,
                 dest_is_dir,
+                resumable: false,
             })
         };
         for (screen, both_dirs, dest_is_dir) in [

@@ -569,6 +569,7 @@ mod tests {
                 dest_mtime: now.checked_sub(Duration::from_secs(86_400)),
                 both_dirs: false,
                 dest_is_dir: false,
+                resumable: false,
             }),
             "report (2).txt",
             &PanelConfig::default(),

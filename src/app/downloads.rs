@@ -114,26 +114,11 @@ pub fn url_is_file(url: &str) -> bool {
     }
 }
 
-/// A name that is not already taken in `dir`: `file`, then `file (2)`, `file
-/// (3)`, keeping any extension.
+/// The free-name rule, kept reachable from this module's tests; the runner
+/// owns it now, since `Rename` is answered there.
+#[cfg(test)]
 fn unique_name(dir: &Path, name: &str) -> PathBuf {
-    let candidate = dir.join(name);
-    if !candidate.exists() {
-        return candidate;
-    }
-    let (stem, ext) = match name.rsplit_once('.') {
-        Some((stem, ext)) if !stem.is_empty() => (stem.to_string(), format!(".{ext}")),
-        _ => (name.to_string(), String::new()),
-    };
-    for n in 2..10_000u32 {
-        let candidate = dir.join(format!("{stem} ({n}){ext}"));
-        if !candidate.exists() {
-            return candidate;
-        }
-    }
-    // Ten thousand of the same name is not a real case; fall back to the plain
-    // one rather than loop forever.
-    dir.join(name)
+    crate::ops::download::free_name(dir, name)
 }
 
 impl App {
@@ -157,13 +142,24 @@ impl App {
             }
         };
         let name = download_name(url);
-        let target = unique_name(&dir, &name);
-        let display = target
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(&name)
-            .to_string();
-        let mut spec = JobSpec::new(JobKind::Download, Vec::new(), Some(VfsPath::local(target)));
+        // The plain name, on purpose: a second fetch of the same URL lands on
+        // the same file, which is what lets the job ask "resume or overwrite?"
+        // instead of quietly making a `file (2)`.
+        let target = dir.join(&name);
+        let dest = VfsPath::local(target);
+        // One download per destination at a time. A job already fetching into
+        // this file is the one to wait for (or cancel), not to race.
+        let busy = self.jobs.rows().iter().any(|row| {
+            row.kind == JobKind::Download
+                && row.finished.is_none()
+                && self.jobs.spec(row.id).and_then(|spec| spec.dest.as_ref()) == Some(&dest)
+        });
+        if busy {
+            self.message = Some(format!("already downloading {name} - see the job queue"));
+            return;
+        }
+        let display = name.clone();
+        let mut spec = JobSpec::new(JobKind::Download, Vec::new(), Some(dest));
         spec.options.download = Some(DownloadRequest {
             url: url.to_string(),
             resume: false,
