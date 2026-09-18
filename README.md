@@ -112,8 +112,6 @@ panel without leaving the listing.
 Copy and move with familiar function keys. Queue long operations in the
 background, follow their progress, and keep browsing while they run.
 
-[![Holos Commander with two file panels and a function-key bar](docs/sample1.png)](docs/sample1.png)
-
 **Two-panel browsing.** Source and destination side by side, with tabs and familiar function keys.
 
 [![Quick navigation](docs/hotlist.png)](docs/hotlist.png)
