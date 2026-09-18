@@ -8,19 +8,17 @@
 //! drives popup does. The box is a fixed size and never resizes as devices
 //! arrive.
 //!
-//! The answer goes back as [`DialogResult::Text`], the device and the PIN
-//! encoded by [`encode_choice`], because the dialog result has no variant
-//! for a device and the drives popup's rule - no new variant to get wrong -
-//! holds here too. [`decode_choice`] is the other half, used by the
-//! application.
+//! The answer goes back as [`DialogResult::SendTo`], a typed
+//! [`DeviceChoice`] of the device and the PIN, the way the copy dialog and
+//! the job dialogs hand back typed answers rather than text to be parsed.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
 
 use super::field::Field;
 use crate::dialog::{
-    Dialog, DialogKey, DialogOutcome, DialogResult, DialogStyle, FocusRing, draw_mnemonic_buttons,
-    draw_text,
+    DeviceChoice, Dialog, DialogKey, DialogOutcome, DialogResult, DialogStyle, FocusRing,
+    draw_mnemonic_buttons, draw_text,
 };
 use crate::input::{DialogId, KeyCode};
 use crate::localsend::{DeviceType, Peer, Protocol};
@@ -157,19 +155,20 @@ impl SendDeviceDialog {
     /// What Enter would send to: the typed address when there is one, else
     /// the device under the cursor.
     #[must_use]
-    pub fn choice(&self) -> Option<(Peer, String)> {
-        let pin = self.pin.text().trim().to_string();
-        if !self.address.is_empty() {
-            return Some((Peer::typed(self.address.text()), pin));
-        }
-        self.peers.get(self.cursor).cloned().map(|p| (p, pin))
+    pub fn choice(&self) -> Option<DeviceChoice> {
+        let pin = self.pin.text().trim();
+        let pin = (!pin.is_empty()).then(|| pin.to_string());
+        let peer = if self.address.is_empty() {
+            self.peers.get(self.cursor).cloned()?
+        } else {
+            Peer::typed(self.address.text())
+        };
+        Some(DeviceChoice { peer, pin })
     }
 
     fn accept(&mut self) -> DialogOutcome {
         match self.choice() {
-            Some((peer, pin)) => {
-                DialogOutcome::Accept(DialogResult::Text(encode_choice(&peer, &pin)))
-            }
+            Some(choice) => DialogOutcome::Accept(DialogResult::SendTo(Box::new(choice))),
             None => {
                 self.refusal = Some("no device yet - wait, or type an address".to_string());
                 DialogOutcome::Consumed
@@ -314,56 +313,6 @@ struct Rects {
     address: Rect,
     pin: Rect,
     buttons: Rect,
-}
-
-/// The device and PIN as one line: tab-separated fields, none of which can
-/// hold a tab - a host, a port, a scheme, a fingerprint, a name and a PIN.
-#[must_use]
-pub fn encode_choice(peer: &Peer, pin: &str) -> String {
-    let protocol = match peer.protocol {
-        Protocol::Http => "http",
-        Protocol::Https => "https",
-    };
-    format!(
-        "{}\t{}\t{}\t{}\t{}\t{}",
-        peer.host,
-        peer.port,
-        protocol,
-        peer.fingerprint.as_deref().unwrap_or(""),
-        peer.alias.replace('\t', " "),
-        pin.replace('\t', "")
-    )
-}
-
-/// [`encode_choice`] undone, or `None` for anything else.
-#[must_use]
-pub fn decode_choice(text: &str) -> Option<(Peer, String)> {
-    let mut parts = text.split('\t');
-    let host = parts.next()?.to_string();
-    let port: u16 = parts.next()?.parse().ok()?;
-    let protocol = match parts.next()? {
-        "http" => Protocol::Http,
-        "https" => Protocol::Https,
-        _ => return None,
-    };
-    let fingerprint = parts.next().filter(|f| !f.is_empty()).map(str::to_string);
-    let alias = parts.next()?.to_string();
-    let pin = parts.next().unwrap_or("").to_string();
-    if host.is_empty() || alias.is_empty() {
-        return None;
-    }
-    Some((
-        Peer {
-            alias,
-            host,
-            port,
-            protocol,
-            fingerprint,
-            device_type: None,
-            model: None,
-        },
-        pin,
-    ))
 }
 
 impl Dialog for SendDeviceDialog {

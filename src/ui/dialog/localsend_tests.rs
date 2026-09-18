@@ -24,31 +24,6 @@ fn peer(alias: &str, host: &str) -> Peer {
 }
 
 #[test]
-fn the_choice_round_trips_through_the_encoding_and_junk_does_not() {
-    let p = peer("Nice Orange", "10.0.0.7");
-    let text = encode_choice(&p, "1234");
-    let (back, pin) = decode_choice(&text).expect("decodes");
-    assert_eq!(
-        (back.alias.as_str(), back.host.as_str(), back.port),
-        ("Nice Orange", "10.0.0.7", 53317)
-    );
-    assert_eq!(back.protocol, Protocol::Https);
-    assert_eq!(back.fingerprint.as_deref(), Some("fp-Nice Orange"));
-    assert_eq!(pin, "1234");
-    let mut plain = p;
-    plain.protocol = Protocol::Http;
-    plain.fingerprint = None;
-    let (back, pin) = decode_choice(&encode_choice(&plain, "")).expect("decodes");
-    assert_eq!(
-        (back.protocol, back.fingerprint, pin.as_str()),
-        (Protocol::Http, None, "")
-    );
-    assert!(decode_choice("nonsense").is_none());
-    assert!(decode_choice("h\tnotaport\thttps\t\tname\t").is_none());
-    assert!(decode_choice("h\t1\tgopher\t\tname\t").is_none());
-}
-
-#[test]
 fn enter_with_nobody_heard_refuses_and_a_device_that_arrives_is_chosen() {
     let mut d = SendDeviceDialog::new(Selection {
         folders: 1,
@@ -66,10 +41,10 @@ fn enter_with_nobody_heard_refuses_and_a_device_that_arrives_is_chosen() {
     );
     d.set_peers(vec![peer("Zed", "10.0.0.2"), peer("Amy", "10.0.0.1")]);
     match d.handle_key(&key(KeyCode::Enter)) {
-        DialogOutcome::Accept(DialogResult::Text(text)) => {
-            let (chosen, pin) = decode_choice(&text).expect("decodes");
-            assert_eq!(chosen.alias, "Zed", "the first row, as given");
-            assert_eq!(pin, "");
+        DialogOutcome::Accept(DialogResult::SendTo(choice)) => {
+            assert_eq!(choice.peer.alias, "Zed", "the first row, as given");
+            assert_eq!(choice.peer.fingerprint.as_deref(), Some("fp-Zed"));
+            assert_eq!(choice.pin, None, "nothing typed is no PIN");
         }
         other => panic!("{other:?}"),
     }
@@ -122,11 +97,13 @@ fn tab_reaches_the_address_and_a_typed_address_outranks_the_list() {
         d.handle_key(&typed(c));
     }
     match d.handle_key(&key(KeyCode::Enter)) {
-        DialogOutcome::Accept(DialogResult::Text(text)) => {
-            let (chosen, pin) = decode_choice(&text).expect("decodes");
-            assert_eq!((chosen.host.as_str(), chosen.port), ("192.168.1.9", 5000));
-            assert_eq!(chosen.fingerprint, None, "typed: nothing to pin");
-            assert_eq!(pin, "4321");
+        DialogOutcome::Accept(DialogResult::SendTo(choice)) => {
+            assert_eq!(
+                (choice.peer.host.as_str(), choice.peer.port),
+                ("192.168.1.9", 5000)
+            );
+            assert_eq!(choice.peer.fingerprint, None, "typed: nothing to pin");
+            assert_eq!(choice.pin.as_deref(), Some("4321"));
         }
         other => panic!("{other:?}"),
     }
@@ -305,7 +282,7 @@ fn alt_s_sends_and_alt_n_cancels_from_anywhere_in_the_box() {
     assert!(d.ring.is(ADDRESS), "focus in a field");
     assert!(matches!(
         d.handle_key(&alt('s')),
-        DialogOutcome::Accept(DialogResult::Text(_))
+        DialogOutcome::Accept(DialogResult::SendTo(_))
     ));
     assert!(matches!(
         d.handle_key(&alt('n')),

@@ -190,6 +190,10 @@ pub enum DialogResult {
     Job(JobAction),
     /// Everything the copy/move dialog collects.
     CopyMove(Box<CopyMoveAnswer>),
+    /// The `Alt+X` picker's device and PIN. Typed for the reason
+    /// [`DialogResult::Job`] is: a value the program itself produced should
+    /// not be spelled into `Text` and parsed back.
+    SendTo(Box<DeviceChoice>),
     /// Everything the `Alt+F5` pack dialog collects.
     Pack(Box<PackAnswer>),
     /// Everything the `Shift+R` resize dialog collects.
@@ -340,6 +344,20 @@ pub struct PackAnswer {
     /// "Move to archive": pack, then delete the sources - and only if the pack
     /// succeeded, which is `JobKind::Move`'s own promise.
     pub move_sources: bool,
+}
+
+/// What the `Alt+X` device picker hands back: where to send, and the PIN
+/// the user typed, if any.
+///
+/// Defined here beside [`CopyMoveAnswer`] and for the same reason: the
+/// dialog, the event loop that routes its answer and the application that
+/// queues the job all agree on one type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeviceChoice {
+    /// The device.
+    pub peer: crate::localsend::Peer,
+    /// The PIN, when one was typed.
+    pub pin: Option<String>,
 }
 
 /// What the copy/move dialog hands back.

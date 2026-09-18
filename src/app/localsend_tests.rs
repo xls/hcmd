@@ -9,6 +9,14 @@ fn app() -> App {
     App::headless(Config::default(), Keymap::builtin(), Theme::blue())
 }
 
+/// The picker's answer for the fake receiver, with `pin` when not empty.
+fn choose(receiver: &Receiver, pin: &str) -> DeviceChoice {
+    DeviceChoice {
+        peer: receiver.peer(),
+        pin: (!pin.is_empty()).then(|| pin.to_string()),
+    }
+}
+
 #[test]
 fn nothing_selected_is_a_message_and_not_a_picker() {
     let mut app = app();
@@ -57,8 +65,7 @@ fn choosing_a_device_queues_a_send_job_that_reaches_the_device() {
     let mut app = app();
     app.send_paths(paths);
     app.service_localsend();
-    let choice = App::encode_peer(&receiver.peer(), "");
-    app.answer_send_device(&choice);
+    app.answer_send_device(&choose(&receiver, ""));
     assert!(
         !app.is_discovering_devices(),
         "discovery ends with the choice"
@@ -90,7 +97,7 @@ fn a_pin_typed_in_the_picker_rides_with_the_job() {
     let mut app = app();
     app.send_paths(paths);
     app.service_localsend();
-    app.answer_send_device(&App::encode_peer(&receiver.peer(), "1234"));
+    app.answer_send_device(&choose(&receiver, "1234"));
     let rows = app.jobs.rows();
     let spec = app.jobs.spec(rows[0].id).expect("the spec");
     assert_eq!(
@@ -104,20 +111,18 @@ fn a_pin_typed_in_the_picker_rides_with_the_job() {
 }
 
 #[test]
-fn an_unreadable_choice_sends_nothing_and_stops_discovery() {
-    let (dir, paths) = scratch("app-junk");
+fn a_choice_with_nothing_queued_sends_nothing_and_stops_discovery() {
+    let receiver = Receiver::start(Mode::Accept);
     let mut app = app();
-    app.send_paths(paths);
-    app.service_localsend();
-    app.answer_send_device("not a choice");
+    // No `send_paths` before the answer: the picker's paths are empty.
+    app.answer_send_device(&choose(&receiver, ""));
     assert!(!app.is_discovering_devices());
     assert!(app.jobs.rows().is_empty());
     assert!(
         app.message
             .as_deref()
-            .is_some_and(|m| m.contains("no device"))
+            .is_some_and(|m| m.contains("nothing to send"))
     );
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]

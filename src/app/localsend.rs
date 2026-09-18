@@ -13,10 +13,11 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use crate::app::App;
+use crate::dialog::DeviceChoice;
 use crate::localsend::{DeviceInfo, Discovery, Protocol};
 use crate::ops::localsend::LocalSendRequest;
 use crate::ops::{JobKind, JobOptions, JobSpec};
-use crate::ui::dialog::localsend::{Selection, SendDeviceDialog, Summary, decode_choice};
+use crate::ui::dialog::localsend::{Selection, SendDeviceDialog, Summary};
 use crate::vfs::VfsPath;
 
 /// How often the picker re-announces, so a device whose app opened after
@@ -178,12 +179,8 @@ impl App {
     }
 
     /// The picker's answer: send the queued paths to the chosen device.
-    pub fn answer_send_device(&mut self, choice: &str) {
-        let Some((peer, pin)) = decode_choice(choice) else {
-            self.message = Some("no device chosen".to_string());
-            self.stop_device_discovery();
-            return;
-        };
+    pub fn answer_send_device(&mut self, choice: &DeviceChoice) {
+        let DeviceChoice { peer, pin } = choice.clone();
         let paths = std::mem::take(&mut self.localsend.paths);
         let me = self.localsend.discovery.as_ref().map_or_else(
             || DeviceInfo::ours(&alias(), 0, Protocol::Http),
@@ -197,13 +194,8 @@ impl App {
         let count = paths.len();
         let sources: Vec<VfsPath> = paths.iter().map(VfsPath::local).collect();
         let alias = peer.alias.clone();
-        let spec = JobSpec::new(JobKind::LocalSend, sources, None).with_options(
-            JobOptions::localsend(LocalSendRequest {
-                me,
-                peer,
-                pin: (!pin.is_empty()).then_some(pin),
-            }),
-        );
+        let spec = JobSpec::new(JobKind::LocalSend, sources, None)
+            .with_options(JobOptions::localsend(LocalSendRequest { me, peer, pin }));
         self.request_job(spec);
         let plural = if count == 1 { "" } else { "s" };
         self.message = Some(format!("sending {count} item{plural} to {alias}"));
@@ -230,16 +222,10 @@ impl App {
         !self.localsend.paths.is_empty()
     }
 
-    /// The device a test would send to, built the way the picker builds it.
+    /// Whether a send is queued for the loop to start.
     #[cfg(test)]
     pub(crate) fn send_paths_queued(&self) -> bool {
         self.localsend.pending.is_some()
-    }
-
-    /// A peer the tests can hand straight to [`App::answer_send_device`].
-    #[cfg(test)]
-    pub(crate) fn encode_peer(peer: &crate::localsend::Peer, pin: &str) -> String {
-        crate::ui::dialog::localsend::encode_choice(peer, pin)
     }
 }
 
