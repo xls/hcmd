@@ -132,6 +132,10 @@ impl SendDeviceDialog {
     /// the same device when it is still there.
     pub fn set_peers(&mut self, peers: Vec<Peer>) {
         let on = self.peers.get(self.cursor).cloned();
+        // A "no device yet" refusal is answered by a device arriving.
+        if !peers.is_empty() {
+            self.refusal = None;
+        }
         self.peers = peers;
         self.cursor = on
             .and_then(|was| {
@@ -246,7 +250,6 @@ impl SendDeviceDialog {
         };
         let address = field(3 + LIST_ROWS, area.width);
         let pin = field(4 + LIST_ROWS, 12);
-        let refusal = row(5 + LIST_ROWS);
         let buttons = Rect::new(area.x, area.bottom().saturating_sub(1), area.width, 1);
         Rects {
             list,
@@ -254,7 +257,6 @@ impl SendDeviceDialog {
             sending,
             address,
             pin,
-            refusal,
             buttons,
         }
     }
@@ -311,7 +313,6 @@ struct Rects {
     sending: Rect,
     address: Rect,
     pin: Rect,
-    refusal: Rect,
     buttons: Rect,
 }
 
@@ -389,12 +390,9 @@ impl Dialog for SendDeviceDialog {
 
     fn size_hint(&self) -> (u16, u16) {
         // The heading, the list, the rule, the sending line, two fields, the
-        // refusal row, the buttons, and the border. Fixed: devices arriving
-        // must not move the box.
-        (
-            WIDTH.saturating_add(2),
-            1 + LIST_ROWS + 1 + 1 + 2 + 1 + 1 + 2,
-        )
+        // buttons right under them, and the border. Fixed: devices arriving
+        // must not move the box. A refusal takes the heading's row.
+        (WIDTH.saturating_add(2), 1 + LIST_ROWS + 1 + 1 + 2 + 1 + 2)
     }
 
     fn mnemonic_letters(&self) -> Vec<char> {
@@ -484,19 +482,26 @@ impl Dialog for SendDeviceDialog {
         let body = style.body();
         let ascii = style.ascii;
         let rects = Self::rects(area);
-        let heading = if let Some(why) = &self.not_listening {
-            format!("{why} - type an address below")
+        // The heading row: a refusal while there is one to show, else what
+        // discovery is doing.
+        let (heading, heading_style) = if let Some(why) = &self.refusal {
+            (why.clone(), style.button(true))
+        } else if let Some(why) = &self.not_listening {
+            (format!("{why} - type an address below"), body)
         } else if self.peers.is_empty() {
-            "Listening for devices - open LocalSend on the other device".to_string()
+            (
+                "Listening for devices - open LocalSend on the other device".to_string(),
+                body,
+            )
         } else {
             let plural = if self.peers.len() == 1 { "" } else { "s" };
-            format!("{} device{plural} heard:", self.peers.len())
+            (format!("{} device{plural} heard:", self.peers.len()), body)
         };
         draw_text(
             f,
             Rect::new(area.x, area.y, area.width, 1),
             &heading,
-            body,
+            heading_style,
             ascii,
         );
         // A rule under the list, as the drives popup draws one, then what
@@ -554,9 +559,6 @@ impl Dialog for SendDeviceDialog {
         );
         self.address.render(f, rects.address, style);
         self.pin.render(f, rects.pin, style);
-        if let Some(why) = &self.refusal {
-            draw_text(f, rects.refusal, why, style.button(true), ascii);
-        }
         let focused = match self.ring.index() {
             SEND => 0,
             CANCEL => 1,

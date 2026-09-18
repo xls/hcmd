@@ -312,3 +312,18 @@ fn alt_s_sends_and_alt_n_cancels_from_anywhere_in_the_box() {
         DialogOutcome::Accept(DialogResult::None)
     ));
 }
+
+#[test]
+fn a_refusal_takes_the_heading_row_and_a_device_arriving_clears_it() {
+    let mut d = SendDeviceDialog::new(Selection {
+        folders: 0,
+        files: 1,
+    });
+    d.handle_key(&key(KeyCode::Enter));
+    assert!(d.refusal.is_some(), "nothing to send to yet");
+    d.set_peers(vec![peer("Amy", "10.0.0.1")]);
+    assert!(d.refusal.is_none(), "a device answers the refusal");
+    // The box has no row of its own for it: heading, list, rule, sending,
+    // two fields, buttons, border.
+    assert_eq!(d.size_hint().1, 1 + LIST_ROWS + 1 + 1 + 2 + 1 + 2);
+}
