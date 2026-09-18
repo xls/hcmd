@@ -19,10 +19,12 @@ use ratatui::layout::Rect;
 
 use super::field::Field;
 use crate::dialog::{
-    Dialog, DialogKey, DialogOutcome, DialogResult, DialogStyle, FocusRing, draw_buttons, draw_text,
+    Dialog, DialogKey, DialogOutcome, DialogResult, DialogStyle, FocusRing, draw_mnemonic_buttons,
+    draw_text,
 };
 use crate::input::{DialogId, KeyCode};
 use crate::localsend::{DeviceType, Peer, Protocol};
+use crate::ui::text::Glyphs;
 
 /// The controls, in ring order.
 const LIST: usize = 0;
@@ -213,28 +215,38 @@ impl SendDeviceDialog {
     }
 
     /// The rows of the box: the list, then the fields, then the buttons.
+    /// The rows of the box, laid out like the other dialogs: no blank rows,
+    /// a rule between the list and the fields, the buttons on the last row.
     fn rects(area: Rect) -> Rects {
-        let list_top = area.y.saturating_add(1);
-        let list = Rect::new(area.x, list_top, area.width, LIST_ROWS.min(area.height));
-        let address_row = list_top.saturating_add(LIST_ROWS).saturating_add(1);
+        let row = |n: u16| Rect::new(area.x, area.y.saturating_add(n), area.width, 1);
+        let list = Rect::new(
+            area.x,
+            area.y.saturating_add(1),
+            area.width,
+            LIST_ROWS.min(area.height),
+        );
+        let rule = row(1 + LIST_ROWS);
+        let sending = row(2 + LIST_ROWS);
         let label_w = 9_u16;
-        let address = Rect::new(
-            area.x.saturating_add(label_w),
-            address_row,
-            area.width.saturating_sub(label_w),
-            1,
-        );
-        let pin = Rect::new(
-            area.x.saturating_add(label_w),
-            address_row.saturating_add(1),
-            12.min(area.width.saturating_sub(label_w)),
-            1,
-        );
+        let field = |n: u16, w: u16| {
+            Rect::new(
+                area.x.saturating_add(label_w),
+                area.y.saturating_add(n),
+                w.min(area.width.saturating_sub(label_w)),
+                1,
+            )
+        };
+        let address = field(3 + LIST_ROWS, area.width);
+        let pin = field(4 + LIST_ROWS, 12);
+        let refusal = row(5 + LIST_ROWS);
         let buttons = Rect::new(area.x, area.bottom().saturating_sub(1), area.width, 1);
         Rects {
             list,
+            rule,
+            sending,
             address,
             pin,
+            refusal,
             buttons,
         }
     }
@@ -284,8 +296,11 @@ pub struct Summary {
 /// Where the parts of the box land.
 struct Rects {
     list: Rect,
+    rule: Rect,
+    sending: Rect,
     address: Rect,
     pin: Rect,
+    refusal: Rect,
     buttons: Rect,
 }
 
@@ -349,17 +364,17 @@ impl Dialog for SendDeviceDialog {
     }
 
     fn size_hint(&self) -> (u16, u16) {
-        // The heading, the list, a blank, two fields, a blank, the refusal
-        // row, the buttons, and the border. Fixed: devices arriving must not
-        // move the box.
+        // The heading, the list, the rule, the sending line, two fields, the
+        // refusal row, the buttons, and the border. Fixed: devices arriving
+        // must not move the box.
         (
             WIDTH.saturating_add(2),
-            1 + LIST_ROWS + 1 + 2 + 1 + 1 + 1 + 2,
+            1 + LIST_ROWS + 1 + 1 + 2 + 1 + 1 + 2,
         )
     }
 
     fn mnemonic_letters(&self) -> Vec<char> {
-        Vec::new()
+        vec!['s', 'n']
     }
 
     fn handle_key(&mut self, key: &DialogKey) -> DialogOutcome {
@@ -367,6 +382,12 @@ impl Dialog for SendDeviceDialog {
         // pops the dialog and tells nobody, and the application has
         // discovery and the queued paths to put away. The same route the
         // share dialog takes, for the same reason.
+        // `Alt+S` and `Alt+N` are the buttons, from anywhere in the box.
+        match key.mnemonic() {
+            Some('s') => return self.accept(),
+            Some('n') => return DialogOutcome::Accept(DialogResult::None),
+            _ => {}
+        }
         if key.is_cancel() {
             return DialogOutcome::Accept(DialogResult::None);
         }
@@ -454,14 +475,18 @@ impl Dialog for SendDeviceDialog {
             body,
             ascii,
         );
-        // The row between the list and the fields: what is going.
-        let sending_row = Rect::new(
-            area.x,
-            rects.list.y.saturating_add(rects.list.height),
-            area.width,
-            1,
+        // A rule under the list, as the drives popup draws one, then what
+        // is going.
+        draw_text(
+            f,
+            rects.rule,
+            &Glyphs::new(ascii)
+                .horizontal()
+                .repeat(usize::from(rects.rule.width)),
+            body,
+            ascii,
         );
-        draw_text(f, sending_row, &self.sending_line(), body, ascii);
+        draw_text(f, rects.sending, &self.sending_line(), body, ascii);
         let list_focused = self.ring.is(LIST);
         for row in 0..rects.list.height {
             let Some(peer) = self.peers.get(usize::from(row)) else {
@@ -503,15 +528,20 @@ impl Dialog for SendDeviceDialog {
         self.address.render(f, rects.address, style);
         self.pin.render(f, rects.pin, style);
         if let Some(why) = &self.refusal {
-            let rect = Rect::new(area.x, rects.buttons.y.saturating_sub(1), area.width, 1);
-            draw_text(f, rect, why, style.button(true), ascii);
+            draw_text(f, rects.refusal, why, style.button(true), ascii);
         }
         let focused = match self.ring.index() {
             SEND => 0,
             CANCEL => 1,
             _ => usize::MAX,
         };
-        draw_buttons(f, rects.buttons, &["Send", "Cancel"], focused, style);
+        draw_mnemonic_buttons(
+            f,
+            rects.buttons,
+            &[("Send", Some('s')), ("Cancel", Some('n'))],
+            focused,
+            style,
+        );
     }
 
     fn cursor(&self, area: Rect) -> Option<(u16, u16)> {

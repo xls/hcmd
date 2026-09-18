@@ -260,3 +260,25 @@ fn the_selection_is_described_in_words_and_the_count_arrives_later() {
     });
     assert_eq!(d.size_hint(), before);
 }
+
+#[test]
+fn alt_s_sends_and_alt_n_cancels_from_anywhere_in_the_box() {
+    use crate::input::KeyModifiers;
+    let alt = |c: char| DialogKey::raw(KeyPress::new(KeyCode::Char(c), KeyModifiers::ALT));
+    let mut d = SendDeviceDialog::new(Selection {
+        folders: 0,
+        files: 1,
+    });
+    d.set_peers(vec![peer("Amy", "10.0.0.1")]);
+    assert_eq!(d.mnemonic_letters(), vec!['s', 'n']);
+    d.handle_key(&key(KeyCode::Tab));
+    assert!(d.ring.is(ADDRESS), "focus in a field");
+    assert!(matches!(
+        d.handle_key(&alt('s')),
+        DialogOutcome::Accept(DialogResult::Text(_))
+    ));
+    assert!(matches!(
+        d.handle_key(&alt('n')),
+        DialogOutcome::Accept(DialogResult::None)
+    ));
+}
