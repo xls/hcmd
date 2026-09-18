@@ -704,9 +704,6 @@ pub struct Viewer {
     render_hits: Vec<find_render::RenderHit>,
     /// Which of `render_hits` the cursor is on.
     render_hit: Option<usize>,
-    /// The focused link in the rendered document, as (line, index within
-    /// that line's links). `Tab` steps it; see [`links`].
-    render_link: Option<(usize, usize)>,
     /// The rendered cursor's column: a byte index into its line's shown text.
     render_col: usize,
     /// The column a vertical move aims for: where `Left`/`Right`/`Home`/`End`
@@ -946,7 +943,6 @@ impl Viewer {
             find: Find::default(),
             render_hits: Vec::new(),
             render_hit: None,
-            render_link: None,
             render_col: 0,
             render_goal: 0,
             render_anchor: None,

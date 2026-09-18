@@ -71,7 +71,8 @@ fn tab_walks_the_links_in_order_and_wraps_at_both_ends() {
 }
 
 #[test]
-fn the_cursor_follows_the_link_and_leaving_its_line_unfocuses_it() {
+fn the_cursor_lands_on_the_link_and_leaving_it_unfocuses_it() {
+    use crate::viewer::{Extend, Motion};
     let mut viewer = rendered(DOC);
     viewer.step_link(true);
     viewer.step_link(true);
@@ -79,10 +80,56 @@ fn the_cursor_follows_the_link_and_leaving_its_line_unfocuses_it() {
         viewer.render_cursor > 0,
         "the second link is on a later line"
     );
+    assert_eq!(
+        viewer.render_col(),
+        "More ".len(),
+        "the cursor is on the label's first character"
+    );
     assert!(viewer.focused_link().is_some());
     // Moving the cursor off the line is how Enter goes back to meaning fold.
-    viewer.move_render(crate::viewer::Motion::Up);
+    viewer.move_render_sel(Motion::Up, Extend::None);
     assert!(viewer.focused_link().is_none());
+    // And so is walking off the label on its own line: the underline and the
+    // marker are the cursor's, not a memory.
+    viewer.move_render_sel(Motion::Down, Extend::None);
+    assert!(viewer.focused_link().is_some(), "back on it");
+    for _ in 0.."two".len() {
+        viewer.move_render_sel(Motion::Right, Extend::None);
+    }
+    assert!(viewer.focused_link().is_none(), "one past the label");
+    viewer.move_render_sel(Motion::Left, Extend::None);
+    assert_eq!(
+        viewer.focused_link().map(|link| link.target.as_str()),
+        Some("https://b.invalid/"),
+        "on its last character"
+    );
+}
+
+#[test]
+fn tab_searches_from_the_cursor_not_from_the_last_link() {
+    use crate::viewer::{Extend, Motion};
+    let mut viewer = rendered(DOC);
+    // The cursor is put past the first link by hand, and Tab finds the next
+    // one after it rather than starting over.
+    viewer.move_render_sel(Motion::Down, Extend::None);
+    viewer.move_render_sel(Motion::Down, Extend::None);
+    assert_eq!(viewer.render_cursor, 2);
+    assert_eq!(
+        viewer.step_link(true).as_deref(),
+        Some("https://b.invalid/")
+    );
+    // From the middle of a label, forward is the next link and back is the
+    // one before it - the label the cursor is in is neither.
+    viewer.move_render_sel(Motion::Right, Extend::None);
+    assert_eq!(
+        viewer.step_link(false).as_deref(),
+        Some("https://b.invalid/"),
+        "back from inside a label is its own start"
+    );
+    assert_eq!(
+        viewer.step_link(false).as_deref(),
+        Some("https://a.invalid/1.pdf")
+    );
 }
 
 #[test]
