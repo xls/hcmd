@@ -1,6 +1,6 @@
 [package]
 name         = "holoscommander"
-version      = "0.12.0"
+version      = "0.13.0"
 edition      = "2024"
 rust-version = "1.95"
 description  = "A Total Commander alternative for the terminal, for fingers that learned F5 in 1998"

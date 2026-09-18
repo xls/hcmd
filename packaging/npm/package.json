@@ -1,6 +1,6 @@
 {
   "name": "holos-installer",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Install hcmd, a Total Commander alternative for the terminal",
   "bin": { "holos-installer": "install.js" },
   "files": ["install.js", "README.md"],

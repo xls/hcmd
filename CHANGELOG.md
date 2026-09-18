@@ -2,6 +2,16 @@
 
 Notable changes per release, one line each. Newest first.
 
+## v0.13.0
+
+- A download manager: `Ctrl+D` fetches a URL into a per-session downloads folder (`Alt+J` opens it) as a background job with a progress bar, resumable and cancellable like a copy; a file already there asks Resume, Overwrite, Rename or Skip through the copy's own dialog.
+- The viewer walks links: `Tab` and `Shift+Tab` move between them in the rendered view and over bare `http(s)://` in plain text; `Enter` downloads a file link or opens a page in the browser, `Shift+Enter` always opens the browser.
+- The viewer has a key bar of its own along the bottom, naming the mode keys and its function keys as the keymap binds them.
+- A copy installed with `npx holos-installer` is offered a self-update when a newer release is out; Skip waits for the next one.
+- Keys moved: the change-drive fallbacks are `Alt+W` and `Alt+E`, the job queue's `Alt+B`; the hotlist lives in the drives popup under a divider, freeing `Ctrl+D` for downloads and `Alt+J` for the downloads folder.
+- The update check runs once at startup (`ui.check_for_updates`) and blinks a notice on the right status bar until `Alt+U` dismisses it.
+- The About page names the author and the repository, and thanks Christian Ghisler for Total Commander.
+
 ## v0.12.0
 
 - On an [Omarchy](https://omarchy.org/) desktop, an `omarchy` theme paints the panel from the desktop's own colour scheme; it is built from the live palette rather than fetched from the repository, and appears in the `Alt+T` picker only where Omarchy is installed.
