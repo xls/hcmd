@@ -542,6 +542,11 @@ pub fn dialog_answered(app: &mut App, id: DialogId, job: Option<JobId>, result: 
         (DialogId::Hotlist, DialogResult::Text(path)) => {
             app.navigate(app.active_side, crate::vfs::VfsPath::local(path));
         }
+        // `Ctrl+D`'s URL. One entry point, so the viewer's links reach the
+        // same download as the prompt does.
+        (DialogId::Download, DialogResult::Text(url)) => {
+            app.request_download(url);
+        }
         // `Ctrl+Shift+D`'s label. The path is the active panel's, which has
         // not moved: the prompt is modal (see `open_hotlist_add`).
         (DialogId::HotlistAdd, DialogResult::Text(label)) => {

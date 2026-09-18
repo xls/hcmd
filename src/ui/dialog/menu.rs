@@ -167,7 +167,7 @@ const COMMANDS: [Action; 13] = [
     Action::BranchView,
     Action::MultiRename,
     Action::RenameResult,
-    Action::Hotlist,
+    Action::Download,
     Action::HotlistAdd,
     Action::GotoPath,
     Action::SwapPanels,

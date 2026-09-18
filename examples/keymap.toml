@@ -99,7 +99,14 @@ job_queue         = ["alt+f9", "alt+b"]
 # strip of a tabbed dialog, which is why mnemonics are letters - the two sets
 # never collide.
 
-hotlist           = ["ctrl+d"]
+# The hotlist (favourites) is reached through the drives popup - alt+w / alt+e,
+# where it sits below the drives under a divider - so it no longer needs a key
+# of its own, and ctrl+d is the download prompt now. Bind hotlist here to bring
+# the favourites-only popup back if you want it.
+hotlist           = []
+# ctrl+d prompts for a URL and fetches it into the downloads folder (alt+j),
+# streaming and resumable, as a background job like a copy.
+download          = ["ctrl+d"]
 # ctrl+shift+d needs the enhanced keyboard protocol, so it carries an
 # alt+letter fallback like every other undeliverable key.
 hotlist_add       = ["ctrl+shift+d", "alt+a"]

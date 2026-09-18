@@ -929,21 +929,21 @@ mod tests {
     fn a_user_global_binding_outranks_a_builtin_context_binding() {
         // step 2 (global from keymap.toml) is above step 3
         // (built-in default for the context). A minimal hand-written file that
-        // rebinds hotlist to backspace must win over the built-in
+        // rebinds dir_size to backspace must win over the built-in
         // [panel] parent = ["backspace"], or the user's own file is dead.
-        let km = Keymap::load("[global]\nhotlist = [\"backspace\"]\n", "test");
+        let km = Keymap::load("[global]\ndir_size = [\"backspace\"]\n", "test");
         assert!(km.warnings.is_empty(), "{:?}", km.warnings);
         let backspace = KeyPress::plain(KeyCode::Backspace);
         assert_eq!(
             km.resolve(KeyContext::Panel, backspace),
-            Resolution::Action(Action::Hotlist)
+            Resolution::Action(Action::DirSize)
         );
-        // The rebinding also replaced the built-in ctrl+d rather than adding
+        // The rebinding also replaced the built-in ctrl+l rather than adding
         // to it (the layering rule in the module docs).
         assert_eq!(
             km.resolve(
                 KeyContext::Panel,
-                press(KeyCode::Char('d'), KeyModifiers::CONTROL)
+                press(KeyCode::Char('l'), KeyModifiers::CONTROL)
             ),
             Resolution::Unbound
         );
@@ -952,7 +952,7 @@ mod tests {
         // That is the point of writing it in [global] rather than in [panel].
         assert_eq!(
             km.resolve(KeyContext::CmdLine, backspace),
-            Resolution::Action(Action::Hotlist)
+            Resolution::Action(Action::DirSize)
         );
     }
 

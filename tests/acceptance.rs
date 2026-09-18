@@ -85,7 +85,7 @@ mod keys {
     /// `Alt+E` - the same for `Alt+F2`, the right panel's. `w` and `e` are
     /// adjacent keys, left and right, like the panels they steer.
     pub const ALT_E: &[u8] = b"\x1b[101;3u";
-    /// `Ctrl+D` - the hotlist alone (`d` is codepoint 100).
+    /// `Ctrl+D` - the download prompt (`d` is codepoint 100).
     pub const CTRL_D: &[u8] = b"\x1b[100;5u";
     /// `Ctrl+Q` - the quick view (`q` is codepoint 113).
     pub const CTRL_Q: &[u8] = b"\x1b[113;5u";
@@ -1728,11 +1728,10 @@ fn alt_f1_hangs_the_device_picker_under_the_left_panel_whichever_one_has_focus()
     );
     s.press(keys::ESC, "the panel back", |t| t.contains("thunder"));
 
-    // Ctrl+D is the hotlist alone. Nothing has been added to
-    // it, so it is an empty list rather than the devices-and-hotlist popup -
-    // which is exactly the difference the two constructors draw.
-    s.press(keys::CTRL_D, "the hotlist", |t| {
-        t.contains("Directory hotlist") && !t.contains("panel drives")
+    // Ctrl+D is the download prompt now: the hotlist folded into the drives
+    // popup above (below the divider), so the key freed up.
+    s.press(keys::CTRL_D, "the download prompt", |t| {
+        t.contains("Download") && t.contains("URL")
     });
     s.press(keys::ESC, "the panel back", |t| t.contains("thunder"));
 }

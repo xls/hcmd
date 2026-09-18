@@ -17,6 +17,7 @@ pub mod compare;
 pub mod console;
 pub mod cursor;
 pub mod dialogs;
+pub mod downloads;
 pub mod drives;
 pub mod fileinfo;
 pub mod jobs;
@@ -799,6 +800,9 @@ pub struct App {
     /// The drive popup's request slot and re-enumeration deadline.
     ///
     pub drives: crate::devices::Drives,
+    /// The downloads folder: the per-process staging directory a
+    /// [`crate::ops::JobKind::Download`] writes into, emptied on exit.
+    pub downloads: crate::app::downloads::Downloads,
     /// The file this session is about to hand to something outside itself.
     ///
     pub handoff: crate::ops::open::Handoff,
@@ -980,6 +984,7 @@ impl App {
             quick_view_geometry: (0, 0),
             hotlist: crate::devices::hotlist::Hotlist::default(),
             drives: crate::devices::Drives::default(),
+            downloads: crate::app::downloads::Downloads::default(),
             handoff: crate::ops::open::Handoff::default(),
             pending_file_info: None,
             pending_clipboard: None,

@@ -110,6 +110,7 @@ const DIALOG_ORDER: &[DialogId] = &[
     DialogId::Drive(Side::Right),
     DialogId::Hotlist,
     DialogId::HotlistAdd,
+    DialogId::Download,
     DialogId::Menu,
     DialogId::ContextMenu,
     DialogId::Execute,
@@ -1064,11 +1065,12 @@ fn dialog_help(id: DialogId) -> (&'static str, &'static str) {
         ),
         DialogId::Hotlist => (
             "Directory hotlist",
-            "Ctrl+D. The same list Alt+F1 shows under its separator, on its\n\
-             own, acting on whichever panel has focus. Ctrl+Shift+D adds the\n\
-             directory you are in. An entry whose path has gone is shown greyed\n\
-             with the reason rather than dropped, and Enter on it refuses\n\
- instead of navigating.",
+            "Your favourites, on their own. They also sit below the drives in the\n\
+             Alt+W / Alt+E popup, under a separator, which is where they are\n\
+             reached by default - this standalone popup is unbound unless you\n\
+             give `hotlist` a key. Ctrl+Shift+D adds the directory you are in.\n\
+             An entry whose path has gone is shown greyed with the reason rather\n\
+ than dropped, and Enter on it refuses instead of navigating.",
         ),
         DialogId::HotlistAdd => (
             "Add to the hotlist",
@@ -1077,6 +1079,15 @@ fn dialog_help(id: DialogId) -> (&'static str, &'static str) {
              list replaces that entry's label where it stands rather than\n\
              adding a second row, and the order is the order you put them in -\n\
  hotlist.toml is never sorted.",
+        ),
+        DialogId::Download => (
+            "Download",
+            "Ctrl+D. Paste a URL to fetch it into the downloads folder, which\n\
+             Alt+J opens. Redirects are followed; the transfer runs as a\n\
+             background job with a progress bar and can be cancelled or sent to\n\
+             the background like a copy. Nothing is opened or run - the file is\n\
+             just put in the folder, and F5 copies it out to keep it. The\n\
+ downloads folder is emptied when hcmd exits.",
         ),
         DialogId::Menu => (
             "Menu bar",
@@ -1504,7 +1515,7 @@ mod tests {
         let before = keyboard_page(&app);
         assert!(before.contains("Ctrl+D"), "{before}");
         app.keymap
-            .overlay("[global]\nhotlist = [\"alt+k\"]\n", "test.toml");
+            .overlay("[global]\ndownload = [\"alt+k\"]\n", "test.toml");
         let after = keyboard_page(&app);
         assert!(after.contains("Alt+K"), "{after}");
         assert!(

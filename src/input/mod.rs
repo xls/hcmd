@@ -97,6 +97,8 @@ pub enum DialogId {
     /// `Ctrl+Shift+D`, the label prompt for the directory being added to the
     /// hotlist.
     HotlistAdd,
+    /// `Ctrl+D`, the URL prompt for a download.
+    Download,
     /// `F9`, the menu bar.
     Menu,
     /// `Shift+F10`, the context menu for the entry under the cursor.
@@ -211,6 +213,7 @@ impl DialogId {
             Self::Drive(Side::Right) => "drive_right",
             Self::Hotlist => "hotlist",
             Self::HotlistAdd => "hotlist_add",
+            Self::Download => "download",
             Self::Menu => "menu",
             Self::ContextMenu => "context_menu",
             Self::Message => "message",
@@ -701,6 +704,20 @@ fn open_hotlist_add(app: &mut App) {
         "Add to the hotlist",
         "Label:",
         &label,
+    )));
+}
+
+/// `Ctrl+D`: ask for a URL to download into the downloads folder.
+///
+/// The prompt is the whole of the panel side: the answer goes to
+/// [`App::request_download`], which is the same entry the viewer's links reach,
+/// so there is one download path however it was asked for.
+fn open_download_prompt(app: &mut App) {
+    app.push_dialog(Box::new(InputDialog::new(
+        DialogId::Download,
+        "Download",
+        "URL:",
+        "",
     )));
 }
 
@@ -1265,6 +1282,7 @@ pub(crate) fn run_action(app: &mut App, action: Action, press: KeyPress) -> Resu
         A::DriveRight => app.request_drives(crate::app::DrivesRequest::Devices(Side::Right)),
         A::Hotlist => app.request_drives(crate::app::DrivesRequest::Hotlist),
         A::HotlistAdd => open_hotlist_add(app),
+        A::Download => open_download_prompt(app),
 
         // -------------------------------------------- the design compare -
         A::CompareDirs => app.compare_lists(),
