@@ -141,6 +141,8 @@ The protocols run in process, without an external `ssh` command or
 
 **Remote connections (`Ctrl+F`).** Quick connect or choose a saved host, then browse and copy through an ordinary panel.
 
+
+[![Remote connection dialog with quick connect and saved hosts](docs/serve.png)](docs/serve.png)
 **Share the other way (`Ctrl+N`).** Select files or folders and hcmd serves them
 over **HTTP and WebDAV** for as long as the dialog is open. A browser gets a
 plain index page with names, sizes and dates; another hcmd (or Finder, Explorer,
@@ -152,6 +154,8 @@ the dialog stops serving.
 
 **Fetch a URL (`Ctrl+D`).** Download into a per-session folder (`Alt+J`) as a
 background job with a progress bar; a partial file resumes.
+
+[![Native Local send](docs/localsend.png)](docs/localsend.png)
 
 **Send to a phone (`Alt+X`) - native LocalSend, send only.** A built-in
 implementation of the [LocalSend](https://localsend.org) protocol: send the
