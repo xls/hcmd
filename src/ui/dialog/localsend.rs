@@ -39,7 +39,6 @@ const LIST_ROWS: u16 = 8;
 
 /// The picker.
 pub struct SendDeviceDialog {
-    /// How many selected entries are going.
     /// What is going: how many folders and files were selected.
     selection: Selection,
     /// What that comes to once counted: every file and every byte.
