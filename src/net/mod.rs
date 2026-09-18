@@ -1,10 +1,15 @@
-//! The only outbound HTTP in the program.
+//! The outbound HTTP in the program.
 //!
-//! Two questions are asked of GitHub and nothing else is: *is there a newer
-//! release*, and *are there themes in the repository this machine does not
-//! have*. Both are asked because the user did something that means to ask
-//! them - opening the theme picker, or checking for an update - and neither
-//! is asked on startup, in the background, or on a timer.
+//! Two questions are asked of GitHub: *is there a newer release*, and *are
+//! there themes in the repository this machine does not have*. Both are asked
+//! because the user did something that means to ask them - opening the theme
+//! picker, or checking for an update. The version check also runs once at
+//! startup unless the user turns it off.
+//!
+//! The third thing is a [`download`]: a file the user pointed at, streamed to
+//! disk as a cancellable, resumable job. It is the only long transfer here, and
+//! it lives in its own submodule; everything below is a short question read
+//! into memory.
 //!
 //! # Why it is small
 //!
@@ -26,6 +31,9 @@ use std::time::Duration;
 
 use crate::error::{Error, Result};
 
+mod download;
+pub use download::{DownloadStatus, download};
+
 /// The repository the two questions are about.
 pub const REPO: &str = "xls/holos";
 
@@ -45,7 +53,7 @@ const MAX_BODY: u64 = 2 * 1024 * 1024;
 
 /// Identify the program, because the GitHub API refuses a request that does
 /// not.
-fn agent() -> String {
+pub(crate) fn agent() -> String {
     format!("hcmd/{}", env!("CARGO_PKG_VERSION"))
 }
 
