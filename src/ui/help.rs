@@ -1108,11 +1108,16 @@ fn dialog_help(id: DialogId) -> (&'static str, &'static str) {
             "Serve the selection",
             "Ctrl+N. Shares the selected files and folders over HTTP and WebDAV\n\
              for as long as this dialog is open, and shows the addresses to\n\
-             give out and the last five requests. A browser gets a plain index\n\
+             give out and the last ten requests. A browser gets a plain index\n\
              page; another hcmd (or Finder, Explorer, rclone) can connect to\n\
              the same address as dav:// and browse it. Read-only, and downloads\n\
-             from it resume. Esc stops serving - nothing keeps serving behind\n\
- a closed dialog.",
+             from it resume. Listens on every interface at serve.port (8080;\n\
+             any free port when that is taken, and the dialog says so) - a\n\
+             host firewall must allow that port for another machine to reach\n\
+             it, so the dialog says which firewall is on (ufw, firewalld,\n\
+             nftables, iptables) and shows the command that opens the port.\n\
+             Stop serving, Esc or Enter stops it - nothing keeps serving\n\
+             behind a closed dialog.",
         ),
         DialogId::SelfUpdate => (
             "Install the new release?",

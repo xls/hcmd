@@ -73,6 +73,9 @@ pub struct Config {
     /// Terminal capability overrides.
     #[config(section)]
     pub terminal: TerminalConfig,
+    /// The `Ctrl+N` share.
+    #[config(section)]
+    pub serve: ServeConfig,
     /// File-type colouring. Rules are matched in order, first match wins, and a
     /// rule names a theme slot rather than a colour, so the rules survive a
     /// theme change. `match` takes `ext` (a list, without the dot), `mode`
@@ -107,6 +110,7 @@ impl Default for Config {
             devices: DevicesConfig::default(),
             remote: RemoteConfig::default(),
             terminal: TerminalConfig::default(),
+            serve: ServeConfig::default(),
             filetypes: default_filetypes(),
             warnings: Vec::new(),
         }
@@ -1350,6 +1354,22 @@ pub enum ColorDepthSetting {
     ///
     #[serde(rename = "16")]
     Ansi16,
+}
+
+/// `[serve]`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ConfigDoc)]
+#[serde(default)]
+pub struct ServeConfig {
+    /// The port `Ctrl+N` listens on, so a firewall rule can name it once.
+    /// When it is taken the share falls back to any free port and the dialog
+    /// says which. `0` always takes a free port.
+    pub port: u16,
+}
+
+impl Default for ServeConfig {
+    fn default() -> Self {
+        Self { port: 8080 }
+    }
 }
 
 /// `[terminal]`.

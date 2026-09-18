@@ -62,7 +62,22 @@ pub struct Server {
 
 impl Server {
     /// Serve `roots` on every interface, on a free port.
-    pub fn start(roots: Vec<Root>, tx: mpsc::Sender<ServeEvent>) -> std::io::Result<Self> {
+    ///
+    /// On every interface, so the LAN can reach it. `port` is tried first
+    /// and, when it is taken, any free port is used instead: a firewall rule
+    /// wants a port it can name, but a share that cannot start because
+    /// something else has that port helps nobody. `0` is any free port.
+    pub fn start(
+        port: u16,
+        roots: Vec<Root>,
+        tx: mpsc::Sender<ServeEvent>,
+    ) -> std::io::Result<Self> {
+        if port != 0
+            && let Ok(server) =
+                Self::start_on(&format!("0.0.0.0:{port}"), roots.clone(), tx.clone())
+        {
+            return Ok(server);
+        }
         Self::start_on("0.0.0.0:0", roots, tx)
     }
 

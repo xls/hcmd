@@ -428,6 +428,13 @@ colors = "auto"
 # [terminal.sequences]
 # "shift+f5" = "[15;2~"
 
+# The `Ctrl+N` share.
+[serve]
+# The port `Ctrl+N` listens on, so a firewall rule can name it once.
+# When it is taken the share falls back to any free port and the dialog
+# says which. `0` always takes a free port.
+port = 8080
+
 # File-type colouring. Rules are matched in order, first match wins, and a
 # rule names a theme slot rather than a colour, so the rules survive a
 # theme change. `match` takes `ext` (a list, without the dot), `mode`

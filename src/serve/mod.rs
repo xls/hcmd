@@ -16,6 +16,7 @@
 //! the share with.
 
 pub mod dav;
+pub mod firewall;
 pub mod http;
 pub mod server;
 pub mod tree;

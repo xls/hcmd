@@ -89,6 +89,8 @@ mod keys {
     pub const CTRL_D: &[u8] = b"\x1b[100;5u";
     /// `Ctrl+Q` - the quick view (`q` is codepoint 113).
     pub const CTRL_Q: &[u8] = b"\x1b[113;5u";
+    /// `Ctrl+N` - serve the selection (`n` is codepoint 110).
+    pub const CTRL_N: &[u8] = b"\x1b[110;5u";
 
     /// `Ctrl+Enter` - the "insert the filename at the caret".
     pub const CTRL_ENTER: &[u8] = b"\x1b[13;5u";
@@ -1673,6 +1675,27 @@ fn f9_drops_the_bar_and_esc_gives_the_panel_back() {
     s.press(b"thu", "the quick search after Esc", |t| {
         t.contains("search: thu")
     });
+}
+
+#[test]
+fn ctrl_n_puts_up_the_serve_dialog_with_an_address_the_firewall_and_a_stop_button() {
+    // The share is a dialog like the others: its addresses, what the host
+    // firewall makes of the port, and a button - not a bare "Esc stops"
+    // hint. Only a rendered frame shows all three landed in one box that
+    // fits the terminal.
+    let fix = Fixture::new("serve");
+    let mut s = Session::start(Launch::new(120, 30, fix.path()));
+    s.wait_for_listing();
+    s.press(keys::DOWN, "the cursor on a file", |t| {
+        t.contains("thunder")
+    });
+    s.press(keys::CTRL_N, "the serve dialog", |t| t.contains("Serving"));
+    let text = s.text();
+    assert!(text.contains("http://localhost:"), "an address:\n{text}");
+    assert!(text.contains("firewall:"), "the firewall's state:\n{text}");
+    assert!(text.contains("[ Stop serving ]"), "the button:\n{text}");
+    assert!(text.contains("Requests:"), "the log heading:\n{text}");
+    s.press(keys::ESC, "the panel back", |t| !t.contains("Serving"));
 }
 
 #[test]

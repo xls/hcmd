@@ -99,10 +99,10 @@ fn the_share_lives_exactly_as_long_as_its_dialog() {
 }
 
 #[test]
-fn the_log_keeps_the_last_five_requests() {
+fn the_log_keeps_the_last_ten_requests() {
     let mut dialog =
         crate::ui::dialog::serve::ServeDialog::new(vec!["http://localhost:1/".into()], 1);
-    for i in 0..7_u16 {
+    for i in 0..12_u16 {
         dialog.push(&Served {
             peer: "10.0.0.7".into(),
             method: "GET".into(),
@@ -114,7 +114,7 @@ fn the_log_keeps_the_last_five_requests() {
     let log = dialog.log();
     assert_eq!(log.len(), crate::ui::dialog::serve::LOG_ROWS);
     assert!(log.first().is_some_and(|l| l.contains("/f2")), "{log:?}");
-    assert!(log.last().is_some_and(|l| l.contains("/f6")), "{log:?}");
+    assert!(log.last().is_some_and(|l| l.contains("/f11")), "{log:?}");
     assert!(
         log.last()
             .is_some_and(|l| l.contains("1.0 KB") && l.contains("10.0.0.7")),

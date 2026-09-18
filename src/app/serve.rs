@@ -14,7 +14,7 @@ use tokio::sync::mpsc;
 
 use crate::app::App;
 use crate::serve::tree::{self, Root};
-use crate::serve::{ServeEvent, Server, lan_ip};
+use crate::serve::{ServeEvent, Server, firewall, lan_ip};
 use crate::ui::dialog::serve::ServeDialog;
 
 /// The share's state on the application: what was asked for, and what is
@@ -65,7 +65,8 @@ impl App {
             return;
         };
         let count = roots.len();
-        match Server::start(roots, tx.clone()) {
+        let wanted = self.config.serve.port;
+        match Server::start(wanted, roots, tx.clone()) {
             Ok(server) => {
                 let port = server.port();
                 let mut urls = Vec::new();
@@ -74,7 +75,15 @@ impl App {
                 }
                 urls.push(format!("http://localhost:{port}/"));
                 self.serving.server = Some(server);
-                self.push_dialog(Box::new(ServeDialog::new(urls, count)));
+                let mut dialog = ServeDialog::new(urls, count);
+                if wanted != 0 && port != wanted {
+                    dialog.note(format!(
+                        "port {wanted} was taken - on {port} instead (serve.port)"
+                    ));
+                }
+                // A few file reads, no process: see the module.
+                dialog.firewall(firewall::lines(firewall::detect(port), port));
+                self.push_dialog(Box::new(dialog));
             }
             Err(e) => {
                 self.message = Some(format!("could not start serving: {e}"));
