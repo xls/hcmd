@@ -161,6 +161,8 @@ nest, and the type is decided by content, not by the extension.
   bracketed paste.
 - Update check at startup and on demand (`Alt+U`): tells you once per version,
   with the install command. It downloads nothing and never replaces the binary.
+- Installed with `npx holos-installer`? A newer release offers to install itself
+  the same way, once, and only if you say so.
 - Works down to 60 columns, with an ASCII spelling of every piece of chrome for
   terminals without box drawing.
 

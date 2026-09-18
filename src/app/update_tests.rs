@@ -172,6 +172,58 @@ fn the_startup_check_is_silent_unless_there_is_something_new() {
 }
 
 #[test]
+fn the_installer_marker_is_its_version_or_nothing() {
+    assert_eq!(
+        parse_installer_marker("0.12.0\n"),
+        Some("0.12.0".to_string())
+    );
+    assert_eq!(
+        parse_installer_marker("  1.2.3  "),
+        Some("1.2.3".to_string())
+    );
+    assert_eq!(parse_installer_marker(""), None);
+    assert_eq!(parse_installer_marker(" \n"), None);
+}
+
+#[test]
+fn only_a_copy_the_npx_installer_put_here_is_offered_a_self_update() {
+    let mut app = App::headless(
+        crate::config::Config::default(),
+        crate::config::Keymap::builtin(),
+        crate::config::Theme::blue(),
+    );
+    // No marker: the notice is all there is.
+    app.offer_self_update("v9.9.9", false);
+    assert!(!app.dialog_is_open(), "nothing to install with");
+
+    // With the marker: the question, and the answer either way.
+    app.offer_self_update("v9.9.9", true);
+    assert_eq!(
+        app.top_dialog().map(crate::dialog::Dialog::id),
+        Some(crate::input::DialogId::SelfUpdate)
+    );
+    app.close_dialogs();
+    app.answer_self_update(false);
+    assert!(
+        app.message
+            .as_deref()
+            .is_some_and(|m| m.contains("skipped")),
+        "{:?}",
+        app.message
+    );
+    // Yes, with no shell to type into: told what to run rather than spawned
+    // behind the user's back.
+    app.answer_self_update(true);
+    assert!(
+        app.message
+            .as_deref()
+            .is_some_and(|m| m.contains(SELF_UPDATE_COMMAND)),
+        "{:?}",
+        app.message
+    );
+}
+
+#[test]
 fn the_key_dismisses_a_blinking_notice_into_a_one_shot_message() {
     let mut app = App::headless(
         crate::config::Config::default(),

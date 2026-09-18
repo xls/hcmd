@@ -49,6 +49,25 @@ pub fn state_dir() -> Result<PathBuf> {
     Ok(xdg_state_home()?.join(APP_DIR))
 }
 
+/// `$XDG_DATA_HOME`, falling back to `$HOME/.local/share`.
+pub fn xdg_data_home() -> Result<PathBuf> {
+    match std::env::var_os("XDG_DATA_HOME") {
+        Some(v) if !v.is_empty() && PathBuf::from(&v).is_absolute() => Ok(PathBuf::from(v)),
+        _ => Ok(home_dir()?.join(".local").join("share")),
+    }
+}
+
+/// `~/.local/share/hcmd/` - what the `npx holos-installer` lays down beside
+/// the binary: the shipped themes and examples, and its own marker. Named for
+/// the binary rather than [`APP_DIR`] because the installer names it so, and
+/// `HCMD_SHARE_DIR` moves it for both of them.
+pub fn data_dir() -> Result<PathBuf> {
+    match std::env::var_os("HCMD_SHARE_DIR") {
+        Some(v) if !v.is_empty() && PathBuf::from(&v).is_absolute() => Ok(PathBuf::from(v)),
+        _ => Ok(xdg_data_home()?.join("hcmd")),
+    }
+}
+
 /// The directory a panel starts in when there is no saved state: the process
 /// working directory, or `$HOME`, or `/`. Never fails.
 pub fn start_dir() -> PathBuf {

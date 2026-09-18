@@ -552,6 +552,12 @@ pub fn dialog_answered(app: &mut App, id: DialogId, job: Option<JobId>, result: 
         (DialogId::DownloadLink, DialogResult::Confirm(answer)) => {
             app.answer_link_download(*answer);
         }
+        // "Install it now?" for a copy the npx installer laid down. Skip is
+        // remembered by the once-per-version note the check already wrote, so
+        // the question comes back only with the next release.
+        (DialogId::SelfUpdate, DialogResult::Confirm(answer)) => {
+            app.answer_self_update(*answer);
+        }
         // `Ctrl+Shift+D`'s label. The path is the active panel's, which has
         // not moved: the prompt is modal (see `open_hotlist_add`).
         (DialogId::HotlistAdd, DialogResult::Text(label)) => {

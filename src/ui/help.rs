@@ -112,6 +112,7 @@ const DIALOG_ORDER: &[DialogId] = &[
     DialogId::HotlistAdd,
     DialogId::Download,
     DialogId::DownloadLink,
+    DialogId::SelfUpdate,
     DialogId::Menu,
     DialogId::ContextMenu,
     DialogId::Execute,
@@ -1101,6 +1102,15 @@ fn dialog_help(id: DialogId) -> (&'static str, &'static str) {
              Download fetches it into the downloads folder (Alt+J) as a\n\
              background job; Cancel leaves everything as it was. Shift+Enter\n\
  always opens the browser.",
+        ),
+        DialogId::SelfUpdate => (
+            "Install the new release?",
+            "Shown when a newer release is found and this copy was installed\n\
+             by npx holos-installer, which left a note saying so. Install types\n\
+             `npx holos-installer` into the console so you can watch it run;\n\
+             restart hcmd when it finishes. Skip asks nothing more until the\n\
+             next release. A copy installed any other way never sees this -\n\
+ it gets the status-line notice with the install command instead.",
         ),
         DialogId::Menu => (
             "Menu bar",

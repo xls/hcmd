@@ -45,6 +45,32 @@ pub fn startup_check_allowed(configured: bool) -> bool {
     configured && std::env::var_os(NO_STARTUP_CHECK_ENV).is_none()
 }
 
+/// The note `npx holos-installer` leaves beside what it installed, holding its
+/// own version. Its presence is what makes an update *installable from here*:
+/// a binary that came from a package manager or a tarball has no such note
+/// and gets the notice alone.
+pub const INSTALLER_MARKER: &str = ".hcmd-installer";
+
+/// What a self-update runs. Typed into the console, so its progress is on
+/// screen and it is as much the user's command as anything else typed there.
+pub const SELF_UPDATE_COMMAND: &str = "npx holos-installer";
+
+/// The installer's version out of the marker's text, or `None` for an empty
+/// or absent note.
+pub fn parse_installer_marker(text: &str) -> Option<String> {
+    let version = text.trim();
+    (!version.is_empty()).then(|| version.to_string())
+}
+
+/// The version of the npx installer that put this binary here, if one did.
+pub fn installer_version() -> Option<String> {
+    let path = crate::config::paths::data_dir()
+        .ok()?
+        .join(INSTALLER_MARKER);
+    let text = std::fs::read_to_string(path).ok()?;
+    parse_installer_marker(&text)
+}
+
 /// The one key inside it.
 const ACKED_KEY: &str = "acknowledged";
 
@@ -401,6 +427,11 @@ impl App {
                 if !quiet {
                     self.message = Some(notice(&tag));
                 }
+                // A copy the npx installer put here can be replaced by the same
+                // installer, so that copy is asked - once per release, since
+                // `run_check` has already written the note that makes this
+                // `Newer` the only one for this tag.
+                self.offer_self_update(&tag, installer_version().is_some());
             }
             UpdateEvent::Known(tag) if !quiet => {
                 self.message = Some(format!("hcmd {tag} is out, and you have been told once"));
@@ -414,6 +445,52 @@ impl App {
             // A quiet answer with nothing to announce leaves the line alone.
             UpdateEvent::Known(_) | UpdateEvent::Current(_) | UpdateEvent::Failed(_) => {}
         }
+    }
+}
+
+impl App {
+    /// Ask whether to install `tag` with the npx installer - only on a copy
+    /// that installer put here (`installed_via_npx`), since only that copy can
+    /// be replaced the same way. Asked once per release: this runs off the
+    /// `Newer` event, which [`run_check`] makes unique per tag.
+    pub fn offer_self_update(&mut self, tag: &str, installed_via_npx: bool) {
+        if !installed_via_npx {
+            return;
+        }
+        self.push_dialog(Box::new(
+            crate::dialog::ConfirmDialog::new(
+                crate::input::DialogId::SelfUpdate,
+                "Update",
+                vec![
+                    format!("hcmd {tag} is out."),
+                    format!("Install it now with {SELF_UPDATE_COMMAND}?"),
+                ],
+            )
+            .with_buttons("Install", "Skip"),
+        ));
+    }
+
+    /// The answer. Install types the command into the console, where its
+    /// output is on screen and stdin works; with no shell running it says what
+    /// to run rather than spawning anything unseen. Skip is remembered by the
+    /// once-per-version note the check already wrote.
+    pub fn answer_self_update(&mut self, install: bool) {
+        if !install {
+            self.message =
+                Some("skipped - you will be asked again for the next release".to_string());
+            return;
+        }
+        if self.console.shell.is_none() {
+            self.message = Some(format!(
+                "no shell is running - start one with Ctrl+O and run: {SELF_UPDATE_COMMAND}"
+            ));
+            return;
+        }
+        self.to_shell(format!("{SELF_UPDATE_COMMAND}\n").as_bytes());
+        self.command_was_run();
+        self.message = Some(format!(
+            "running {SELF_UPDATE_COMMAND} in the console - restart hcmd when it finishes"
+        ));
     }
 }
 

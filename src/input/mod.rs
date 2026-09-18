@@ -101,6 +101,9 @@ pub enum DialogId {
     Download,
     /// `Enter` on a file link in the viewer: download it, or not.
     DownloadLink,
+    /// A newer release, on a copy the npx installer put here: install it now
+    /// with `npx holos-installer`, or skip until the next one.
+    SelfUpdate,
     /// `F9`, the menu bar.
     Menu,
     /// `Shift+F10`, the context menu for the entry under the cursor.
@@ -217,6 +220,7 @@ impl DialogId {
             Self::HotlistAdd => "hotlist_add",
             Self::Download => "download",
             Self::DownloadLink => "download_link",
+            Self::SelfUpdate => "self_update",
             Self::Menu => "menu",
             Self::ContextMenu => "context_menu",
             Self::Message => "message",

@@ -243,6 +243,16 @@ async function main() {
     fs.copyFileSync(built, pending);
     fs.chmodSync(pending, 0o755);
     fs.renameSync(pending, path.join(INSTALL_DIR, "hcmd"));
+    // Leave a note that this installer put the binary here, with its own
+    // version, so hcmd can offer `npx holos-installer` when a newer release is
+    // out. Nothing reads it but hcmd; a copy installed any other way has none.
+    try {
+      fs.mkdirSync(SHARE_DIR, { recursive: true });
+      const own = require("./package.json").version;
+      fs.writeFileSync(path.join(SHARE_DIR, ".hcmd-installer"), `${own}\n`);
+    } catch (e) {
+      // Not worth failing an install that already succeeded.
+    }
     // The 21 themes are compiled into the binary, so every one of them works
     // with no files at all. These are the editable copies: a theme is changed
     // by putting a file of the same name in the config directory, and without

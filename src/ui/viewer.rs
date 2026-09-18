@@ -241,11 +241,24 @@ pub fn keybar_items(app: &App) -> Vec<(String, &'static str)> {
             // one - `find_next` is `n` and `F3`, and this is the F-key bar -
             // and otherwise the first, which is how `1`/`2`/`3` and `Esc` show.
             let parts: Vec<&str> = keys.split(" / ").map(str::trim).collect();
+            // Deterministically, since the keymap does not order an action's
+            // bindings: a function key, else a named key (`Esc`), else a
+            // letter - and alphabetical within a rank, so two runs agree.
+            let rank = |key: &str| -> (u8, String) {
+                let kind = if is_fkey(key) {
+                    0
+                } else if key.chars().count() > 1 {
+                    1
+                } else {
+                    2
+                };
+                (kind, key.to_ascii_lowercase())
+            };
             let pick = parts
                 .iter()
                 .copied()
-                .find(|key| is_fkey(key))
-                .or_else(|| parts.first().copied())
+                .filter(|key| !key.is_empty())
+                .min_by_key(|key| rank(key))
                 .unwrap_or("");
             (!pick.is_empty() && pick != crate::config::keymap::UNBOUND)
                 .then(|| (pick.to_string(), label))
