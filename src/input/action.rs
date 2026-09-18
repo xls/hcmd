@@ -362,6 +362,9 @@ actions! {
     ViewerTemplate    = "viewer_template",   V07, "Apply a binary struct template to the hex dump";
     ModeRender        = "mode_render",       V07, "Switch the viewer to the rendered view";
     FoldToggle        = "fold_toggle",       V07, "Collapse or expand the region under the cursor";
+    LinkNext          = "link_next",         V09, "Focus the next link in the rendered view";
+    LinkPrev          = "link_prev",         V09, "Focus the previous link in the rendered view";
+    LinkOpen          = "link_open",         V09, "Open the focused link in the system browser";
     FoldAll           = "fold_all",          V07, "Collapse every region in the rendered view";
     UnfoldAll         = "unfold_all",        V07, "Expand every region in the rendered view";
 }

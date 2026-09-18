@@ -24,7 +24,11 @@ pub(crate) fn inline(line: &mut LineBuf, text: &str) {
             && let Some((label, target, end)) = link_at(text, at)
         {
             flush(line, text, plain_from, at);
+            // The label is the link: remembered as data so the viewer can walk
+            // to it and act on the target, not only paint it.
+            let start = line.len();
             line.push(label, Some(SynSlot::Function));
+            line.link_from(start, target);
             if !target.is_empty() {
                 line.plain(" (");
                 line.push(target, Some(SynSlot::Comment));

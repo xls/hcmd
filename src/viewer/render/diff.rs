@@ -55,6 +55,7 @@ fn line(text: String, slot: SynSlot) -> RenderLine {
         text,
         spans,
         fold: None,
+        links: Vec::new(),
     }
 }
 

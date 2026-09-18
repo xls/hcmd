@@ -206,7 +206,8 @@ pub fn render(text: &str) -> Vec<RenderLine> {
     let mut page = Page::default();
     let mut at = 0_usize;
     let mut plain_from = 0_usize;
-    let mut link: Option<String> = None;
+    // An open anchor: where its text began, and where it points.
+    let mut link: Option<(usize, String)> = None;
 
     while at < text.len() {
         let Some(next) = text.get(at..).and_then(|rest| rest.find('<')) else {
@@ -269,9 +270,17 @@ pub fn render(text: &str) -> Vec<RenderLine> {
                 page.line.plain("  ");
             }
             "td" | "th" if tag.closing => {}
-            "a" if !tag.closing => link = tag.attr("href").map(str::to_string),
+            // The anchor's text is the link: its start is noted when the tag
+            // opens, and the range is recorded as data when it closes, so the
+            // viewer can walk to it rather than only read the target after it.
+            "a" if !tag.closing => {
+                link = tag
+                    .attr("href")
+                    .map(|href| (page.line.len(), href.to_string()));
+            }
             "a" if tag.closing => {
-                if let Some(href) = link.take().filter(|h| !h.is_empty()) {
+                if let Some((start, href)) = link.take().filter(|(_, h)| !h.is_empty()) {
+                    page.line.link_from(start, &href);
                     page.line.plain(" (");
                     page.line.push(&href, Some(SynSlot::Comment));
                     page.line.plain(")");

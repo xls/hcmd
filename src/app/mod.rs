@@ -678,6 +678,9 @@ pub struct App {
     /// update without it vanishing the moment the user does anything. Cleared by
     /// the check key, which dismisses it into a one-shot message.
     pub update_available: Option<String>,
+    /// The link a viewer `Enter` offered to download, held while its confirm
+    /// dialog is up so the answer knows what it was answering.
+    pub pending_link_download: Option<String>,
     /// Set by the quit action; the event loop reads it.
     pub should_quit: bool,
     /// What the terminal's keyboard protocol has reported.
@@ -957,6 +960,7 @@ impl App {
             container_attempts: HashMap::new(),
             message: None,
             update_available: None,
+            pending_link_download: None,
             should_quit: false,
             keyboard: crate::input::Keyboard::default(),
             clipboard: None,

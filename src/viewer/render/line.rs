@@ -5,7 +5,7 @@
 //! touches a `RenderLine`'s string directly.
 
 use super::super::highlight::{Span, SynSlot};
-use super::RenderLine;
+use super::{Link, RenderLine};
 
 /// A line being built, with its colour runs.
 ///
@@ -16,9 +16,43 @@ use super::RenderLine;
 pub(crate) struct LineBuf {
     text: String,
     spans: Vec<Span>,
+    links: Vec<Link>,
 }
 
 impl LineBuf {
+    /// How many bytes have been appended so far - the offset the next piece
+    /// starts at, which is what a link needs to remember its own start.
+    pub(crate) fn len(&self) -> usize {
+        self.text.len()
+    }
+
+    /// Record that everything appended since `start` is a link to `target`.
+    ///
+    /// An empty target, or a range with nothing in it, records nothing: a link
+    /// with no label has no text to focus.
+    pub(crate) fn link_from(&mut self, start: usize, target: &str) {
+        let end = self.text.len();
+        if target.is_empty() || start >= end {
+            return;
+        }
+        // The HTML walker puts its own space before a word, so a range that
+        // began at the anchor's open tag begins on that space; the link is the
+        // label, not the whitespace around it.
+        let Some(slice) = self.text.get(start..end) else {
+            return;
+        };
+        let leading = slice.len().saturating_sub(slice.trim_start().len());
+        let trailing = slice.len().saturating_sub(slice.trim_end().len());
+        let (start, end) = (start.saturating_add(leading), end.saturating_sub(trailing));
+        if start >= end {
+            return;
+        }
+        self.links.push(Link {
+            range: start..end,
+            target: target.to_string(),
+        });
+    }
+
     /// Append `piece`, coloured with `slot`.
     pub(crate) fn push(&mut self, piece: &str, slot: Option<SynSlot>) {
         if piece.is_empty() {
@@ -50,6 +84,7 @@ impl LineBuf {
             text: self.text,
             spans: self.spans,
             fold: None,
+            links: self.links,
         }
     }
 }

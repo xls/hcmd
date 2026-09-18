@@ -547,6 +547,11 @@ pub fn dialog_answered(app: &mut App, id: DialogId, job: Option<JobId>, result: 
         (DialogId::Download, DialogResult::Text(url)) => {
             app.request_download(url);
         }
+        // A viewer link's "download this?": the URL was held on the app while
+        // the dialog was up.
+        (DialogId::DownloadLink, DialogResult::Confirm(answer)) => {
+            app.answer_link_download(*answer);
+        }
         // `Ctrl+Shift+D`'s label. The path is the active panel's, which has
         // not moved: the prompt is modal (see `open_hotlist_add`).
         (DialogId::HotlistAdd, DialogResult::Text(label)) => {

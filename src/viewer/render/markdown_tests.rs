@@ -106,6 +106,43 @@ fn emphasis_code_and_links_lose_their_markers_and_keep_their_text() {
 }
 
 #[test]
+fn a_link_is_kept_as_data_over_its_label() {
+    // The label is what a reader sees and what `Tab` focuses; the target is
+    // what `Enter` acts on. Both survive as data, not only as painted text.
+    let out = render("see [docs](http://x.invalid) and [more](https://y.invalid/a.pdf)");
+    let line = out.first().expect("one line");
+    assert_eq!(
+        line.text,
+        "see docs (http://x.invalid) and more (https://y.invalid/a.pdf)"
+    );
+    let links: Vec<(&str, &str)> = line
+        .links
+        .iter()
+        .map(|l| {
+            (
+                line.text.get(l.range.clone()).unwrap_or(""),
+                l.target.as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        links,
+        vec![
+            ("docs", "http://x.invalid"),
+            ("more", "https://y.invalid/a.pdf")
+        ]
+    );
+    // A reference with no target is not a link: nothing to act on.
+    assert!(
+        render("see [docs] now")
+            .first()
+            .expect("line")
+            .links
+            .is_empty()
+    );
+}
+
+#[test]
 fn a_lone_marker_is_left_alone_rather_than_eating_the_line() {
     assert_eq!(lines("2 * 3 = 6"), vec!["2 * 3 = 6"]);
     assert_eq!(lines("a * b"), vec!["a * b"]);

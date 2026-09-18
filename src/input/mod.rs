@@ -99,6 +99,8 @@ pub enum DialogId {
     HotlistAdd,
     /// `Ctrl+D`, the URL prompt for a download.
     Download,
+    /// `Enter` on a file link in the viewer: download it, or not.
+    DownloadLink,
     /// `F9`, the menu bar.
     Menu,
     /// `Shift+F10`, the context menu for the entry under the cursor.
@@ -214,6 +216,7 @@ impl DialogId {
             Self::Hotlist => "hotlist",
             Self::HotlistAdd => "hotlist_add",
             Self::Download => "download",
+            Self::DownloadLink => "download_link",
             Self::Menu => "menu",
             Self::ContextMenu => "context_menu",
             Self::Message => "message",
@@ -2071,10 +2074,17 @@ mod tests {
             ask(KeyCode::Char('N'), SHIFT),
             Some((Action::FindPrev, Extend::None))
         );
-        // `Shift+Tab` resolves to nothing and `Tab` is not a movement, so it is
-        // swallowed like any other unbound viewer key.
-        assert_eq!(ask(KeyCode::BackTab, SHIFT), None);
-        assert_eq!(ask(KeyCode::Tab, SHIFT), None);
+        // `Shift+Tab` is `[viewer] link_prev`, a binding of its own, so it
+        // resolves as itself and extends nothing - it never reaches step 2,
+        // and `Tab` is not a movement anyway.
+        assert_eq!(
+            ask(KeyCode::BackTab, SHIFT),
+            Some((Action::LinkPrev, Extend::None))
+        );
+        assert_eq!(
+            ask(KeyCode::Tab, SHIFT),
+            Some((Action::LinkPrev, Extend::None))
+        );
     }
 
     #[test]

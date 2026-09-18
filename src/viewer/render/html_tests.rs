@@ -111,6 +111,32 @@ fn a_link_with_no_href_and_one_with_single_quotes_both_work() {
 }
 
 #[test]
+fn an_anchor_is_kept_as_a_link_over_its_text() {
+    // The anchor's text is the label `Tab` focuses; the href is what `Enter`
+    // acts on. An anchor with no href is text, not a link.
+    let out = render("<p>see <a href=\"https://x.invalid/f.zip\">the file</a> here</p>");
+    let line = out.first().expect("one line");
+    let links: Vec<(&str, &str)> = line
+        .links
+        .iter()
+        .map(|l| {
+            (
+                line.text.get(l.range.clone()).unwrap_or(""),
+                l.target.as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(links, vec![("the file", "https://x.invalid/f.zip")]);
+    assert!(
+        render("<a href=\"\">empty</a>")
+            .first()
+            .expect("line")
+            .links
+            .is_empty()
+    );
+}
+
+#[test]
 fn malformed_markup_renders_worse_rather_than_failing() {
     // An unclosed tag, a stray `<`, and a tag that never ends.
     assert_eq!(lines("<p>one<p>two"), vec!["one", "", "two"]);

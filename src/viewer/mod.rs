@@ -56,6 +56,7 @@ pub mod highlight;
 pub mod index;
 pub mod inspect;
 pub mod layout;
+pub mod links;
 pub mod modes;
 pub mod navigate;
 pub mod refusal;
@@ -697,6 +698,9 @@ pub struct Viewer {
     render_hits: Vec<find_render::RenderHit>,
     /// Which of `render_hits` the cursor is on.
     render_hit: Option<usize>,
+    /// The focused link in the rendered document, as (line, index within
+    /// that line's links). `Tab` steps it; see [`links`].
+    render_link: Option<(usize, usize)>,
     /// The other side of a diff, when this viewer is showing one.
     ///
     /// The `---` side: the file the viewer holds is the `+++` one, so `1` and
@@ -924,6 +928,7 @@ impl Viewer {
             find: Find::default(),
             render_hits: Vec::new(),
             render_hit: None,
+            render_link: None,
             render_hits_built: false,
             diff_old: None,
             diff_shown: false,

@@ -73,3 +73,114 @@ fn the_content_range_total_is_read_after_the_slash() {
     assert_eq!(range_total("nonsense"), None);
     assert_eq!(range_total(""), None);
 }
+
+/// A local HTTP server over a scratch directory, for an end-to-end transfer
+/// with no outside network. Python's `http.server` does not honour `Range`, so
+/// it doubles as the "server ignored the range" case.
+struct LocalServer {
+    child: std::process::Child,
+    port: u16,
+}
+
+impl LocalServer {
+    fn serve(dir: &std::path::Path) -> Self {
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .expect("a free port")
+            .local_addr()
+            .expect("its address")
+            .port();
+        let mut child = std::process::Command::new("python3")
+            .args([
+                "-m",
+                "http.server",
+                &port.to_string(),
+                "--bind",
+                "127.0.0.1",
+            ])
+            .current_dir(dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("python3 http.server starts");
+        // Wait until it answers rather than racing it.
+        for _ in 0..100 {
+            if std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
+                return Self { child, port };
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        // Reap it before giving up, so a server that never answered is not
+        // left as a zombie behind the panic.
+        let _ = child.kill();
+        let _ = child.wait();
+        panic!("the local server never came up on port {port}");
+    }
+
+    fn url(&self, name: &str) -> String {
+        format!("http://127.0.0.1:{}/{name}", self.port)
+    }
+}
+
+impl Drop for LocalServer {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+#[test]
+#[ignore = "spawns python3 http.server on localhost; run with: cargo test -- --ignored end_to_end"]
+fn end_to_end_a_file_is_streamed_to_disk_and_a_partial_one_is_rewritten() {
+    let dir = std::env::temp_dir().join(format!("hcmd-dl-e2e-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("scratch dir");
+    // Bigger than one chunk, so the loop actually loops.
+    let payload: Vec<u8> = (0..200_000u32).map(|i| (i % 251) as u8).collect();
+    std::fs::write(dir.join("blob.bin"), &payload).expect("the served file");
+    let server = LocalServer::serve(&dir);
+    let dest = dir.join("out.bin");
+
+    // A fresh download lands byte for byte, and progress reported the total
+    // before the first chunk and climbed to it.
+    let mut reports: Vec<(u64, Option<u64>)> = Vec::new();
+    let status = download(&server.url("blob.bin"), &dest, false, &mut |done, total| {
+        reports.push((done, total));
+        true
+    })
+    .expect("the download succeeds");
+    assert_eq!(status, DownloadStatus::Completed);
+    assert_eq!(std::fs::read(&dest).expect("out.bin"), payload);
+    assert_eq!(
+        reports.first(),
+        Some(&(0, Some(payload.len() as u64))),
+        "{reports:?}"
+    );
+    assert_eq!(reports.last().map(|r| r.0), Some(payload.len() as u64));
+
+    // Cut the file in half and ask to resume. This server ignores Range and
+    // answers 200 with everything, which must rewrite the file cleanly rather
+    // than append a second copy.
+    std::fs::write(&dest, &payload[..100_000]).expect("truncate");
+    let status = download(&server.url("blob.bin"), &dest, true, &mut |_, _| true)
+        .expect("the resume attempt succeeds");
+    assert_eq!(status, DownloadStatus::Completed);
+    assert_eq!(
+        std::fs::read(&dest).expect("out.bin"),
+        payload,
+        "not appended, rewritten"
+    );
+
+    // A cancel from the callback stops early and leaves a partial file.
+    let status = download(&server.url("blob.bin"), &dest, false, &mut |done, _| {
+        done == 0
+    })
+    .expect("a cancel is not an error");
+    assert_eq!(status, DownloadStatus::Cancelled);
+    assert!(
+        std::fs::metadata(&dest).expect("partial").len() < payload.len() as u64,
+        "the partial file is left in place"
+    );
+
+    drop(server);
+    let _ = std::fs::remove_dir_all(&dir);
+}

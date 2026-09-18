@@ -437,11 +437,20 @@ find_next         = ["n", "f3"]
 find_prev         = ["shift+n"]
 goto_offset       = ["ctrl+g"]
 cycle_encoding    = ["f8"]
-# tab is a focus switch between the two hex sides, and nothing
-# else changes -- the cursor stays on the same byte and the selection over the
-# same bytes. It is other_panel in [global]; context resolves that by
-# context, and there is no other panel to move to from a full-screen viewer.
+# tab is the mode's focus key: between the two hex sides in mode 2, where
+# nothing else changes -- the cursor stays on the same byte and the selection
+# over the same bytes -- and from link to link in mode 3. It is other_panel in
+# [global]; context resolves that by context, and there is no other panel to
+# move to from a full-screen viewer.
 hex_side          = ["tab"]
+# Links, in mode 3. tab (above) focuses the next one and shift+tab the
+# previous, wrapping; the focused link is painted like the current match.
+# enter on it downloads a file link (after asking) or opens a page link in the
+# browser; shift+enter always opens the browser. link_next is reached through
+# tab, so it carries no key of its own by default.
+link_next         = []
+link_prev         = ["shift+tab"]
+link_open         = ["shift+enter"]
 # ctrl+c copies the selection here rather than remembering a file. Listed
 # so the F1 page shows it under the viewer; naming the
 # action in [viewer] replaces only this table's bindings for it, and the

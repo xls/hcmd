@@ -111,6 +111,7 @@ const DIALOG_ORDER: &[DialogId] = &[
     DialogId::Hotlist,
     DialogId::HotlistAdd,
     DialogId::Download,
+    DialogId::DownloadLink,
     DialogId::Menu,
     DialogId::ContextMenu,
     DialogId::Execute,
@@ -1088,6 +1089,14 @@ fn dialog_help(id: DialogId) -> (&'static str, &'static str) {
              the background like a copy. Nothing is opened or run - the file is\n\
              just put in the folder, and F5 copies it out to keep it. The\n\
  downloads folder is emptied when hcmd exits.",
+        ),
+        DialogId::DownloadLink => (
+            "Download this link?",
+            "Enter on a focused link in the viewer's rendered view (mode 3).\n\
+             Tab and Shift+Tab move between links; a link to a file asks this,\n\
+             and a link to a page opens in the browser instead. Download fetches\n\
+             it into the downloads folder (Alt+J) as a background job; Cancel\n\
+ leaves everything as it was. Shift+Enter always opens the browser.",
         ),
         DialogId::Menu => (
             "Menu bar",

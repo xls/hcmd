@@ -117,6 +117,19 @@ pub struct Fold {
     pub summary: String,
 }
 
+/// A link in a rendered line: the text that carries it, and where it points.
+///
+/// Kept as data rather than flattened into the text, so the viewer can walk
+/// from link to link and act on the target - a Markdown `[label](url)` and an
+/// HTML `<a href>` both end up here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Link {
+    /// Byte range within the line's text that is the link's label.
+    pub range: std::ops::Range<usize>,
+    /// The target, exactly as the document wrote it.
+    pub target: String,
+}
+
 /// One line of a rendered document.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderLine {
@@ -127,6 +140,8 @@ pub struct RenderLine {
     pub spans: Vec<Span>,
     /// Set when this line opens a foldable region.
     pub fold: Option<Fold>,
+    /// The links on this line, in text order.
+    pub links: Vec<Link>,
 }
 
 impl RenderLine {
@@ -137,6 +152,7 @@ impl RenderLine {
             text: text.into(),
             spans: Vec::new(),
             fold: None,
+            links: Vec::new(),
         }
     }
 }

@@ -493,8 +493,35 @@ fn viewer_action(app: &mut App, action: Action, extend: Extend) -> Result<()> {
             outcome
         }
         A::FoldToggle => {
+            // A focused link under the cursor takes `Enter` first: a file link
+            // is offered as a download, a page link goes to the browser.
+            // Anywhere else the key means fold, as it always has.
+            if let Some(target) = viewer.focused_link().map(|link| link.target.clone()) {
+                app.follow_web_link(&target);
+                return Ok(());
+            }
             let said = viewer.toggle_fold();
             app.message = Some(said);
+            return Ok(());
+        }
+        A::LinkNext | A::LinkPrev => {
+            if viewer.mode() != crate::config::ViewerMode::Render {
+                app.message =
+                    Some("links: mode 3 only - press 3 for the rendered view".to_string());
+                return Ok(());
+            }
+            let said = viewer
+                .step_link(action == A::LinkNext)
+                .unwrap_or_else(|| "no links in this document".to_string());
+            app.message = Some(said);
+            return Ok(());
+        }
+        A::LinkOpen => {
+            let Some(target) = viewer.focused_link().map(|link| link.target.clone()) else {
+                app.message = Some("no link focused - tab moves to one".to_string());
+                return Ok(());
+            };
+            app.open_link_in_browser(&target);
             return Ok(());
         }
         A::FoldAll | A::UnfoldAll => {
@@ -607,10 +634,20 @@ fn viewer_action(app: &mut App, action: Action, extend: Extend) -> Result<()> {
         // changes*. In text mode there are no sides, and a key that silently
         // did nothing would look broken.
         A::HexSide => {
-            if viewer.mode() == crate::config::ViewerMode::Hex {
-                viewer.switch_hex_side();
-            } else {
-                app.message = Some("hex side: hex mode only - 2 or F4 switches to it".to_string());
+            // `Tab` is the mode's focus key: hex sides in mode 2, the next
+            // link in mode 3.
+            match viewer.mode() {
+                crate::config::ViewerMode::Hex => viewer.switch_hex_side(),
+                crate::config::ViewerMode::Render => {
+                    let said = viewer
+                        .step_link(true)
+                        .unwrap_or_else(|| "no links in this document".to_string());
+                    app.message = Some(said);
+                }
+                crate::config::ViewerMode::Text => {
+                    app.message =
+                        Some("hex side: hex mode only - 2 or F4 switches to it".to_string());
+                }
             }
             return Ok(());
         }

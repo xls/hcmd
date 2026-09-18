@@ -65,3 +65,27 @@ fn the_folder_is_made_on_first_use_and_removed_on_drop() {
     // Dropped: the staging area is gone.
     assert!(!root.exists(), "the downloads folder is emptied on drop");
 }
+
+#[test]
+fn a_link_with_a_file_extension_is_a_download_and_a_page_is_not() {
+    // Files: something to fetch and keep.
+    for url in [
+        "https://host/report.pdf",
+        "https://host/dl/tool.tar.gz?token=1",
+        "https://host/image.PNG",
+        "https://host/release/hcmd-0.12.0-x86_64.tar.gz",
+    ] {
+        assert!(url_is_file(url), "{url} is a file");
+    }
+    // Pages: something to read in a browser.
+    for url in [
+        "https://host",
+        "https://host/",
+        "https://host/docs/",
+        "https://host/index.html",
+        "https://host/page.php?id=3",
+        "https://host/about",
+    ] {
+        assert!(!url_is_file(url), "{url} is a page");
+    }
+}

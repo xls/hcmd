@@ -176,14 +176,25 @@ impl Viewer {
     #[must_use]
     pub(super) fn render_matches_on(&self, line: usize) -> Vec<MatchRun> {
         let current = self.render_hit.and_then(|at| self.render_hits.get(at));
-        self.render_hits
+        let mut runs: Vec<MatchRun> = self
+            .render_hits
             .iter()
             .filter(|hit| hit.line == line)
             .map(|hit| MatchRun {
                 range: hit.range.clone(),
                 current: current.is_some_and(|now| now == hit),
             })
-            .collect()
+            .collect();
+        // The focused link is painted the way the current match is - the one
+        // "this is where you are" colour the viewer has - rather than growing a
+        // second highlight that would have to be explained.
+        if let Some(range) = self.focused_link_on(line) {
+            runs.push(MatchRun {
+                range,
+                current: true,
+            });
+        }
+        runs
     }
 }
 

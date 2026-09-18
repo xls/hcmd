@@ -391,6 +391,15 @@ pub fn desktop_open(path: &Path) -> std::io::Result<()> {
     open::that_detached(path)
 }
 
+/// Hand a URL to the desktop's default browser.
+///
+/// Its own entry rather than [`desktop_open`] with a `Path`, because a URL is
+/// not a path and squeezing one through `&Path` would lose anything a path
+/// cannot hold. Detached for the same reason as the file case.
+pub fn desktop_open_url(url: &str) -> std::io::Result<()> {
+    open::that_detached(url)
+}
+
 /// Spawn a program with no terminal and no wait (the design's
 /// `execute_in = "detached"`).
 ///

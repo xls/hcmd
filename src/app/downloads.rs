@@ -93,6 +93,27 @@ fn download_name(url: &str) -> String {
     clean.to_string()
 }
 
+/// Does a URL look like it names a file to fetch rather than a page to read?
+///
+/// Judged by the path's extension, which is all a link tells you before it is
+/// fetched: `report.pdf` and `tool.tar.gz` are files; `index.html`, `/docs/`
+/// and `?q=x` are pages. A file link is offered as a download and a page link
+/// goes to the browser, so a wrong guess costs one extra keystroke, not data.
+#[must_use]
+pub fn url_is_file(url: &str) -> bool {
+    let name = download_name(url);
+    if name == "download" {
+        return false;
+    }
+    match name.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() && !ext.is_empty() => !matches!(
+            ext.to_ascii_lowercase().as_str(),
+            "html" | "htm" | "xhtml" | "shtml" | "php" | "asp" | "aspx" | "jsp" | "cgi"
+        ),
+        _ => false,
+    }
+}
+
 /// A name that is not already taken in `dir`: `file`, then `file (2)`, `file
 /// (3)`, keeping any extension.
 fn unique_name(dir: &Path, name: &str) -> PathBuf {
@@ -149,6 +170,55 @@ impl App {
         });
         self.request_job(spec);
         self.message = Some(format!("downloading {display}"));
+    }
+
+    /// What a link in the viewer asks for: a file link is offered as a
+    /// download, anything else opens in the browser.
+    ///
+    /// The viewer's whole part is to hand the target here - it does not know
+    /// about jobs, folders or browsers - so a link and the `Ctrl+D` prompt end
+    /// in the same [`App::request_download`]. Named for the web, because
+    /// `request_link` is already the symlink job.
+    pub fn follow_web_link(&mut self, target: &str) {
+        let target = target.trim();
+        if !(target.starts_with("http://") || target.starts_with("https://")) {
+            // A relative path, an anchor, a `mailto:`: nothing to fetch or
+            // browse to from here.
+            self.message = Some(format!("not a web link: {target}"));
+            return;
+        }
+        if !url_is_file(target) {
+            self.open_link_in_browser(target);
+            return;
+        }
+        self.pending_link_download = Some(target.to_string());
+        let name = download_name(target);
+        self.push_dialog(Box::new(
+            crate::dialog::ConfirmDialog::new(
+                crate::input::DialogId::DownloadLink,
+                "Download",
+                vec![format!("Download {name}?"), target.to_string()],
+            )
+            .with_buttons("Download", "Cancel"),
+        ));
+    }
+
+    /// Hand a link to the desktop browser, and say so on the status line.
+    pub fn open_link_in_browser(&mut self, target: &str) {
+        self.message = Some(match crate::ops::open::desktop_open_url(target) {
+            Ok(()) => format!("opened in the browser: {target}"),
+            Err(e) => format!("could not open {target}: {e}"),
+        });
+    }
+
+    /// The answer to the download prompt a link raised.
+    pub fn answer_link_download(&mut self, yes: bool) {
+        let Some(url) = self.pending_link_download.take() else {
+            return;
+        };
+        if yes {
+            self.request_download(&url);
+        }
     }
 
     /// Show the downloads folder in the active panel.
