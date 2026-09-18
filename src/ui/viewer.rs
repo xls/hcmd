@@ -593,9 +593,22 @@ struct RowPaint {
 
 impl RowPaint {
     /// The style for one match run.
-    fn style(self, current: bool) -> Style {
-        let bg = if current { self.current } else { self.found };
-        Style::new().fg(self.bg).bg(bg)
+    ///
+    /// A run that is only `underline` - the URL the cursor stands in, in text
+    /// mode - keeps the text's own colours and adds the line, so it reads as
+    /// "this does something" without pretending to be a search hit.
+    fn style(self, current: bool, underline: bool) -> Style {
+        let style = if !current && underline {
+            Style::new()
+        } else {
+            let bg = if current { self.current } else { self.found };
+            Style::new().fg(self.bg).bg(bg)
+        };
+        if underline {
+            style.add_modifier(Modifier::UNDERLINED)
+        } else {
+            style
+        }
     }
 
     /// The style for a selected cell.
@@ -680,7 +693,7 @@ fn layer_style(
         .filter(|m| m.range.start <= at && at < m.range.end)
         .max_by_key(|m| m.current)
     {
-        return paint.style(run.current);
+        return paint.style(run.current, run.underline);
     }
     if sel.iter().any(|r| r.start <= at && at < r.end) {
         return paint.selection();
@@ -1059,6 +1072,7 @@ fn value_runs(matches: &[MatchRun], width: u16, cfg: crate::config::HexConfig) -
                 .map(|range| MatchRun {
                     range,
                     current: m.current,
+                    underline: m.underline,
                 })
         })
         .collect()
@@ -2219,6 +2233,7 @@ mod tests {
             &[MatchRun {
                 range: 4..6,
                 current: false,
+                underline: false,
             }],
             paint,
         );

@@ -68,7 +68,7 @@ pub fn url_span_at(bytes: &[u8], at: usize) -> Option<(usize, String)> {
 impl Viewer {
     /// The web link under the byte cursor in text mode, as (its offset in the
     /// file, the link).
-    fn url_span_under_cursor(&mut self) -> Option<(u64, String)> {
+    pub(super) fn url_span_under_cursor(&mut self) -> Option<(u64, String)> {
         if self.mode != ViewerMode::Text {
             return None;
         }

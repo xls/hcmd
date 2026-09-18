@@ -104,6 +104,8 @@ pub enum DialogId {
     /// A newer release, on a copy the npx installer put here: install it now
     /// with `npx holos-installer`, or skip until the next one.
     SelfUpdate,
+    /// `Ctrl+N`, the share: where it is reachable and what was asked of it.
+    Serve,
     /// `F9`, the menu bar.
     Menu,
     /// `Shift+F10`, the context menu for the entry under the cursor.
@@ -221,6 +223,7 @@ impl DialogId {
             Self::Download => "download",
             Self::DownloadLink => "download_link",
             Self::SelfUpdate => "self_update",
+            Self::Serve => "serve",
             Self::Menu => "menu",
             Self::ContextMenu => "context_menu",
             Self::Message => "message",
@@ -1291,6 +1294,7 @@ pub(crate) fn run_action(app: &mut App, action: Action, press: KeyPress) -> Resu
         A::HotlistAdd => open_hotlist_add(app),
         A::Download => open_download_prompt(app),
         A::Downloads => app.show_downloads(),
+        A::Serve => app.request_serve(),
 
         // -------------------------------------------- the design compare -
         A::CompareDirs => app.compare_lists(),

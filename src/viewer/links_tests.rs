@@ -102,6 +102,7 @@ fn the_focused_link_is_painted_like_the_current_match() {
     let run = runs.first().expect("the focused link is a run");
     assert_eq!(runs.len(), 1, "no search is on, so it is the only run");
     assert!(run.current, "in the current-match colour");
+    assert!(run.underline, "and underlined: it does something");
     let text = viewer
         .rendered()
         .and_then(|doc| doc.lines.get(line))

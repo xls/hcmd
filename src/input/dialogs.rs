@@ -558,6 +558,9 @@ pub fn dialog_answered(app: &mut App, id: DialogId, job: Option<JobId>, result: 
         (DialogId::SelfUpdate, DialogResult::Confirm(answer)) => {
             app.answer_self_update(*answer);
         }
+        // The share dialog closing, by Esc or Enter: the listener goes with
+        // it. Nothing serves behind a closed dialog.
+        (DialogId::Serve, DialogResult::None) => app.stop_serving(),
         // `Ctrl+Shift+D`'s label. The path is the active panel's, which has
         // not moved: the prompt is modal (see `open_hotlist_add`).
         (DialogId::HotlistAdd, DialogResult::Text(label)) => {

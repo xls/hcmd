@@ -60,6 +60,7 @@ pub mod queue;
 pub mod rename;
 pub mod renameresult;
 pub mod resize;
+pub mod serve;
 pub mod summary;
 pub mod tabbed;
 pub mod template;

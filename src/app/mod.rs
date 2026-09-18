@@ -30,6 +30,7 @@ pub mod remote;
 pub mod rename;
 pub mod resize;
 pub mod search;
+pub mod serve;
 pub mod settings;
 pub mod update;
 pub mod viewer;
@@ -806,6 +807,9 @@ pub struct App {
     /// The downloads folder: the per-process staging directory a
     /// [`crate::ops::JobKind::Download`] writes into, emptied on exit.
     pub downloads: crate::app::downloads::Downloads,
+    /// The `Ctrl+N` share: what was asked for and the listener while its
+    /// dialog is up.
+    pub serving: crate::app::serve::Serving,
     /// The file this session is about to hand to something outside itself.
     ///
     pub handoff: crate::ops::open::Handoff,
@@ -989,6 +993,7 @@ impl App {
             hotlist: crate::devices::hotlist::Hotlist::default(),
             drives: crate::devices::Drives::default(),
             downloads: crate::app::downloads::Downloads::default(),
+            serving: crate::app::serve::Serving::default(),
             handoff: crate::ops::open::Handoff::default(),
             pending_file_info: None,
             pending_clipboard: None,

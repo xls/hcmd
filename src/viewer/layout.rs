@@ -32,6 +32,15 @@ impl Viewer {
         // nothing else, so a selection adds no read however far it spans
         // (the design invariant 4).
         self.sel_preview = None;
+        // The link under the text-mode cursor, found once here so every row
+        // that shows part of it can underline its part. One small window read;
+        // nothing in the other modes.
+        self.text_link = if self.mode == ViewerMode::Text {
+            self.url_span_under_cursor()
+                .map(|(from, url)| (from, from.saturating_add(url.len() as u64)))
+        } else {
+            None
+        };
         if rows == 0 || cols == 0 {
             return Ok(());
         }
@@ -245,6 +254,7 @@ impl Viewer {
                     (lo < hi).then(|| MatchRun {
                         range: (lo.saturating_sub(at) as usize)..(hi.saturating_sub(at) as usize),
                         current: *current,
+                        underline: false,
                     })
                 })
                 .collect();
@@ -344,17 +354,34 @@ impl Viewer {
             // Matches, in the same decoded coordinates the spans are in. Both
             // are then carried across tab expansion together, so a tab-indented
             // line is coloured and highlighted where the columns actually are.
-            let hits = match matcher.as_ref() {
+            let mut hits = match matcher.as_ref() {
                 Some(m) => {
                     let raw = m.matches_in(body);
                     let dec = find::match_ranges_in_line(m, enc, body);
                     raw.into_iter()
                         .zip(dec)
-                        .map(|(r, d)| (d, current == Some(at.saturating_add(r.start as u64))))
+                        .map(|(r, d)| {
+                            (d, current == Some(at.saturating_add(r.start as u64)), false)
+                        })
                         .collect::<Vec<_>>()
                 }
                 None => Vec::new(),
             };
+            // The web link the cursor stands in is underlined - it does
+            // something - as a run of its own, not a search hit. UTF-8 only:
+            // that is where a byte offset in the line is an offset in the
+            // decoded text too.
+            if let Some((from, to)) = self.text_link
+                && enc == TextEncoding::UTF8
+            {
+                let lo = from.max(at);
+                let hi = to.min(at.saturating_add(body.len() as u64));
+                if lo < hi {
+                    let range = usize::try_from(lo.saturating_sub(at)).unwrap_or(0)
+                        ..usize::try_from(hi.saturating_sub(at)).unwrap_or(0);
+                    hits.push((range, false, true));
+                }
+            }
 
             let (expanded, spans, hits) =
                 expand_row(&decoded, self.tab_width, self.ascii, &spans, &hits);

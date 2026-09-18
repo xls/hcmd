@@ -98,3 +98,35 @@ fn tab_steps_the_cursor_from_link_to_link_in_a_text_file() {
     );
     assert_eq!(viewer.step_text_link(false).expect("read"), None);
 }
+
+#[test]
+fn the_link_under_the_cursor_is_underlined_in_its_row() {
+    let mut viewer = text_viewer("first: https://a.invalid/1.pdf here\nplain line\n");
+    viewer.step_text_link(true).expect("read");
+    viewer.layout(10, 80).expect("layout");
+    let underlined: Vec<String> = viewer
+        .rows()
+        .iter()
+        .filter_map(|row| match row {
+            crate::viewer::Row::Text { text, matches, .. } => matches
+                .iter()
+                .find(|m| m.underline && !m.current)
+                .and_then(|m| text.get(m.range.clone()))
+                .map(str::to_string),
+            crate::viewer::Row::Hex { .. } => None,
+        })
+        .collect();
+    assert_eq!(
+        underlined,
+        vec!["https://a.invalid/1.pdf".to_string()],
+        "exactly the link, underlined, and not painted as a search hit"
+    );
+    // Off the link, nothing is underlined.
+    viewer.goto_offset(0).expect("home");
+    viewer.layout(10, 80).expect("layout");
+    let any = viewer.rows().iter().any(|row| match row {
+        crate::viewer::Row::Text { matches, .. } => matches.iter().any(|m| m.underline),
+        crate::viewer::Row::Hex { .. } => false,
+    });
+    assert!(!any, "the cursor is on prose");
+}

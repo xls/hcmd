@@ -321,6 +321,9 @@ pub struct MatchRun {
     pub range: std::ops::Range<usize>,
     /// True for the match the cursor is on.
     pub current: bool,
+    /// Underlined as well: a link the cursor is on, which *does* something,
+    /// as opposed to a search hit, which is only where something was found.
+    pub underline: bool,
 }
 
 /// Clip match runs to one row's range and rebase them onto it.
@@ -337,6 +340,7 @@ pub fn slice_row_matches(runs: &[MatchRun], range: &std::ops::Range<usize>) -> V
             (start < end).then(|| MatchRun {
                 range: start.saturating_sub(range.start)..end.saturating_sub(range.start),
                 current: m.current,
+                underline: m.underline,
             })
         })
         .collect()
@@ -702,6 +706,9 @@ pub struct Viewer {
     /// The focused link in the rendered document, as (line, index within
     /// that line's links). `Tab` steps it; see [`links`].
     render_link: Option<(usize, usize)>,
+    /// The web link the text-mode cursor stands in, as file offsets, found
+    /// once per layout so the rows can underline it.
+    text_link: Option<(u64, u64)>,
     /// The other side of a diff, when this viewer is showing one.
     ///
     /// The `---` side: the file the viewer holds is the `+++` one, so `1` and
@@ -930,6 +937,7 @@ impl Viewer {
             render_hits: Vec::new(),
             render_hit: None,
             render_link: None,
+            text_link: None,
             render_hits_built: false,
             diff_old: None,
             diff_shown: false,
@@ -2632,7 +2640,7 @@ fn expand_row(
     tab_width: u16,
     ascii: bool,
     spans: &[Span],
-    hits: &[(std::ops::Range<usize>, bool)],
+    hits: &[(std::ops::Range<usize>, bool, bool)],
 ) -> (String, Vec<Span>, Vec<MatchRun>) {
     if spans.is_empty() && hits.is_empty() {
         return (
@@ -2647,7 +2655,7 @@ fn expand_row(
         wants.push(s.range.start);
         wants.push(s.range.end);
     }
-    for (r, _) in hits {
+    for (r, _, _) in hits {
         wants.push(r.start);
         wants.push(r.end);
     }
@@ -2673,11 +2681,12 @@ fn expand_row(
         .collect();
     let matches = hits
         .iter()
-        .filter_map(|(r, current)| {
+        .filter_map(|(r, current, underline)| {
             let range = at(r.start)..at(r.end);
             (range.start < range.end).then_some(MatchRun {
                 range,
                 current: *current,
+                underline: *underline,
             })
         })
         .collect();

@@ -183,15 +183,18 @@ impl Viewer {
             .map(|hit| MatchRun {
                 range: hit.range.clone(),
                 current: current.is_some_and(|now| now == hit),
+                underline: false,
             })
             .collect();
         // The focused link is painted the way the current match is - the one
-        // "this is where you are" colour the viewer has - rather than growing a
-        // second highlight that would have to be explained.
+        // "this is where you are" colour the viewer has - and underlined on
+        // top, which is what says "this one does something" rather than "this
+        // one matched".
         if let Some(range) = self.focused_link_on(line) {
             runs.push(MatchRun {
                 range,
                 current: true,
+                underline: true,
             });
         }
         runs

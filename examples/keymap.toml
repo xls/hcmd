@@ -110,6 +110,9 @@ download          = ["ctrl+d"]
 # alt+j opens the downloads folder in the active panel. It was the job queue's
 # fallback; that moved to alt+b when downloads took the key.
 downloads         = ["alt+j"]
+# ctrl+n serves the selection over HTTP and WebDAV for as long as its dialog
+# is open: a browser gets an index page, another hcmd connects as dav://.
+serve             = ["ctrl+n"]
 # ctrl+shift+d needs the enhanced keyboard protocol, so it carries an
 # alt+letter fallback like every other undeliverable key.
 hotlist_add       = ["ctrl+shift+d", "alt+a"]

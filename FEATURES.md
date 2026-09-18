@@ -163,6 +163,9 @@ nest, and the type is decided by content, not by the extension.
   with the install command. It downloads nothing and never replaces the binary.
 - Installed with `npx holos-installer`? A newer release offers to install itself
   the same way, once, and only if you say so.
+- `Ctrl+N` serves the selection over HTTP and WebDAV while its dialog is open:
+  a browser gets an index page, another hcmd connects as `dav://`, and
+  downloads from it resume. Read-only; closing the dialog stops it.
 - Works down to 60 columns, with an ASCII spelling of every piece of chrome for
   terminals without box drawing.
 

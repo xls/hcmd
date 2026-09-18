@@ -214,6 +214,7 @@ actions! {
     HotlistAdd        = "hotlist_add",       V07, "Add this directory to the hotlist";
     Download          = "download",          V09, "Download a URL to the downloads folder";
     Downloads         = "downloads",         V09, "Show the downloads folder";
+    Serve             = "serve",             V09, "Serve the selection over HTTP and WebDAV";
     ShowHidden        = "show_hidden",       V01,  "Toggle showing hidden files";
     ConnectToggle     = "connect_toggle",    V065, "Connect or disconnect the active panel";
     DirSize           = "dir_size",          V02, "Calculate the space the selection occupies";

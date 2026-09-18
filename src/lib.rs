@@ -35,6 +35,7 @@ pub mod remote;
 pub mod rename;
 pub mod runtime;
 pub mod search;
+pub mod serve;
 pub mod term;
 pub mod ui;
 pub mod vfs;

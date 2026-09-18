@@ -372,6 +372,9 @@ pub async fn event_loop() -> Result<()> {
     // answer, and a failure that reaches the status line and stops there.
     let (update_tx, mut update_rx) =
         mpsc::channel::<UpdateEvent>(crate::app::update::UPDATE_CHANNEL_DEPTH);
+    // The share, reporting each request it answers to its dialog.
+    let (serve_tx, mut serve_rx) =
+        mpsc::channel::<crate::serve::ServeEvent>(crate::serve::SERVE_CHANNEL_DEPTH);
     let (info_tx, mut info_rx) = mpsc::channel::<crate::viewer::fileinfo::FileInfo>(
         crate::app::fileinfo::FILE_INFO_CHANNEL_DEPTH,
     );
@@ -454,6 +457,7 @@ pub async fn event_loop() -> Result<()> {
         // for the reason the writes above are: a request over the network is
         // I/O, and this loop is the render thread.
         app.service_update_check(&update_tx);
+        app.service_serve(&serve_tx);
         app.service_file_info(&info_tx);
         app.service_links(&link_tx);
         service_git_status(&mut app, &git_tx);
@@ -941,6 +945,11 @@ pub async fn event_loop() -> Result<()> {
                 app.push_dialog(Box::new(
                     crate::ui::dialog::fileinfo::FileInfoDialog::new(&info),
                 ));
+            }
+            Some(event) = serve_rx.recv() => {
+                // What the share did - a request answered, or the listener
+                // failing - folded into the Serve dialog if it is still up.
+                app.apply_serve_event(event);
             }
             Some(event) = update_rx.recv() => {
                 // What GitHub said about the latest release, or why it could
