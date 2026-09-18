@@ -2,6 +2,12 @@
 
 Notable changes per release, one line each. Newest first.
 
+## v0.14.0
+
+- `Ctrl+N` serves the selected files and folders over HTTP and WebDAV for as long as its dialog is open: the dialog lists the addresses to reach it on and logs the last five requests; the index page is plain HTML with name, size and date, downloads resume, and another copy of hcmd can connect to it as a `dav://` remote.
+- Links are underlined when the cursor stands on them, in the rendered view and over a bare URL in plain text, so what `Enter` will act on is visible.
+- Mode 3 selects and copies the rendered text: `Shift` with the arrows, `Ctrl+A` and `Ctrl+C` take what is drawn, never the Markdown or HTML source; the cursor keeps its column across blank lines.
+
 ## v0.13.0
 
 - A download manager: `Ctrl+D` fetches a URL into a per-session downloads folder (`Alt+J` opens it) as a background job with a progress bar, resumable and cancellable like a copy; a file already there asks Resume, Overwrite, Rename or Skip through the copy's own dialog.
