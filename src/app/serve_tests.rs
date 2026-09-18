@@ -113,6 +113,23 @@ fn the_log_keeps_the_last_ten_requests() {
     }
     let log = dialog.log();
     assert_eq!(log.len(), crate::ui::dialog::serve::LOG_ROWS);
+    // Each row starts with the time it was answered, HH:MM:SS.
+    let stamp: Vec<char> = log
+        .first()
+        .map(|l| l.chars().take(9).collect())
+        .unwrap_or_default();
+    assert_eq!(stamp.len(), 9, "{log:?}");
+    assert!(
+        stamp.get(2) == Some(&':') && stamp.get(5) == Some(&':') && stamp.get(8) == Some(&' '),
+        "{log:?}"
+    );
+    assert!(
+        stamp
+            .iter()
+            .enumerate()
+            .all(|(i, c)| matches!(i, 2 | 5 | 8) || c.is_ascii_digit()),
+        "{log:?}"
+    );
     assert!(log.first().is_some_and(|l| l.contains("/f2")), "{log:?}");
     assert!(log.last().is_some_and(|l| l.contains("/f11")), "{log:?}");
     assert!(

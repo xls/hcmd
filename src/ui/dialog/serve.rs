@@ -74,10 +74,13 @@ impl ServeDialog {
         self.note = Some(text);
     }
 
-    /// Log one answered request.
+    /// Log one answered request, stamped with the wall-clock time it was
+    /// answered: a share left up for an afternoon should say when the other
+    /// side fetched, not only that it did.
     pub fn push(&mut self, served: &Served) {
         let line = format!(
-            "{:<8} {:<3} {:>9}  {}  {}",
+            "{} {:<8} {:<3} {:>9}  {}  {}",
+            chrono::Local::now().format("%H:%M:%S"),
             served.method,
             served.status,
             human_size(served.bytes),

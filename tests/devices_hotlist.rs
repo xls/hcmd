@@ -114,26 +114,17 @@ fn alt_f2_with_the_left_panel_active_changes_the_right_one() {
     assert_eq!(app.active_side, Side::Right);
 }
 
-/// `Ctrl+D` "opens that same list **alone**", acting on the
-/// **active** panel rather than on a fixed side.
+/// The hotlist is no longer a key of its own: it lives in the drives popup
+/// under a divider, and `Ctrl+D` is the download prompt. So `Ctrl+D` opens
+/// that prompt and queues no drives request at all.
 #[test]
-fn ctrl_d_is_the_hotlist_alone_and_acts_on_whichever_panel_has_focus() {
+fn ctrl_d_is_the_download_prompt_and_not_the_hotlist() {
     let mut app = app();
     app.set_focus(Focus::Panel(Side::Right));
 
     press(&mut app, KeyCode::Char('d'), KeyModifiers::CONTROL);
-    assert_eq!(app.drives_pending(), Some(DrivesRequest::Hotlist));
-
-    app.service_drives();
-    assert_eq!(app.focus, Focus::Dialog(DialogId::Hotlist));
-
-    dialog_accepted(
-        &mut app,
-        DialogId::Hotlist,
-        DialogResult::Text("/tmp".to_string()),
-    );
-    assert_eq!(path_of(&app, Side::Right), "/tmp");
-    assert_eq!(path_of(&app, Side::Left), "/home/thorin/left");
+    assert_eq!(app.drives_pending(), None);
+    assert_eq!(app.focus, Focus::Dialog(DialogId::Download));
 }
 
 /// **I6.** "`Ctrl+Shift+D` adds the active panel's directory,
