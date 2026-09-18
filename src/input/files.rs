@@ -509,7 +509,8 @@ pub(super) fn open_copy_move(app: &mut App, kind: JobKind, same_dir: bool) {
         | JobKind::Checksum { .. }
         | JobKind::Split
         | JobKind::Merge
-        | JobKind::Resize => false,
+        | JobKind::Resize
+        | JobKind::Download => false,
     };
     if takes_the_source_away && !app.active_panel().active_tab().caps.writable {
         app.message = Some("this backend is read-only; nothing can be moved out of it".to_string());

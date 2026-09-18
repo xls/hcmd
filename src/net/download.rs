@@ -162,12 +162,21 @@ pub fn download(
     let (offset, total) = match plan(from, status, content_length, range)
         .map_err(|e| Error::msg(format!("{url}: {e}")))?
     {
-        Plan::Complete => return Ok(DownloadStatus::Completed),
+        Plan::Complete => {
+            // Already whole: report it full so the caller's bar closes.
+            let _ = progress(from, Some(from));
+            return Ok(DownloadStatus::Completed);
+        }
         Plan::Write { offset, total } => (offset, total),
     };
 
     let mut file = open_at(path, offset)?;
     let mut done = offset;
+    // Report the starting point before the first chunk, so the bar shows a
+    // resume's head start and the total at once rather than jumping later.
+    if !progress(done, total) {
+        return Ok(DownloadStatus::Cancelled);
+    }
     let mut reader = response.body_mut().as_reader();
     let mut buf = vec![0u8; CHUNK];
     loop {

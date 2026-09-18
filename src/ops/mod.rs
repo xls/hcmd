@@ -56,6 +56,7 @@ pub mod compare;
 pub mod conflict;
 pub mod copy;
 pub mod delete;
+pub mod download;
 pub mod editor;
 pub mod gate;
 pub mod mask;
@@ -190,6 +191,10 @@ pub enum JobKind {
     /// `Shift+R`: decode each source, resample it and write it into `dest`
     /// under the new format and the new name.
     Resize,
+    /// `Ctrl+D` and the viewer's links: fetch a URL into `dest`, streaming and
+    /// resumable. Its source is the URL carried in [`JobOptions::download`], not
+    /// a [`VfsPath`], so `sources` is empty like a [`JobKind::Mkdir`]'s.
+    Download,
 }
 
 impl JobKind {
@@ -210,6 +215,7 @@ impl JobKind {
             Self::Checksum { verify: false } => "checksum",
             Self::Checksum { verify: true } => "verify",
             Self::Resize => "resize",
+            Self::Download => "download",
         }
     }
 
@@ -230,6 +236,7 @@ impl JobKind {
             Self::Checksum { verify: false } => "Checksumming",
             Self::Checksum { verify: true } => "Verifying",
             Self::Resize => "Resizing",
+            Self::Download => "Downloading",
         }
     }
 
@@ -429,6 +436,26 @@ pub struct JobOptions {
     /// them from the dialog through these options, and one shape is easier to
     /// keep true than two.
     pub resize: Option<resize::ResizeSettings>,
+    /// Set only by a [`JobKind::Download`]: the URL and whether to resume a
+    /// partial file. Rides here for the same reason [`PackInto`] and
+    /// [`JobOptions::resize`] do - the source is not a [`VfsPath`], so it cannot
+    /// live in [`JobSpec::sources`].
+    pub download: Option<DownloadRequest>,
+}
+
+/// What a [`JobKind::Download`] fetches, and how to treat a file already there.
+///
+/// The one reusable shape every way of starting a download produces - the
+/// `Ctrl+D` prompt and the viewer's links alike - so the runner has one thing
+/// to read and the callers have one thing to build.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DownloadRequest {
+    /// Where to fetch from. Redirects are followed.
+    pub url: String,
+    /// Continue an existing partial file with a `Range` request rather than
+    /// truncating it. The caller decides this - typically from the same
+    /// resume-or-overwrite prompt a copy shows - so the runner does not have to.
+    pub resume: bool,
 }
 
 impl Default for JobOptions {
@@ -442,6 +469,7 @@ impl Default for JobOptions {
             pack: None,
             part_size: 0,
             resize: None,
+            download: None,
         }
     }
 }
@@ -462,6 +490,7 @@ impl JobOptions {
             pack: None,
             part_size: 0,
             resize: None,
+            download: None,
         }
     }
 
@@ -677,6 +706,7 @@ impl JobSummary {
             JobKind::Split => "split",
             JobKind::Merge => "merged",
             JobKind::Resize => "resized",
+            JobKind::Download => "downloaded",
         };
         let mut out = format!(
             "{verb} {} file{}, {} dir{}",
@@ -1819,6 +1849,7 @@ pub fn run(vfs: &dyn Vfs, spec: &JobSpec, ctx: &mut JobContext) {
         JobKind::Split => split::run_split(vfs, spec, ctx),
         JobKind::Merge => split::run_merge(vfs, spec, ctx),
         JobKind::Resize => resize::run(vfs, spec, ctx),
+        JobKind::Download => download::run(vfs, spec, ctx),
     }
 }
 
