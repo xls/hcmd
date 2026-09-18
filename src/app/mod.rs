@@ -22,6 +22,7 @@ pub mod drives;
 pub mod fileinfo;
 pub mod jobs;
 pub mod links;
+pub mod localsend;
 pub mod navigate;
 pub mod open;
 pub mod quickview;
@@ -810,6 +811,9 @@ pub struct App {
     /// The `Ctrl+N` share: what was asked for and the listener while its
     /// dialog is up.
     pub serving: crate::app::serve::Serving,
+    /// The `Alt+X` send: what was asked for and the discovery while
+    /// its picker is up.
+    pub localsend: crate::app::localsend::LocalSending,
     /// The file this session is about to hand to something outside itself.
     ///
     pub handoff: crate::ops::open::Handoff,
@@ -994,6 +998,7 @@ impl App {
             drives: crate::devices::Drives::default(),
             downloads: crate::app::downloads::Downloads::default(),
             serving: crate::app::serve::Serving::default(),
+            localsend: crate::app::localsend::LocalSending::default(),
             handoff: crate::ops::open::Handoff::default(),
             pending_file_info: None,
             pending_clipboard: None,

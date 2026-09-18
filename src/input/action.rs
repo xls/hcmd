@@ -215,6 +215,7 @@ actions! {
     Download          = "download",          V09, "Download a URL to the downloads folder";
     Downloads         = "downloads",         V09, "Show the downloads folder";
     Serve             = "serve",             V09, "Serve the selection over HTTP and WebDAV";
+    SendDevice        = "send_device",       V09, "Send the selection to a LocalSend device";
     ShowHidden        = "show_hidden",       V01,  "Toggle showing hidden files";
     ConnectToggle     = "connect_toggle",    V065, "Connect or disconnect the active panel";
     DirSize           = "dir_size",          V02, "Calculate the space the selection occupies";

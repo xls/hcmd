@@ -20,11 +20,31 @@ pub struct Request {
     pub method: String,
     /// The path, percent-decoded, without the query. Always starts with `/`.
     pub path: String,
+    /// The query as it came, after the `?` and still percent-encoded; empty
+    /// when there was none. [`Request::query_param`] reads one value.
+    pub query: String,
     /// The headers, names lower-cased.
     pub headers: Vec<(String, String)>,
 }
 
 impl Request {
+    /// A query parameter's value, percent-decoded, or `None` when absent.
+    #[must_use]
+    pub fn query_param(&self, name: &str) -> Option<String> {
+        self.query.split('&').find_map(|pair| {
+            let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+            (key == name).then(|| percent_decode(value))
+        })
+    }
+
+    /// The `Content-Length`, or zero when absent or unreadable.
+    #[must_use]
+    pub fn content_length(&self) -> u64 {
+        self.header("content-length")
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(0)
+    }
+
     /// A header's value, by case-insensitive name.
     #[must_use]
     pub fn header(&self, name: &str) -> Option<&str> {
@@ -75,7 +95,7 @@ pub fn parse_request(buf: &[u8]) -> Result<Request, ParseError> {
     if method.is_empty() || !version.starts_with("HTTP/1.") {
         return Err(ParseError::Malformed);
     }
-    let raw_path = target.split('?').next().unwrap_or(target);
+    let (raw_path, query) = target.split_once('?').unwrap_or((target, ""));
     if !raw_path.starts_with('/') {
         return Err(ParseError::Malformed);
     }
@@ -89,8 +109,47 @@ pub fn parse_request(buf: &[u8]) -> Result<Request, ParseError> {
     Ok(Request {
         method: method.to_ascii_uppercase(),
         path: percent_decode(raw_path),
+        query: query.to_string(),
         headers,
     })
+}
+
+/// Read one request - the head and, up to `max_body` bytes, the body its
+/// `Content-Length` promises - off `stream`. The share reads heads only and
+/// has its own loop; this is for the LocalSend side, whose requests carry
+/// JSON. A body past `max_body` is [`ParseError::TooLarge`].
+pub fn read_request<R: std::io::Read>(
+    stream: &mut R,
+    max_body: usize,
+) -> Result<(Request, Vec<u8>), ParseError> {
+    let mut buf = Vec::with_capacity(1024);
+    let mut chunk = [0_u8; 4096];
+    let (request, head_len) = loop {
+        match parse_request(&buf) {
+            Ok(request) => break (request, head_end(&buf).unwrap_or(buf.len())),
+            Err(ParseError::Incomplete) if buf.len() <= MAX_HEAD => {}
+            Err(other) => return Err(other),
+        }
+        match stream.read(&mut chunk) {
+            Ok(0) => return Err(ParseError::Malformed),
+            Ok(n) => buf.extend_from_slice(chunk.get(..n).unwrap_or(&[])),
+            Err(_) => return Err(ParseError::Malformed),
+        }
+    };
+    let want = usize::try_from(request.content_length()).unwrap_or(usize::MAX);
+    if want > max_body {
+        return Err(ParseError::TooLarge);
+    }
+    let mut body: Vec<u8> = buf.get(head_len..).unwrap_or(&[]).to_vec();
+    while body.len() < want {
+        match stream.read(&mut chunk) {
+            Ok(0) => return Err(ParseError::Malformed),
+            Ok(n) => body.extend_from_slice(chunk.get(..n).unwrap_or(&[])),
+            Err(_) => return Err(ParseError::Malformed),
+        }
+    }
+    body.truncate(want);
+    Ok((request, body))
 }
 
 /// `%41` to `A`, and a `+` left alone: this is a path, not a form.

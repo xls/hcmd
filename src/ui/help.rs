@@ -114,6 +114,7 @@ const DIALOG_ORDER: &[DialogId] = &[
     DialogId::DownloadLink,
     DialogId::SelfUpdate,
     DialogId::Serve,
+    DialogId::SendDevice,
     DialogId::Menu,
     DialogId::ContextMenu,
     DialogId::Execute,
@@ -1118,6 +1119,20 @@ fn dialog_help(id: DialogId) -> (&'static str, &'static str) {
              nftables, iptables) and shows the command that opens the port.\n\
              Stop serving, Esc or Enter stops it - nothing keeps serving\n\
              behind a closed dialog.",
+        ),
+        DialogId::SendDevice => (
+            "Send to a device",
+            "Alt+X. Sends the selected files and folders to a\n\
+             LocalSend device - the stock app on a phone, a laptop, another\n\
+             hcmd - which shows its usual accept prompt. The list fills with\n\
+             the devices heard on the LAN while the dialog is open; a letter\n\
+             jumps to a name, Tab reaches the Address field for a device that\n\
+             does not announce (host or host:port) and the PIN field for one\n\
+             that asks. The transfer runs as a job like a copy: progress bar,\n\
+             background, cancel. A folder is sent as its files with their\n\
+             paths. Encrypted to the device's own certificate, which is\n\
+             checked against the fingerprint it announced. Sending only: this\n\
+             hcmd does not receive.",
         ),
         DialogId::SelfUpdate => (
             "Install the new release?",

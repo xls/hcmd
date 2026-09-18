@@ -51,6 +51,7 @@ pub mod field;
 pub mod fileinfo;
 pub mod find;
 pub mod history;
+pub mod localsend;
 pub mod menu;
 pub mod multirename;
 pub mod openwith;

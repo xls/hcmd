@@ -28,6 +28,7 @@ pub mod dialog;
 pub mod error;
 pub mod git;
 pub mod input;
+pub mod localsend;
 pub mod net;
 pub mod ops;
 pub mod panel;

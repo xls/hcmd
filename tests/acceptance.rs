@@ -91,6 +91,8 @@ mod keys {
     pub const CTRL_Q: &[u8] = b"\x1b[113;5u";
     /// `Ctrl+N` - serve the selection (`n` is codepoint 110).
     pub const CTRL_N: &[u8] = b"\x1b[110;5u";
+    /// `Alt+X` - the send-to-device fallback (`x` is codepoint 120).
+    pub const ALT_X: &[u8] = b"\x1b[120;3u";
 
     /// `Ctrl+Enter` - the "insert the filename at the caret".
     pub const CTRL_ENTER: &[u8] = b"\x1b[13;5u";
@@ -1696,6 +1698,39 @@ fn ctrl_n_puts_up_the_serve_dialog_with_an_address_the_firewall_and_a_stop_butto
     assert!(text.contains("[ Stop serving ]"), "the button:\n{text}");
     assert!(text.contains("Requests:"), "the log heading:\n{text}");
     s.press(keys::ESC, "the panel back", |t| !t.contains("Serving"));
+}
+
+#[test]
+fn alt_x_puts_up_the_send_to_device_picker_with_its_fields_and_buttons() {
+    // The picker is a dialog like the others: the list (empty until a device
+    // answers), the address and PIN fields, and Send/Cancel. Only a rendered
+    // frame shows they landed in one fixed box.
+    let fix = Fixture::new("sendto");
+    let mut s = Session::start(Launch::new(120, 30, fix.path()));
+    s.wait_for_listing();
+    // The first row under `..` is the fixture's folder: the picker says so,
+    // and says what the folder comes to once it has been counted.
+    s.press(keys::DOWN, "the cursor on the folder", |t| {
+        t.contains("thunder")
+    });
+    s.press(keys::ALT_X, "the picker", |t| t.contains("to a device"));
+    s.press(&[], "the folder counted", |t| t.contains("in all"));
+    let text = s.text();
+    assert!(
+        text.contains("Send a folder to a device"),
+        "the title:\n{text}"
+    );
+    assert!(
+        text.contains("Sending a folder: 1 file, 5 B in all"),
+        "what is going:\n{text}"
+    );
+    assert!(text.contains("Address:"), "the address field:\n{text}");
+    assert!(text.contains("PIN:"), "the PIN field:\n{text}");
+    assert!(
+        text.contains("[ Send ]") && text.contains("[ Cancel ]"),
+        "the buttons:\n{text}"
+    );
+    s.press(keys::ESC, "the panel back", |t| !t.contains("to a device"));
 }
 
 #[test]

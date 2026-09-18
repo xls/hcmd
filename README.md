@@ -152,6 +152,11 @@ the dialog stops serving.
 **Fetch a URL (`Ctrl+D`).** Download into a per-session folder (`Alt+J`) as a
 background job with a progress bar; a partial file resumes.
 
+**Send to a phone (`Alt+X`).** Send the selection to any
+[LocalSend](https://localsend.org) device on the LAN - pick it from the list
+or type its address - and it lands in the stock app with its usual prompt.
+Runs as a job; encrypted to the device's own certificate. Sending only.
+
 ### Look inside files of any size
 
 Press **F3** for a streaming viewer that starts displaying a file without waiting

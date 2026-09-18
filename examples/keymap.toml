@@ -113,6 +113,10 @@ downloads         = ["alt+j"]
 # ctrl+n serves the selection over HTTP and WebDAV for as long as its dialog
 # is open: a browser gets an index page, another hcmd connects as dav://.
 serve             = ["ctrl+n"]
+# alt+x sends the selection to a LocalSend device on the LAN: pick one from
+# the devices heard, or type an address. (ctrl+shift+n is a desktop's new-window
+# key on Omarchy and the like, so it is not bound here.)
+send_device       = ["alt+x"]
 # ctrl+shift+d needs the enhanced keyboard protocol, so it carries an
 # alt+letter fallback like every other undeliverable key.
 hotlist_add       = ["ctrl+shift+d", "alt+a"]

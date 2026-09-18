@@ -161,7 +161,7 @@ const MARK: [Action; 11] = [
 ];
 
 /// the `Commands` menu.
-const COMMANDS: [Action; 14] = [
+const COMMANDS: [Action; 15] = [
     Action::Search,
     Action::SearchInPanel,
     Action::BranchView,
@@ -169,6 +169,7 @@ const COMMANDS: [Action; 14] = [
     Action::RenameResult,
     Action::Download,
     Action::Serve,
+    Action::SendDevice,
     Action::HotlistAdd,
     Action::GotoPath,
     Action::SwapPanels,

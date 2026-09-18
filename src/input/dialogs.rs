@@ -561,6 +561,10 @@ pub fn dialog_answered(app: &mut App, id: DialogId, job: Option<JobId>, result: 
         // The share dialog closing, by Esc or Enter: the listener goes with
         // it. Nothing serves behind a closed dialog.
         (DialogId::Serve, DialogResult::None) => app.stop_serving(),
+        // The device picker: a choice queues the send job, a cancel just
+        // stops looking. Either way discovery leaves with the dialog.
+        (DialogId::SendDevice, DialogResult::Text(choice)) => app.answer_send_device(choice),
+        (DialogId::SendDevice, DialogResult::None) => app.stop_device_discovery(),
         // `Ctrl+Shift+D`'s label. The path is the active panel's, which has
         // not moved: the prompt is modal (see `open_hotlist_add`).
         (DialogId::HotlistAdd, DialogResult::Text(label)) => {

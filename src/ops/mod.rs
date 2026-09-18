@@ -59,6 +59,7 @@ pub mod delete;
 pub mod download;
 pub mod editor;
 pub mod gate;
+pub mod localsend;
 pub mod mask;
 pub mod mkdir;
 pub mod move_;
@@ -195,6 +196,9 @@ pub enum JobKind {
     /// resumable. Its source is the URL carried in [`JobOptions::download`], not
     /// a [`VfsPath`], so `sources` is empty like a [`JobKind::Mkdir`]'s.
     Download,
+    /// `Alt+X`: send the sources to a LocalSend device named in
+    /// [`JobOptions::localsend`]. Reads the sources, writes nothing.
+    LocalSend,
 }
 
 impl JobKind {
@@ -216,6 +220,7 @@ impl JobKind {
             Self::Checksum { verify: true } => "verify",
             Self::Resize => "resize",
             Self::Download => "download",
+            Self::LocalSend => "localsend",
         }
     }
 
@@ -237,6 +242,7 @@ impl JobKind {
             Self::Checksum { verify: true } => "Verifying",
             Self::Resize => "Resizing",
             Self::Download => "Downloading",
+            Self::LocalSend => "Sending to device",
         }
     }
 
@@ -445,6 +451,9 @@ pub struct JobOptions {
     /// [`JobOptions::resize`] do - the source is not a [`VfsPath`], so it cannot
     /// live in [`JobSpec::sources`].
     pub download: Option<DownloadRequest>,
+    /// Set only by a [`JobKind::LocalSend`]: the device and the PIN. The
+    /// files are the sources; this is what cannot be a path.
+    pub localsend: Option<localsend::LocalSendRequest>,
 }
 
 /// What a [`JobKind::Download`] fetches, and how to treat a file already there.
@@ -474,6 +483,7 @@ impl Default for JobOptions {
             part_size: 0,
             resize: None,
             download: None,
+            localsend: None,
         }
     }
 }
@@ -495,6 +505,7 @@ impl JobOptions {
             part_size: 0,
             resize: None,
             download: None,
+            localsend: None,
         }
     }
 
@@ -711,6 +722,7 @@ impl JobSummary {
             JobKind::Merge => "merged",
             JobKind::Resize => "resized",
             JobKind::Download => "downloaded",
+            JobKind::LocalSend => "sent",
         };
         let mut out = format!(
             "{verb} {} file{}, {} dir{}",
@@ -1854,6 +1866,7 @@ pub fn run(vfs: &dyn Vfs, spec: &JobSpec, ctx: &mut JobContext) {
         JobKind::Merge => split::run_merge(vfs, spec, ctx),
         JobKind::Resize => resize::run(vfs, spec, ctx),
         JobKind::Download => download::run(vfs, spec, ctx),
+        JobKind::LocalSend => localsend::run(vfs, spec, ctx),
     }
 }
 

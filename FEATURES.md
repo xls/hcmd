@@ -168,6 +168,8 @@ nest, and the type is decided by content, not by the extension.
   downloads from it resume. Read-only; closing the dialog stops it. Fixed port
   (`serve.port`), and the dialog names the host firewall that is on and the
   command that opens the port.
+- `Alt+X` sends the selection to a LocalSend device: pick one heard on
+  the LAN or type an address, PIN if asked; runs as a job. Send only.
 - Works down to 60 columns, with an ASCII spelling of every piece of chrome for
   terminals without box drawing.
 

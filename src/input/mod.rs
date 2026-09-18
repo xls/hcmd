@@ -101,6 +101,8 @@ pub enum DialogId {
     Download,
     /// `Enter` on a file link in the viewer: download it, or not.
     DownloadLink,
+    /// `Alt+X`, the LocalSend device picker.
+    SendDevice,
     /// A newer release, on a copy the npx installer put here: install it now
     /// with `npx holos-installer`, or skip until the next one.
     SelfUpdate,
@@ -222,6 +224,7 @@ impl DialogId {
             Self::HotlistAdd => "hotlist_add",
             Self::Download => "download",
             Self::DownloadLink => "download_link",
+            Self::SendDevice => "send_device",
             Self::SelfUpdate => "self_update",
             Self::Serve => "serve",
             Self::Menu => "menu",
@@ -1295,6 +1298,7 @@ pub(crate) fn run_action(app: &mut App, action: Action, press: KeyPress) -> Resu
         A::Download => open_download_prompt(app),
         A::Downloads => app.show_downloads(),
         A::Serve => app.request_serve(),
+        A::SendDevice => app.request_send_device(),
 
         // -------------------------------------------- the design compare -
         A::CompareDirs => app.compare_lists(),

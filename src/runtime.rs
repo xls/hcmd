@@ -458,6 +458,7 @@ pub async fn event_loop() -> Result<()> {
         // I/O, and this loop is the render thread.
         app.service_update_check(&update_tx);
         app.service_serve(&serve_tx);
+        app.service_localsend();
         app.service_file_info(&info_tx);
         app.service_links(&link_tx);
         service_git_status(&mut app, &git_tx);

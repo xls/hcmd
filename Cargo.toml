@@ -88,8 +88,9 @@ sevenz-rust2         = "0.22.2"
 # it cross-compiles through the same cc path zstd and liblzma already take, and
 # adds ~2 MB. No writing, ever.
 rusqlite             = { version = "0.40.2", features = ["bundled"], optional = true }
-# Row-to-JSON for the sqlite backend; already in the tree transitively.
-serde_json           = { version = "1.0.151", optional = true }
+# Row-to-JSON for the sqlite backend and the LocalSend wire format; already
+# in the tree transitively.
+serde_json           = "1.0.151"
 unrar                = "0.5.8"
 
 # The design: search runs in-process on ripgrep's own libraries. This is
@@ -181,6 +182,12 @@ fatfs                     = "=0.3.6"
 # have. rustls is already linked for SFTP and FTPS, so this adds a client and
 # a root store rather than a second TLS stack.
 ureq                      = { version = "3.1.2", default-features = false, features = ["rustls"] }
+# The LocalSend sender's own TLS client, pinning the peer's announced
+# fingerprint; the same rustls and ring ureq already links, so no new code.
+rustls                    = { version = "0.23.22", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+# A multicast socket with address reuse, which std's UdpSocket cannot make;
+# already in the tree under tokio.
+socket2                   = "0.6.5"
 similar                   = { version = "3", default-features = false, features = ["text"] }
 
 # Image decoding and encoding, for the resizer. Default features off and the
@@ -339,5 +346,5 @@ type_complexity = "deny"
 # and everything else - archives, images, the viewer - is unaffected. The one
 # optional dependency the crate has, and the one bundled C library.
 default = ["sqlite"]
-sqlite = ["dep:rusqlite", "dep:serde_json"]
+sqlite = ["dep:rusqlite"]
 
