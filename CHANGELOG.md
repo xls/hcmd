@@ -2,6 +2,11 @@
 
 Notable changes per release, one line each. Newest first.
 
+## v0.16.0
+
+- `Alt+X` sends the selection to a LocalSend device: a native, send-only implementation of the protocol - devices found by multicast and a subnet scan, or a typed address; PIN when the device asks; runs as a job with a progress bar and cancel; encrypted to the device's own certificate, pinned to the fingerprint it announced. The picker says what is going (`Send folder - 12 files`) and warns past 50 files.
+- The serve dialog stamps each answered request with the time.
+
 ## v0.15.0
 
 - `dav://` connections work: the WebDAV client's HTTP library refused `PROPFIND`, `MKCOL` and `MOVE` as methods HTTP/1.1 does not define, so every WebDAV connect failed at its first listing; proven by hcmd connecting to its own `Ctrl+N` share.

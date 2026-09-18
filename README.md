@@ -18,8 +18,9 @@ Browse, search, preview and move files across local folders, archives and remote
 ![Holos Commander: browse, search, view, inspect hex and connect to remote hosts](docs/holoscommander-final.jpg)
 
 Familiar function keys. A streaming viewer. Remote connections that feel like
-local folders. Holos brings the classic commander workflow to a modern terminal,
-with tabbed panels, background jobs and a built-in shell to keep you moving.
+local folders. Share over HTTP/WebDAV, send to a phone with native LocalSend.
+Holos brings the classic commander workflow to a modern terminal, with tabbed
+panels, background jobs and a built-in shell to keep you moving.
 
 ## Install
 
@@ -152,10 +153,12 @@ the dialog stops serving.
 **Fetch a URL (`Ctrl+D`).** Download into a per-session folder (`Alt+J`) as a
 background job with a progress bar; a partial file resumes.
 
-**Send to a phone (`Alt+X`).** Send the selection to any
-[LocalSend](https://localsend.org) device on the LAN - pick it from the list
-or type its address - and it lands in the stock app with its usual prompt.
-Runs as a job; encrypted to the device's own certificate. Sending only.
+**Send to a phone (`Alt+X`) - native LocalSend, send only.** A built-in
+implementation of the [LocalSend](https://localsend.org) protocol: send the
+selection to any LocalSend device on the LAN - pick it from the list or type
+its address - and it lands in the stock app with its usual prompt. Runs as a
+job; encrypted to the device's own certificate. hcmd sends, it does not
+receive.
 
 ### Look inside files of any size
 
