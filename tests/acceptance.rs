@@ -79,11 +79,12 @@ mod keys {
     /// `Esc`, which closes the menu bar and gives the panel back.
     ///
     pub const ESC: &[u8] = b"\x1b";
-    /// `Alt+D` - the legacy fallback for `Alt+F1`, the left
-    /// panel's device picker (`d` is codepoint 100, Alt is modifier field 3).
-    pub const ALT_D: &[u8] = b"\x1b[100;3u";
-    /// `Alt+G` - the same for `Alt+F2`, the right panel's.
-    pub const ALT_G: &[u8] = b"\x1b[103;3u";
+    /// `Alt+W` - the legacy fallback for `Alt+F1`, the left
+    /// panel's device picker (`w` is codepoint 119, Alt is modifier field 3).
+    pub const ALT_W: &[u8] = b"\x1b[119;3u";
+    /// `Alt+E` - the same for `Alt+F2`, the right panel's. `w` and `e` are
+    /// adjacent keys, left and right, like the panels they steer.
+    pub const ALT_E: &[u8] = b"\x1b[101;3u";
     /// `Ctrl+D` - the hotlist alone (`d` is codepoint 100).
     pub const CTRL_D: &[u8] = b"\x1b[100;5u";
     /// `Ctrl+Q` - the quick view (`q` is codepoint 113).
@@ -1694,7 +1695,7 @@ fn alt_f1_hangs_the_device_picker_under_the_left_panel_whichever_one_has_focus()
     s.send(b"\t");
     s.settle();
 
-    s.press(keys::ALT_D, "the left panel's device picker", |t| {
+    s.press(keys::ALT_W, "the left panel's device picker", |t| {
         t.contains("Left panel drives")
     });
     // Anchored under the *left* panel: the title starts in the left half of
@@ -1712,7 +1713,7 @@ fn alt_f1_hangs_the_device_picker_under_the_left_panel_whichever_one_has_focus()
     s.press(keys::ESC, "the panel back", |t| t.contains("thunder"));
 
     // And Alt+F2's is the right panel's, from the same focus.
-    s.press(keys::ALT_G, "the right panel's device picker", |t| {
+    s.press(keys::ALT_E, "the right panel's device picker", |t| {
         t.contains("Right panel drives")
     });
     let title_column = s

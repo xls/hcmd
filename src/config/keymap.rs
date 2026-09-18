@@ -427,7 +427,7 @@ impl Keymap {
     }
 
     /// How a binding is written in a menu row and on the `F1` page:
-    /// `F5`, `Ctrl+Shift+3`, `Alt+F1 / Alt+D`, `(unbound)`.
+    /// `F5`, `Ctrl+Shift+3`, `Alt+F1 / Alt+W`, `(unbound)`.
     ///
     /// One definition, so the page and the menu cannot
     /// spell the same key two ways.
@@ -1028,9 +1028,11 @@ mod tests {
             "ctrl+x must not begin a chord"
         );
         // And the fallbacks it used to carry are single alt+letter keys now.
+        // The drive fallbacks are alt+w / alt+e - adjacent keys, left and
+        // right - so the panel they steer reads off the keyboard itself.
         for (ch, action) in [
-            ('d', Action::DriveLeft),
-            ('g', Action::DriveRight),
+            ('w', Action::DriveLeft),
+            ('e', Action::DriveRight),
             ('s', Action::Search),
         ] {
             assert_eq!(

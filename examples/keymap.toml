@@ -73,8 +73,8 @@ diff_files        = ["alt+shift+f2"]
 # They are plain alt+<letter> - an ESC-prefixed byte, which every terminal
 # sends - and deliberately NOT ctrl+x chords: ctrl+x is cut, and
 # a chord prefix is an mc idiom this project does not inherit.
-drive_left        = ["alt+f1", "alt+d"]
-drive_right       = ["alt+f2", "alt+g"]
+drive_left        = ["alt+f1", "alt+w"]
+drive_right       = ["alt+f2", "alt+e"]
 view_external     = ["alt+f3"]
 pack              = ["alt+f5"]
 unpack            = ["alt+f6"]
@@ -85,7 +85,7 @@ history_dialog    = ["alt+f8"]
 theme_picker      = ["alt+t"]
 # The background job queue. Enter on a running job brings
 # its progress dialog back to the foreground; F2 in that dialog sends it back.
-job_queue         = ["alt+f9", "alt+j"]
+job_queue         = ["alt+f9", "alt+b"]
 
 # Inside a dialog, alt+<letter> is that dialog's own accelerator and beats
 # every binding above: alt+s is `Search for` while the Find Files dialog is
