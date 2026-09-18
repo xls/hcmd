@@ -122,13 +122,6 @@ pub const NO_BLOCK_INTERPRETATION: &str =
 
 /// What `Ctrl+C` says in mode 3.
 ///
-/// A rendered line is not a run of the file's bytes - an HTML paragraph is
-/// assembled from text scattered across a dozen tags - so there is no span to
-/// copy and nothing honest to put on the clipboard. Naming the two modes that
-/// can is what makes it an instruction rather than a refusal.
-pub const NO_RENDER_COPY: &str =
-    "mode 3 has no byte selection to copy - press 1 for text or 2 for hex, then select";
-
 /// the `viewer.copy_max` refusal, with both numbers.
 ///
 /// Both, because a refusal that names neither the selection nor the limit
@@ -533,6 +526,18 @@ impl Viewer {
         if !self.cursor_enabled {
             return Ok(Copied::Refused(NO_CURSOR.to_string()));
         }
+        // Mode 3 copies the rendered text - what is drawn, joined by
+        // newlines - and has no byte selection for the checks below to read.
+        if self.mode == ViewerMode::Render && matches!(what, CopyRequest::Selection) {
+            return Ok(match self.rendered_selection_text() {
+                Some(text) => Copied::Text {
+                    bytes: text.len() as u64,
+                    text,
+                    note: None,
+                },
+                None => Copied::Refused(NOTHING_SELECTED.to_string()),
+            });
+        }
         let Some(sel) = self.sel else {
             return Ok(Copied::Refused(NOTHING_SELECTED.to_string()));
         };
@@ -559,12 +564,6 @@ impl Viewer {
                 // The reading is of one run of bytes; a block is not one.
                 SelectKind::Rectangular => Ok(Copied::Refused(NO_BLOCK_INTERPRETATION.to_string())),
             },
-            // Mode 3 has no selection to copy: its cursor is a rendered line
-            // and the lines are not a run of the file's bytes. Refusing by
-            // name is the rule the block interpretation above follows.
-            CopyRequest::Selection if self.mode == ViewerMode::Render => {
-                Ok(Copied::Refused(NO_RENDER_COPY.to_string()))
-            }
             CopyRequest::Selection => match (self.mode, sel.kind) {
                 (ViewerMode::Text | ViewerMode::Render, SelectKind::Linear) => {
                     let bytes = self.read_span(lo, hi)?;

@@ -156,8 +156,10 @@ impl Viewer {
                 } else {
                     self.render_matches_on(line)
                 },
-                sel: None,
-                cursor: (line == cursor_line && self.cursor_enabled).then_some(0),
+                // Mode 3's own selection and column, over the shown text.
+                sel: self.render_row_sel(line),
+                cursor: (line == cursor_line && self.cursor_enabled)
+                    .then(|| self.render_col.min(self.shown_len(line))),
                 cut: false,
             });
         }

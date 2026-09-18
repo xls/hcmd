@@ -405,11 +405,13 @@ fn viewer_action(app: &mut App, action: Action, extend: Extend) -> Result<()> {
     // same, but it was answering the wrong question: a reader searching a
     // rendered document is looking for text they can see. Mode 3 searches what
     // it draws, mode 1 searches the file; see [`crate::viewer::find_render`].
-    if viewer.mode() == crate::config::ViewerMode::Render
-        && matches!(action, A::SelectAll | A::SelectBlock)
-    {
+    // Mode 3 selects the *rendered* text - Shift with the arrows, Ctrl+A - and
+    // copies what is drawn. A column block is a byte thing, and the file's
+    // bytes are mode 1's.
+    if viewer.mode() == crate::config::ViewerMode::Render && matches!(action, A::SelectBlock) {
         app.message = Some(
-            "not available in mode 3 - it renders the document, not the file's bytes. Press 1 to select the text".to_string(),
+            "a column block selects the file's bytes, which mode 3 does not show - press 1 for it"
+                .to_string(),
         );
         return Ok(());
     }

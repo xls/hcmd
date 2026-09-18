@@ -334,18 +334,18 @@ fn f4_from_mode_three_goes_to_text_rather_than_cycling() {
 }
 
 #[test]
-fn copying_in_mode_three_is_refused_by_name_rather_than_silently() {
+fn copying_in_mode_three_hands_over_the_rendered_text_not_the_bytes() {
     let mut viewer = rendering();
     viewer.select_all();
     let out = viewer
         .copy(copy::CopyRequest::Selection, 1024 * 1024)
         .expect("no error");
     match out {
-        copy::Copied::Refused(said) => {
-            assert!(said.contains("mode 3"), "{said}");
-            assert!(said.contains("press 1"), "{said}");
+        copy::Copied::Text { text, .. } => {
+            let drawn = rows(&viewer).join("\n");
+            assert_eq!(text, drawn, "what is copied is what is drawn");
         }
-        other => panic!("expected a refusal, got {other:?}"),
+        other => panic!("expected the rendered text, got {other:?}"),
     }
 }
 

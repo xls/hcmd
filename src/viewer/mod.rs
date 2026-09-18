@@ -62,6 +62,7 @@ pub mod navigate;
 pub mod refusal;
 pub mod render;
 pub mod rendered;
+pub mod rendersel;
 pub mod select;
 pub mod source;
 pub mod stack;
@@ -706,6 +707,15 @@ pub struct Viewer {
     /// The focused link in the rendered document, as (line, index within
     /// that line's links). `Tab` steps it; see [`links`].
     render_link: Option<(usize, usize)>,
+    /// The rendered cursor's column: a byte index into its line's shown text.
+    render_col: usize,
+    /// The column a vertical move aims for: where `Left`/`Right`/`Home`/`End`
+    /// last put the cursor, kept across lines too short to hold it so a walk
+    /// over a blank line comes back to the same column.
+    render_goal: usize,
+    /// Where a rendered-text selection was started, as (line, column); see
+    /// [`rendersel`].
+    render_anchor: Option<(usize, usize)>,
     /// The web link the text-mode cursor stands in, as file offsets, found
     /// once per layout so the rows can underline it.
     text_link: Option<(u64, u64)>,
@@ -937,6 +947,9 @@ impl Viewer {
             render_hits: Vec::new(),
             render_hit: None,
             render_link: None,
+            render_col: 0,
+            render_goal: 0,
+            render_anchor: None,
             text_link: None,
             render_hits_built: false,
             diff_old: None,
@@ -1366,7 +1379,7 @@ impl Viewer {
             // always the next one. `move_render` is that walk, and returning
             // here is what keeps every byte-offset path below out of a mode
             // that has no byte offsets.
-            self.move_render(motion);
+            self.move_render_sel(motion, extend);
             return Ok(());
         }
         let moved = match self.mode {
@@ -1436,6 +1449,10 @@ impl Viewer {
     /// file would be a surprise and would throw away where the user was reading.
     ///
     pub fn select_all(&mut self) {
+        if self.mode == ViewerMode::Render {
+            self.select_all_rendered();
+            return;
+        }
         if !self.cursor_enabled {
             return;
         }
@@ -1458,6 +1475,9 @@ impl Viewer {
     /// a nuisance" - has nothing to lose here. It is still taken: the anchor
     /// goes, and only the extra keypress does not.
     pub fn clear_selection(&mut self) -> bool {
+        if self.mode == ViewerMode::Render {
+            return self.clear_render_selection();
+        }
         self.sel.take().is_some_and(|sel| !sel.is_empty())
     }
 

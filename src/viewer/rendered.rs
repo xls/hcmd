@@ -209,9 +209,12 @@ impl Viewer {
         let collapse = document.kind == RenderKind::Diff;
         self.render_regions = document.foldable();
         self.rendered = Some(document);
-        // A new document has its own links; a focus into the old one is
-        // meaningless against it.
+        // A new document has its own links and its own text; a focus or a
+        // selection into the old one is meaningless against it.
         self.render_link = None;
+        self.render_col = 0;
+        self.render_goal = 0;
+        self.render_anchor = None;
         if collapse {
             self.fold_all(true);
         }
