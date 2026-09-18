@@ -1787,22 +1787,24 @@ mod tests {
         let queued = app.take_pending_jobs().len();
         assert_eq!(queued, 1, "the batch itself is a job like any other");
         if let Some(status) = app.jobs.status_mut(id) {
-            status.finished = Some(Box::new(crate::ops::JobSummary {
-                kind: crate::ops::JobKind::Rename,
-                files_done: 0,
-                dirs_done: 0,
-                bytes_done: 0,
-                skipped: 0,
-                failures: vec![crate::ops::JobFailure {
-                    path: source,
-                    error: "alpha-v2.txt already exists".to_string(),
-                }],
-                cancelled: false,
-                elapsed: std::time::Duration::ZERO,
-                sized: Vec::new(),
-                differing: Vec::new(),
-                first_difference: None,
-            }));
+            status.apply(&crate::ops::JobEvent::Finished {
+                summary: Box::new(crate::ops::JobSummary {
+                    kind: crate::ops::JobKind::Rename,
+                    files_done: 0,
+                    dirs_done: 0,
+                    bytes_done: 0,
+                    skipped: 0,
+                    failures: vec![crate::ops::JobFailure {
+                        path: source,
+                        error: "alpha-v2.txt already exists".to_string(),
+                    }],
+                    cancelled: false,
+                    elapsed: std::time::Duration::ZERO,
+                    sized: Vec::new(),
+                    differing: Vec::new(),
+                    first_difference: None,
+                }),
+            });
         }
 
         let line = files::retry_failures(&mut app, id);
@@ -2323,7 +2325,7 @@ mod tests {
             first_difference: None,
         });
         if let Some(status) = app.jobs.status_mut(id) {
-            status.finished = Some(summary);
+            status.apply(&crate::ops::JobEvent::Finished { summary });
         }
         press(&mut app, KeyCode::F(10), KeyModifiers::NONE);
         assert!(app.should_quit, "nothing is still running");

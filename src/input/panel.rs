@@ -275,7 +275,7 @@ pub(super) fn clear_search_then_marks(app: &mut App) {
         .jobs
         .rows()
         .iter()
-        .filter(|j| j.kind == JobKind::Size && j.finished.is_none())
+        .filter(|j| j.kind == JobKind::Size && !j.is_finished())
         .map(|j| j.id)
         .collect();
     if !walking.is_empty() {

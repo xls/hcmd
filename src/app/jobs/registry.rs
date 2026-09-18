@@ -1,10 +1,10 @@
 //! Every job this session has handed out an id for.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::config::OpsConfig;
 use crate::ops::queue::JobQueue;
-use crate::ops::{JobHandle, JobId, JobRequest, JobSpec, JobStatus, SizeCache};
+use crate::ops::{JobHandle, JobId, JobKind, JobRequest, JobSpec, JobStatus, SizeCache};
 use crate::panel::Side;
 use crate::vfs::VfsPath;
 
@@ -40,12 +40,6 @@ pub struct Jobs {
     handles: HashMap<JobId, JobHandle>,
     /// Monotonic source for [`JobId`].
     next: u64,
-    /// Jobs whose progress dialog the user closed, so it is not immediately
-    /// put back while the worker winds down. Cancelling is not instantaneous.
-    dismissed: HashSet<JobId>,
-    /// Jobs whose `Finished` has already been acted on, so a finish is reported
-    /// once rather than on every frame.
-    settled: HashSet<JobId>,
     /// "When this job finishes cleanly, re-read this panel and put the cursor
     /// on the entry this path produced" - how `F7` lands on the directory it
     /// just made (the `+ F7`).
@@ -68,8 +62,6 @@ impl Jobs {
             specs: HashMap::new(),
             handles: HashMap::new(),
             next: 0,
-            dismissed: HashSet::new(),
-            settled: HashSet::new(),
             follow: HashMap::new(),
             sizes: SizeCache::new(),
         }
@@ -95,19 +87,61 @@ impl Jobs {
         self.specs.get(&id)
     }
 
+    /// Every job that has not finished: queued, running or blocked.
+    pub fn unfinished(&self) -> impl Iterator<Item = &JobStatus> {
+        self.rows.iter().filter(|status| !status.is_finished())
+    }
+
+    /// The first unfinished job in the foreground view - the one a progress
+    /// dialog is a view of, dismissed or not.
+    pub fn foreground(&self) -> Option<&JobStatus> {
+        self.unfinished().find(|status| !status.is_background())
+    }
+
+    /// Whether any unfinished job is in the background view.
+    pub fn any_background(&self) -> bool {
+        self.unfinished().any(JobStatus::is_background)
+    }
+
+    /// The first backgrounded job parked on a question, which is the one to
+    /// bring forward so the question is seen.
+    pub fn blocked_background(&self) -> Option<&JobStatus> {
+        self.unfinished()
+            .find(|status| status.is_background() && status.is_blocked())
+    }
+
+    /// Whether any job is parked on a question.
+    pub fn any_blocked(&self) -> bool {
+        self.rows.iter().any(JobStatus::is_blocked)
+    }
+
+    /// Jobs that have finished and not yet been acted on: reported once,
+    /// their dialog closed once.
+    pub fn finished_unpresented(&self) -> impl Iterator<Item = &JobStatus> {
+        self.rows
+            .iter()
+            .filter(|status| status.is_finished() && !status.is_presented())
+    }
+
+    /// Jobs that finished while backgrounded, whose result waits in the
+    /// queue view.
+    pub fn finished_background(&self) -> impl Iterator<Item = &JobStatus> {
+        self.rows
+            .iter()
+            .filter(|status| status.is_background() && status.is_finished())
+    }
+
     /// True while any size walk is running, so the loop knows to keep waking to
     /// advance the size-column animation even when the walk is quiet.
     pub fn any_walking(&self) -> bool {
-        self.rows
-            .iter()
-            .any(|status| status.finished.is_none() && status.kind == crate::ops::JobKind::Size)
+        self.unfinished().any(|status| status.kind == JobKind::Size)
     }
 
     /// True while any job is unfinished - running, queued or waiting on an
     /// answer. Drives the top-right activity indicator and keeps its animation
     /// advancing.
     pub fn any_active(&self) -> bool {
-        self.rows.iter().any(|status| status.finished.is_none())
+        self.unfinished().next().is_some()
     }
 
     /// True while a size walk covering `path` is still running.
@@ -118,9 +152,8 @@ impl Jobs {
     /// from the live jobs and their specs, so nothing has to be kept in step by
     /// hand and a cancelled walk stops animating the moment its row is gone.
     pub fn is_walking(&self, path: &crate::vfs::VfsPath) -> bool {
-        self.rows.iter().any(|status| {
-            status.finished.is_none()
-                && status.kind == crate::ops::JobKind::Size
+        self.unfinished().any(|status| {
+            status.kind == JobKind::Size
                 && self
                     .specs
                     .get(&status.id)
@@ -131,7 +164,7 @@ impl Jobs {
     /// The first job that has not finished, which is the one a progress dialog
     /// shows.
     pub fn active(&self) -> Option<&JobStatus> {
-        self.rows.iter().find(|j| j.finished.is_none())
+        self.unfinished().next()
     }
 
     /// Take an id nobody has had before, and file the status row and spec that
@@ -218,37 +251,16 @@ impl Jobs {
     /// the queue.
     ///
     /// All four together, because a job that is in one of them and not the
-    /// others is a job in no state at all.
+    /// others is a job in no state at all. Everything else about a job -
+    /// whether it was dismissed, whether its finish was reported - lives on
+    /// the row, so it goes with the row.
     pub fn forget(&mut self, id: JobId) {
         self.rows.retain(|j| j.id != id);
         self.handles.remove(&id);
         self.specs.remove(&id);
-        self.dismissed.remove(&id);
         if self.queue.contains(id) {
             self.queue.cancel(id);
         }
-    }
-
-    /// Note that the user closed this job's progress dialog.
-    pub fn dismiss(&mut self, id: JobId) {
-        self.dismissed.insert(id);
-    }
-
-    /// Has the user closed this job's progress dialog?
-    pub fn is_dismissed(&self, id: JobId) -> bool {
-        self.dismissed.contains(&id)
-    }
-
-    /// Has this job's `Finished` already been acted on?
-    pub fn is_settled(&self, id: JobId) -> bool {
-        self.settled.contains(&id)
-    }
-
-    /// Record that this job's `Finished` has been acted on, and that its
-    /// dialog is no longer dismissed because there is no longer one to dismiss.
-    pub fn settle(&mut self, id: JobId) {
-        self.settled.insert(id);
-        self.dismissed.remove(&id);
     }
 
     /// Ask for a panel to be re-read and landed on `dest` when this job ends

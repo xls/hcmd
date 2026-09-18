@@ -13,7 +13,7 @@
 //!
 //! This module is the queue's **model**. The queue *view* is UI and belongs to
 //! agent 2d: [`rows`] and [`counts`] give it everything it needs to draw
-//! without knowing anything about workers, and [`JobState`] is the one place
+//! without knowing anything about workers, and [`RowState`] is the one place
 //! "pending / active / failed" is defined so the view and the key bar cannot
 //! disagree about what a job is doing.
 //!
@@ -34,7 +34,7 @@
 
 use std::collections::{HashSet, VecDeque};
 
-use super::{JobId, JobKind, JobRequest, JobStatus};
+use super::{JobId, JobKind, JobRequest, JobState, JobStatus, JobSummary};
 use crate::config::OpsConfig;
 
 /// How many contending jobs run at once by default.
@@ -61,7 +61,7 @@ pub const fn serialises(kind: JobKind) -> bool {
 
 /// What the queue view shows in its state column.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum JobState {
+pub enum RowState {
     /// Accepted but not started: it is waiting for a slot, or the user pressed
     /// `F2 Queue` instead of `OK`.
     Pending,
@@ -80,7 +80,7 @@ pub enum JobState {
     Cancelled,
 }
 
-impl JobState {
+impl RowState {
     /// Every state, in the order a view should group them.
     pub const ALL: &'static [Self] = &[
         Self::Waiting,
@@ -127,7 +127,7 @@ impl JobState {
     }
 }
 
-impl std::fmt::Display for JobState {
+impl std::fmt::Display for RowState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.label())
     }
@@ -138,24 +138,20 @@ impl std::fmt::Display for JobState {
 /// The order of the tests is the meaning: a job parked on a conflict is
 /// `Waiting` even though it is also running, because that is what the view has
 /// to say about it.
-pub fn state_of(status: &JobStatus) -> JobState {
-    if let Some(summary) = status.finished.as_ref() {
-        if summary.cancelled {
-            return JobState::Cancelled;
+pub fn state_of(status: &JobStatus) -> RowState {
+    match status.state() {
+        JobState::Finished { summary, .. } => {
+            if summary.cancelled {
+                RowState::Cancelled
+            } else if summary.failures.is_empty() {
+                RowState::Done
+            } else {
+                RowState::Failed
+            }
         }
-        return if summary.failures.is_empty() {
-            JobState::Done
-        } else {
-            JobState::Failed
-        };
-    }
-    if status.pending_decision.is_some() {
-        return JobState::Waiting;
-    }
-    if status.started {
-        JobState::Running
-    } else {
-        JobState::Pending
+        JobState::Blocked { .. } => RowState::Waiting,
+        JobState::Running => RowState::Running,
+        JobState::Queued => RowState::Pending,
     }
 }
 
@@ -170,7 +166,7 @@ pub struct QueueRow {
     /// What it is doing.
     pub kind: JobKind,
     /// Where it is up to.
-    pub state: JobState,
+    pub state: RowState,
     /// True when its progress dialog is not on screen.
     pub background: bool,
     /// The verb, e.g. `Copying`.
@@ -190,7 +186,7 @@ pub fn row(status: &JobStatus) -> QueueRow {
         id: status.id,
         kind: status.kind,
         state,
-        background: status.background,
+        background: status.is_background(),
         title: status.kind.title(),
         detail: detail(status, state),
         fraction: status.fraction(),
@@ -204,14 +200,14 @@ pub fn rows(jobs: &[JobStatus]) -> Vec<QueueRow> {
 }
 
 /// The right-hand text for one row.
-fn detail(status: &JobStatus, state: JobState) -> String {
+fn detail(status: &JobStatus, state: RowState) -> String {
     match state {
-        JobState::Pending => "waiting for a slot".to_string(),
-        JobState::Waiting => status.pending_decision.as_ref().map_or_else(
+        RowState::Pending => "waiting for a slot".to_string(),
+        RowState::Waiting => status.pending_decision().map_or_else(
             || "waiting for an answer".to_string(),
             |request| format!("{} already exists", request.dest),
         ),
-        JobState::Running => {
+        RowState::Running => {
             if status.files_total > 0 {
                 format!("{} / {} files", status.files_done, status.files_total)
             } else {
@@ -220,10 +216,9 @@ fn detail(status: &JobStatus, state: JobState) -> String {
         }
         // A finished job's own sentence, which already names the counts, the
         // skips and the failures (the end-of-batch summary).
-        JobState::Done | JobState::Failed | JobState::Cancelled => status
-            .finished
-            .as_ref()
-            .map_or_else(String::new, |summary| summary.message()),
+        RowState::Done | RowState::Failed | RowState::Cancelled => status
+            .summary()
+            .map_or_else(String::new, JobSummary::message),
     }
 }
 
@@ -280,12 +275,12 @@ pub fn counts(jobs: &[JobStatus]) -> QueueCounts {
     let mut out = QueueCounts::default();
     for status in jobs {
         match state_of(status) {
-            JobState::Pending => out.pending = out.pending.saturating_add(1),
-            JobState::Running => out.running = out.running.saturating_add(1),
-            JobState::Waiting => out.waiting = out.waiting.saturating_add(1),
-            JobState::Done => out.done = out.done.saturating_add(1),
-            JobState::Failed => out.failed = out.failed.saturating_add(1),
-            JobState::Cancelled => out.cancelled = out.cancelled.saturating_add(1),
+            RowState::Pending => out.pending = out.pending.saturating_add(1),
+            RowState::Running => out.running = out.running.saturating_add(1),
+            RowState::Waiting => out.waiting = out.waiting.saturating_add(1),
+            RowState::Done => out.done = out.done.saturating_add(1),
+            RowState::Failed => out.failed = out.failed.saturating_add(1),
+            RowState::Cancelled => out.cancelled = out.cancelled.saturating_add(1),
         }
     }
     out
@@ -420,7 +415,7 @@ impl JobQueue {
     /// Contending jobs that hold a slot: launched and not yet finished.
     fn occupied(&self, jobs: &[JobStatus]) -> usize {
         jobs.iter()
-            .filter(|j| serialises(j.kind) && j.finished.is_none() && self.launched.contains(&j.id))
+            .filter(|j| serialises(j.kind) && !j.is_finished() && self.launched.contains(&j.id))
             .count()
     }
 
@@ -432,7 +427,7 @@ impl JobQueue {
         }
         let done: HashSet<JobId> = jobs
             .iter()
-            .filter(|j| j.finished.is_some())
+            .filter(|j| j.is_finished())
             .map(|j| j.id)
             .collect();
         self.launched.retain(|id| !done.contains(id));
@@ -494,14 +489,14 @@ mod tests {
     #[test]
     fn every_state_a_job_can_be_in_is_named() {
         let mut status = JobStatus::queued(JobId(1), JobKind::Copy);
-        assert_eq!(state_of(&status), JobState::Pending);
+        assert_eq!(state_of(&status), RowState::Pending);
 
         status.apply(&JobEvent::Started {
             kind: JobKind::Copy,
             files_total: 1,
             bytes_total: 1,
         });
-        assert_eq!(state_of(&status), JobState::Running);
+        assert_eq!(state_of(&status), RowState::Running);
 
         status.apply(&JobEvent::NeedsDecision {
             request: Box::new(ConflictRequest {
@@ -518,13 +513,13 @@ mod tests {
         });
         assert_eq!(
             state_of(&status),
-            JobState::Waiting,
+            RowState::Waiting,
             "parked on a conflict, which is not the same as running"
         );
         assert!(state_of(&status).needs_attention());
 
         finish(&mut status, Vec::new(), false);
-        assert_eq!(state_of(&status), JobState::Done);
+        assert_eq!(state_of(&status), RowState::Done);
         assert!(state_of(&status).is_terminal());
 
         let mut failed = started(2, JobKind::Copy);
@@ -536,11 +531,11 @@ mod tests {
             }],
             false,
         );
-        assert_eq!(state_of(&failed), JobState::Failed);
+        assert_eq!(state_of(&failed), RowState::Failed);
 
         let mut cancelled = started(3, JobKind::Move);
         finish(&mut cancelled, Vec::new(), true);
-        assert_eq!(state_of(&cancelled), JobState::Cancelled);
+        assert_eq!(state_of(&cancelled), RowState::Cancelled);
     }
 
     #[test]
@@ -701,7 +696,7 @@ mod tests {
             false,
         );
         let pending = JobStatus::queued(JobId(3), JobKind::Copy);
-        running.background = true;
+        running.send_to_background();
 
         let jobs = vec![running, failed, pending];
         let counts = counts(&jobs);
@@ -743,7 +738,7 @@ mod tests {
         );
 
         let row = row(&jobs[0]);
-        assert_eq!(row.state, JobState::Waiting);
+        assert_eq!(row.state, RowState::Waiting);
         assert!(row.detail.contains("/tmp/dest/a"), "{}", row.detail);
     }
 
@@ -758,15 +753,15 @@ mod tests {
 
         let rows = rows(&jobs);
         assert_eq!(rows.len(), 2);
-        assert_eq!(rows[0].state, JobState::Done);
+        assert_eq!(rows[0].state, RowState::Done);
         assert_eq!(rows[0].title, "Copying");
         assert!(rows[0].detail.contains("copied"), "{}", rows[0].detail);
         assert_eq!(rows[1].title, "Moving");
         assert_eq!(rows[1].detail, "1 / 3 files");
         assert_eq!(rows[1].fraction, Some(0.0));
 
-        assert_eq!(JobState::Pending.to_string(), "queued");
-        assert_eq!(JobState::Failed.id(), "failed");
-        assert_eq!(JobState::ALL.len(), 6);
+        assert_eq!(RowState::Pending.to_string(), "queued");
+        assert_eq!(RowState::Failed.id(), "failed");
+        assert_eq!(RowState::ALL.len(), 6);
     }
 }

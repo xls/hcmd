@@ -535,6 +535,15 @@ pub trait Dialog: Send {
         let _ = jobs;
     }
 
+    /// Whether the dialog has nothing left to show and would rather be gone:
+    /// the queue view once its last job has left. Asked once a frame by
+    /// [`crate::app::App::sync_job_dialogs`], which pops the dialog for a
+    /// `true`. The default is never, which is right for every dialog that
+    /// waits for the user rather than for a job.
+    fn wants_close(&self) -> bool {
+        false
+    }
+
     /// This dialog as an [`Any`], when it has a reason to be downcast.
     ///
     /// Exactly one thing needs it and the default `None` is right for

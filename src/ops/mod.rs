@@ -92,7 +92,8 @@ pub use spec::{
     ConflictChoice, ConflictRequest, Decision, DownloadRequest, JobOptions, JobSpec, PackInto,
 };
 pub use status::{
-    CancelFlag, JobEvent, JobHandle, JobRequest, JobStatus, JobUpdate, running_job_lines,
+    CancelFlag, JobEvent, JobHandle, JobRequest, JobState, JobStatus, JobUpdate, View,
+    running_job_lines,
 };
 pub use summary::{JobFailure, JobSummary, Outcome};
 pub use walk::{

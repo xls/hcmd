@@ -20,7 +20,7 @@ use crate::dialog::{DialogKey, DialogOutcome, DialogResult};
 use crate::error::Result;
 use crate::input::files;
 use crate::input::{Action, DialogId, Focus, KeyCode, KeyPress, run_action};
-use crate::ops::{JobId, JobKind, JobSpec, MaskMode};
+use crate::ops::{JobId, JobKind, JobSpec, JobStatus, MaskMode};
 use crate::panel::mask;
 
 /// Route one key into the dialog on top of the stack.
@@ -440,10 +440,7 @@ pub fn dialog_answered(app: &mut App, id: DialogId, job: Option<JobId>, result: 
         // never named on screen - and an "apply to all" installs a standing
         // policy in a batch the user was not looking at.
         (DialogId::Conflict, DialogResult::Conflict(decision)) => {
-            let target = job.filter(|id| {
-                app.job(*id)
-                    .is_some_and(|status| status.pending_decision.is_some())
-            });
+            let target = job.filter(|id| app.job(*id).is_some_and(JobStatus::is_blocked));
             match target {
                 Some(id) => {
                     app.answer_job(id, (**decision).clone());

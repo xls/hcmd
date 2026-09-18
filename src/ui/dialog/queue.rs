@@ -43,7 +43,7 @@ use crate::dialog::{
     Dialog, DialogKey, DialogOutcome, DialogResult, DialogStyle, MessageDialog, draw_text,
 };
 use crate::input::{DialogId, KeyCode};
-use crate::ops::{JobAction, JobStatus, Outcome};
+use crate::ops::{JobAction, JobState, JobStatus, Outcome};
 use crate::ui::text;
 
 /// The footer's hint line. Not controls to focus - the queue view has no focus
@@ -118,25 +118,25 @@ impl QueueDialog {
     /// the cancelled-vs-failed rule is decided, so the label can never disagree
     /// with whether the job is pruned or offered a retry.
     pub fn state_of(status: &JobStatus) -> &'static str {
-        match status.finished.as_ref() {
-            Some(summary) => match summary.outcome() {
+        match status.state() {
+            JobState::Finished { summary, .. } => match summary.outcome() {
                 Outcome::Cancelled => "cancelled",
                 Outcome::Failed => "failed",
                 Outcome::Clean => "done",
             },
-            None if status.needs_attention() => "waiting",
-            None if status.started => "running",
-            None => "queued",
+            JobState::Blocked { .. } => "waiting",
+            JobState::Running => "running",
+            JobState::Queued => "queued",
         }
     }
 
     /// One row of the list: id, what it is, how it is going.
     pub fn row_text(&self, status: &JobStatus, ascii: bool) -> String {
         let state = Self::state_of(status);
-        let detail = match status.finished.as_ref() {
-            Some(summary) => summary.message(),
-            None if status.needs_attention() => "a conflict needs an answer".to_string(),
-            None => {
+        let detail = match status.state() {
+            JobState::Finished { summary, .. } => summary.message(),
+            JobState::Blocked { .. } => "a conflict needs an answer".to_string(),
+            JobState::Queued | JobState::Running => {
                 // A visual bar with its percent, then what it is counting - the
                 // same bar the single-job progress dialog draws, so the two read
                 // the same.
@@ -154,7 +154,7 @@ impl QueueDialog {
         // `*` marks the job the progress dialog is currently a view of, so a
         // queue with one foreground and three background jobs says which is
         // which (two views of one job).
-        let mark = if status.background { " " } else { "*" };
+        let mark = if status.is_background() { " " } else { "*" };
         format!(
             "{}{mark} {:<18} {state:<10} {detail}",
             status.id,
@@ -181,7 +181,7 @@ impl QueueDialog {
         let Some(status) = self.selected() else {
             return DialogOutcome::Consumed;
         };
-        match status.finished.as_ref() {
+        match status.summary() {
             Some(summary) => {
                 if summary.failures.is_empty() {
                     DialogOutcome::Push(Box::new(MessageDialog::line(
@@ -191,10 +191,7 @@ impl QueueDialog {
                 } else {
                     // a backgrounded job's summary is shown when the user comes
                     // here, not when it finishes.
-                    DialogOutcome::Replace(Box::new(SummaryDialog::new(
-                        status.id,
-                        summary.as_ref().clone(),
-                    )))
+                    DialogOutcome::Replace(Box::new(SummaryDialog::new(status.id, summary.clone())))
                 }
             }
             // a job waiting on a conflict shows its dialog when
@@ -230,7 +227,7 @@ impl QueueDialog {
         let mut done = 0u64;
         let mut total = 0u64;
         for job in &self.jobs {
-            if job.finished.is_none() {
+            if !job.is_finished() {
                 done = done.saturating_add(job.bytes_done);
                 total = total.saturating_add(job.bytes_total);
             }
@@ -281,14 +278,14 @@ impl Dialog for QueueDialog {
         DialogId::JobQueue
     }
 
-    /// So the sync can ask [`Self::should_auto_close`] whether an emptied queue
-    /// should return to the panels.
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        Some(self)
+    /// An emptied queue returns to the panels on its own; see
+    /// [`Self::should_auto_close`] for the one it does not.
+    fn wants_close(&self) -> bool {
+        self.should_auto_close()
     }
 
     fn title(&self) -> String {
-        let running = self.jobs.iter().filter(|j| j.finished.is_none()).count();
+        let running = self.jobs.iter().filter(|j| !j.is_finished()).count();
         if running == 0 {
             "Background jobs".to_string()
         } else {
@@ -406,7 +403,7 @@ impl Dialog for QueueDialog {
         }
 
         if let (Some(rect), Some(fraction)) = (overall_rect, overall) {
-            let running = self.jobs.iter().filter(|j| j.finished.is_none()).count();
+            let running = self.jobs.iter().filter(|j| !j.is_finished()).count();
             let bar = super::bar_text(Some(fraction), 24, style.ascii);
             let text = format!("Overall {bar}  {running} running");
             let padded = text::fit_left(
@@ -478,21 +475,27 @@ mod tests {
             eta: None,
             elapsed: Duration::from_secs(1),
         });
-        running.background = true;
+        running.send_to_background();
 
         let mut waiting = JobStatus::queued(JobId(3), JobKind::Delete { trash: true });
-        waiting.started = true;
-        waiting.pending_decision = Some(Box::new(crate::ops::ConflictRequest {
-            source: VfsPath::local("/a"),
-            dest: VfsPath::local("/b"),
-            source_size: 1,
-            dest_size: 2,
-            source_mtime: None,
-            dest_mtime: None,
-            both_dirs: false,
-            dest_is_dir: false,
-            resumable: false,
-        }));
+        waiting.apply(&JobEvent::Started {
+            kind: JobKind::Delete { trash: true },
+            files_total: 0,
+            bytes_total: 0,
+        });
+        waiting.apply(&JobEvent::NeedsDecision {
+            request: Box::new(crate::ops::ConflictRequest {
+                source: VfsPath::local("/a"),
+                dest: VfsPath::local("/b"),
+                source_size: 1,
+                dest_size: 2,
+                source_mtime: None,
+                dest_mtime: None,
+                both_dirs: false,
+                dest_is_dir: false,
+                resumable: false,
+            }),
+        });
 
         let mut failed = JobStatus::queued(JobId(4), JobKind::Copy);
         failed.apply(&JobEvent::Finished {

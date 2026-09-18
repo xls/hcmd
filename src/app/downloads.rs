@@ -151,7 +151,7 @@ impl App {
         // this file is the one to wait for (or cancel), not to race.
         let busy = self.jobs.rows().iter().any(|row| {
             row.kind == JobKind::Download
-                && row.finished.is_none()
+                && !row.is_finished()
                 && self.jobs.spec(row.id).and_then(|spec| spec.dest.as_ref()) == Some(&dest)
         });
         if busy {

@@ -523,7 +523,7 @@ pub(super) fn open_copy_move(app: &mut App, kind: JobKind, same_dir: bool) {
         .jobs
         .rows()
         .iter()
-        .any(|j| j.kind == JobKind::Size && j.finished.is_none());
+        .any(|j| j.kind == JobKind::Size && !j.is_finished());
     let mut dialog = CopyMoveDialog::new(
         kind,
         sources.len(),
@@ -1087,8 +1087,7 @@ pub(super) fn retry_failures(app: &mut App, id: JobId) -> String {
         return "that job is no longer listed".to_string();
     };
     let failures: Vec<VfsPath> = status
-        .finished
-        .as_ref()
+        .summary()
         .map(|summary| summary.failures.iter().map(|f| f.path.clone()).collect())
         .unwrap_or_default();
     if failures.is_empty() {

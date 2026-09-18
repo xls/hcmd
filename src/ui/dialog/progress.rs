@@ -637,7 +637,11 @@ mod tests {
         // counts either way, so the answer is to draw no bar, not to draw one
         // computed from nothing.
         let mut status = JobStatus::queued(JobId(1), JobKind::Copy);
-        status.started = true;
+        status.apply(&JobEvent::Started {
+            kind: JobKind::Copy,
+            files_total: 1,
+            bytes_total: 0,
+        });
         status.file = "/tmp/empty.txt".to_string();
         status.files_total = 1;
         status.files_done = 1;

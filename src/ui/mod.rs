@@ -881,7 +881,11 @@ mod tests {
         // A job far enough along to have every field the progress dialog can
         // draw: two bars, a rate, an ETA and a long name to crop.
         let mut running = JobStatus::queued(JobId(1), JobKind::Copy);
-        running.started = true;
+        running.apply(&crate::ops::JobEvent::Started {
+            kind: JobKind::Copy,
+            files_total: 200,
+            bytes_total: 0,
+        });
         running.file = "/srv/media/Arcade/Leap/stl/10 - POWER PANEL.3mf".to_string();
         running.file_bytes_done = 3_000_000;
         running.file_bytes_total = 7_000_000;

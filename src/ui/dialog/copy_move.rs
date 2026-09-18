@@ -750,7 +750,7 @@ impl Dialog for CopyMoveDialog {
     /// the same moment it disappears from the panel behind.
     fn job_update(&mut self, jobs: &[JobStatus]) {
         for job in jobs {
-            let Some(summary) = job.finished.as_deref() else {
+            let Some(summary) = job.summary() else {
                 continue;
             };
             for (path, stats) in &summary.sized {
@@ -768,7 +768,7 @@ impl Dialog for CopyMoveDialog {
         }
         self.sizing = jobs
             .iter()
-            .any(|j| j.kind == JobKind::Size && j.finished.is_none());
+            .any(|j| j.kind == JobKind::Size && !j.is_finished());
     }
 
     fn title(&self) -> String {
@@ -1307,7 +1307,11 @@ mod tests {
 
         // The walk is still running.
         let mut walking = JobStatus::queued(crate::ops::JobId(1), JobKind::Size);
-        walking.started = true;
+        walking.apply(&crate::ops::JobEvent::Started {
+            kind: JobKind::Size,
+            files_total: 0,
+            bytes_total: 0,
+        });
         d.job_update(std::slice::from_ref(&walking));
         assert!(d.stats_line(true).contains(">="), "still a lower bound");
 

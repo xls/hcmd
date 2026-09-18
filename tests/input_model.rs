@@ -2085,15 +2085,11 @@ fn a_conflict_answer_goes_to_the_job_that_asked_it() {
     press(&mut app, KeyCode::Char('o'), NONE);
 
     assert!(
-        app.job(one)
-            .and_then(|j| j.pending_decision.as_ref())
-            .is_some(),
+        app.job(one).and_then(|j| j.pending_decision()).is_some(),
         "the backgrounded job was not answered on the user's behalf"
     );
     assert!(
-        app.job(two)
-            .and_then(|j| j.pending_decision.as_ref())
-            .is_none(),
+        app.job(two).and_then(|j| j.pending_decision()).is_none(),
         "and the job that asked was"
     );
 }

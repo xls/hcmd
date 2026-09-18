@@ -12,8 +12,11 @@ fn a_zero_byte_batch_divides_by_nothing_anywhere() {
     assert_eq!(fraction(5, 0), None, "done without a total is still no bar");
 
     let mut status = JobStatus::queued(JobId(1), JobKind::Copy);
-    status.started = true;
-    status.files_total = 1;
+    status.apply(&JobEvent::Started {
+        kind: JobKind::Copy,
+        files_total: 1,
+        bytes_total: 0,
+    });
     status.files_done = 1;
     assert_eq!(status.fraction(), None, "no batch bar without a total");
     assert_eq!(status.file_fraction(), None);
@@ -80,32 +83,36 @@ fn the_list_is_capped_so_the_prompt_fits_a_sixty_column_terminal() {
 fn nothing_running_is_no_prompt_at_all() {
     assert!(running_job_lines(&[]).is_empty());
     let mut done = JobStatus::queued(JobId(1), JobKind::Copy);
-    done.finished = Some(Box::new(JobSummary {
-        kind: JobKind::Copy,
-        files_done: 1,
-        dirs_done: 0,
-        bytes_done: 1,
-        skipped: 0,
-        failures: Vec::new(),
-        cancelled: false,
-        elapsed: Duration::ZERO,
-        sized: Vec::new(),
-        differing: Vec::new(),
-        first_difference: None,
-    }));
+    done.apply(&JobEvent::Finished {
+        summary: Box::new(JobSummary {
+            kind: JobKind::Copy,
+            files_done: 1,
+            dirs_done: 0,
+            bytes_done: 1,
+            skipped: 0,
+            failures: Vec::new(),
+            cancelled: false,
+            elapsed: Duration::ZERO,
+            sized: Vec::new(),
+            differing: Vec::new(),
+            first_difference: None,
+        }),
+    });
     assert!(running_job_lines(&[done]).is_empty());
 }
 
 #[test]
 fn job_status_folds_the_event_stream() {
     let mut status = JobStatus::queued(JobId(7), JobKind::Copy);
-    assert!(!status.started);
+    assert!(!status.has_started());
+    assert_eq!(*status.state(), JobState::Queued);
     status.apply(&JobEvent::Started {
         kind: JobKind::Copy,
         files_total: 4,
         bytes_total: 400,
     });
-    assert!(status.started);
+    assert!(status.has_started());
+    assert!(status.is_running());
     status.apply(&JobEvent::Progress {
         file: "src/a.txt".to_string(),
         file_bytes_done: 10,
@@ -141,4 +148,111 @@ fn job_status_folds_the_event_stream() {
     });
     assert!(!status.is_running());
     assert_eq!(status.fraction(), Some(1.0));
+}
+
+/// A conflict for the tests to park a job on.
+fn conflict() -> Box<ConflictRequest> {
+    Box::new(ConflictRequest {
+        source: VfsPath::local("/a"),
+        dest: VfsPath::local("/b"),
+        source_size: 1,
+        dest_size: 2,
+        source_mtime: None,
+        dest_mtime: None,
+        both_dirs: false,
+        dest_is_dir: false,
+        resumable: false,
+    })
+}
+
+fn finished(cancelled: bool) -> JobEvent {
+    JobEvent::Finished {
+        summary: Box::new(JobSummary {
+            kind: JobKind::Copy,
+            files_done: 1,
+            dirs_done: 0,
+            bytes_done: 1,
+            skipped: 0,
+            failures: Vec::new(),
+            cancelled,
+            elapsed: Duration::ZERO,
+            sized: Vec::new(),
+            differing: Vec::new(),
+            first_difference: None,
+        }),
+    }
+}
+
+#[test]
+fn a_job_moves_queued_running_blocked_running_finished_and_never_back() {
+    let mut status = JobStatus::queued(JobId(1), JobKind::Copy);
+    assert!(!status.is_finished() && !status.is_blocked() && !status.is_running());
+    status.apply(&JobEvent::NeedsDecision {
+        request: conflict(),
+    });
+    assert!(status.is_blocked(), "a question can arrive before Started");
+    assert!(status.has_started());
+    assert!(
+        status
+            .pending_decision()
+            .is_some_and(|r| r.dest == VfsPath::local("/b"))
+    );
+    // Progress while parked does not un-park it: the worker is waiting.
+    status.apply(&JobEvent::Started {
+        kind: JobKind::Copy,
+        files_total: 1,
+        bytes_total: 1,
+    });
+    assert!(status.is_blocked());
+    status.unblock();
+    assert!(status.is_running());
+    assert!(status.pending_decision().is_none());
+    status.unblock();
+    assert!(
+        status.is_running(),
+        "unblocking a running job changes nothing"
+    );
+    status.apply(&finished(false));
+    assert!(status.is_finished() && !status.is_presented());
+    assert!(status.summary().is_some_and(|s| !s.cancelled));
+    // Nothing moves a finished job: a late question is moot, a late start
+    // is noise.
+    status.apply(&JobEvent::NeedsDecision {
+        request: conflict(),
+    });
+    assert!(status.is_finished() && !status.is_blocked());
+    status.apply(&JobEvent::Started {
+        kind: JobKind::Copy,
+        files_total: 1,
+        bytes_total: 1,
+    });
+    assert!(status.is_finished());
+    status.mark_presented();
+    assert!(status.is_presented());
+}
+
+#[test]
+fn the_view_is_orthogonal_and_bringing_forward_clears_a_dismissal() {
+    let mut status = JobStatus::queued(JobId(1), JobKind::Copy);
+    assert_eq!(status.view(), View::Foreground { dismissed: false });
+    assert!(!status.is_background() && !status.is_dismissed());
+    status.dismiss();
+    assert!(status.is_dismissed(), "Esc keeps the dialog away");
+    status.send_to_background();
+    assert!(status.is_background() && !status.is_dismissed());
+    status.dismiss();
+    assert!(
+        status.is_background(),
+        "nothing to dismiss in the background"
+    );
+    status.bring_to_foreground();
+    assert_eq!(status.view(), View::Foreground { dismissed: false });
+    // And none of that touched where the job is in its life.
+    assert_eq!(*status.state(), JobState::Queued);
+    status.apply(&finished(true));
+    status.send_to_background();
+    assert!(status.is_finished() && status.is_background());
+    status.mark_presented();
+    status.mark_presented();
+    assert!(status.is_presented(), "presenting twice is presenting");
 }

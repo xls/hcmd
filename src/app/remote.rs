@@ -359,7 +359,7 @@ impl App {
         self.jobs
             .rows()
             .iter()
-            .filter(|status| status.finished.is_none())
+            .filter(|status| !status.is_finished())
             .find(|status| {
                 self.jobs.spec(status.id).is_some_and(|spec| {
                     spec.sources

@@ -21,16 +21,18 @@
 
 pub mod draft;
 pub mod registry;
+pub mod report;
 
 use crate::app::{App, PackRequest};
 use crate::input::{DialogId, Focus};
 use crate::ops::{
     Decision, JobEvent, JobHandle, JobId, JobKind, JobRequest, JobSpec, JobStatus, JobSummary,
-    JobUpdate, Outcome,
+    JobUpdate, Outcome, View,
 };
 use crate::panel::Side;
-use crate::ui::dialog::{ConflictDialog, ProgressDialog, QueueDialog, SummaryDialog};
+use crate::ui::dialog::{ConflictDialog, ProgressDialog, SummaryDialog};
 use crate::vfs::{BackendKind, VfsPath};
+use report::{Report, report_for};
 
 impl App {
     /// Queue `Alt+F5`'s pack.
@@ -152,7 +154,7 @@ impl App {
                     // the background for as long as it is held, which is
                     // exactly what "there is nothing on screen for this job"
                     // means here.
-                    let foreground = self.job(request.id).is_some_and(|s| !s.background);
+                    let foreground = self.job(request.id).is_some_and(|s| !s.is_background());
                     self.background_job(request.id);
                     self.rewrite_gate.hold(crate::ops::gate::Held {
                         request,
@@ -284,7 +286,9 @@ impl App {
         // as an invisible foreground job: it is still listed in the queue
         // view, still cancellable, and `foreground_job_status` correctly says
         // there is nothing on screen. See [`App::shows_progress`].
-        status.background = !Self::shows_progress(spec.kind);
+        if !Self::shows_progress(spec.kind) {
+            status.send_to_background();
+        }
         self.jobs.admit(spec, status, queue)
     }
 
@@ -347,20 +351,23 @@ impl App {
         // row would sit at "queued" for the rest of the session.
         if self.jobs.cancel_queued(id) {
             if let Some(status) = self.jobs.status_mut(id) {
-                status.pending_decision = None;
-                status.finished = Some(Box::new(JobSummary {
-                    kind: status.kind,
-                    files_done: 0,
-                    dirs_done: 0,
-                    bytes_done: 0,
-                    skipped: 0,
-                    failures: Vec::new(),
-                    cancelled: true,
-                    elapsed: std::time::Duration::ZERO,
-                    sized: Vec::new(),
-                    differing: Vec::new(),
-                    first_difference: None,
-                }));
+                // Said the way a worker would have said it, so the row moves
+                // through the same transition as every other finish.
+                status.apply(&JobEvent::Finished {
+                    summary: Box::new(JobSummary {
+                        kind: status.kind,
+                        files_done: 0,
+                        dirs_done: 0,
+                        bytes_done: 0,
+                        skipped: 0,
+                        failures: Vec::new(),
+                        cancelled: true,
+                        elapsed: std::time::Duration::ZERO,
+                        sized: Vec::new(),
+                        differing: Vec::new(),
+                        first_difference: None,
+                    }),
+                });
             }
             return;
         }
@@ -380,7 +387,7 @@ impl App {
     /// worker has already gone.
     pub fn answer_job(&mut self, id: JobId, decision: Decision) -> bool {
         if let Some(status) = self.jobs.status_mut(id) {
-            status.pending_decision = None;
+            status.unblock();
         }
         self.jobs
             .handle(id)
@@ -422,7 +429,7 @@ impl App {
     /// on the status row and not a different code path.
     pub fn background_job(&mut self, id: JobId) {
         if let Some(status) = self.jobs.status_mut(id) {
-            status.background = true;
+            status.send_to_background();
         }
     }
 
@@ -434,26 +441,20 @@ impl App {
     /// updated while it was in the background.
     pub fn foreground_job(&mut self, id: JobId) {
         if let Some(status) = self.jobs.status_mut(id) {
-            status.background = false;
+            status.bring_to_foreground();
         }
     }
 
     /// The job whose progress dialog belongs on screen: the first running one
     /// that has not been backgrounded.
     pub fn foreground_job_status(&self) -> Option<&JobStatus> {
-        self.jobs
-            .rows()
-            .iter()
-            .find(|j| j.finished.is_none() && !j.background)
+        self.jobs.foreground()
     }
 
     /// Is any backgrounded job still going? The key bar shows an indicator
     /// while one is.
     pub fn has_background_job(&self) -> bool {
-        self.jobs
-            .rows()
-            .iter()
-            .any(|j| j.finished.is_none() && j.background)
+        self.jobs.any_background()
     }
 
     /// Is a backgrounded job blocked on a conflict?
@@ -461,7 +462,7 @@ impl App {
     /// such a job "does not sit silently blocked" - the key-bar
     /// indicator changes to say a job needs attention.
     pub fn job_needs_attention(&self) -> bool {
-        self.jobs.rows().iter().any(JobStatus::needs_attention)
+        self.jobs.any_blocked()
     }
 
     /// Jobs that finished while backgrounded and have not been looked at.
@@ -470,10 +471,7 @@ impl App {
     /// focus". Its result waits in the queue view, so this is what the queue
     /// view reads rather than something that opens a dialog.
     pub fn finished_background_jobs(&self) -> impl Iterator<Item = &JobStatus> {
-        self.jobs
-            .rows()
-            .iter()
-            .filter(|j| j.background && j.finished.is_some())
+        self.jobs.finished_background()
     }
 
     /// Drop a job's status row, stopping it first if it is still going.
@@ -561,14 +559,8 @@ impl App {
     /// that dismissed it.
     fn progress_job(&self) -> Option<JobId> {
         self.jobs
-            .rows()
-            .iter()
-            .find(|j| {
-                j.finished.is_none()
-                    && !j.background
-                    && Self::shows_progress(j.kind)
-                    && !self.jobs.is_dismissed(j.id)
-            })
+            .unfinished()
+            .find(|j| !j.is_background() && !j.is_dismissed() && Self::shows_progress(j.kind))
             .map(|j| j.id)
     }
 
@@ -611,11 +603,7 @@ impl App {
             .jobs
             .rows()
             .iter()
-            .filter(|j| {
-                j.finished
-                    .as_deref()
-                    .is_some_and(|s| s.outcome() != Outcome::Failed)
-            })
+            .filter(|j| j.summary().is_some_and(|s| s.outcome() != Outcome::Failed))
             .map(|j| j.id)
             .collect();
         for id in done {
@@ -636,13 +624,7 @@ impl App {
         if self.progress_job().is_some() {
             return;
         }
-        let blocked = self
-            .jobs
-            .rows()
-            .iter()
-            .find(|j| j.finished.is_none() && j.background && j.needs_attention())
-            .map(|j| j.id);
-        if let Some(id) = blocked {
+        if let Some(id) = self.jobs.blocked_background().map(|j| j.id) {
             self.foreground_job(id);
         }
     }
@@ -655,14 +637,10 @@ impl App {
     /// user opened with nothing running is left alone: it said "no jobs in the
     /// queue" on purpose.
     fn close_emptied_queue(&mut self) {
-        let close = self.dialogs.last().is_some_and(|frame| {
-            frame.dialog.id() == DialogId::JobQueue
-                && frame
-                    .dialog
-                    .as_any()
-                    .and_then(|any| any.downcast_ref::<QueueDialog>())
-                    .is_some_and(QueueDialog::should_auto_close)
-        });
+        let close = self
+            .dialogs
+            .last()
+            .is_some_and(|frame| frame.dialog.wants_close());
         if close {
             self.pop_dialog();
         }
@@ -670,26 +648,23 @@ impl App {
 
     /// Act on each job that has finished since the last frame, exactly once.
     fn settle_finished_jobs(&mut self) {
-        let finished: Vec<(JobId, bool, JobSummary)> = self
+        let finished: Vec<(JobId, View, JobSummary)> = self
             .jobs
-            .rows()
-            .iter()
-            .filter(|j| !self.jobs.is_settled(j.id))
-            .filter_map(|j| {
-                j.finished
-                    .as_deref()
-                    .map(|summary| (j.id, j.background, summary.clone()))
-            })
+            .finished_unpresented()
+            .filter_map(|j| j.summary().map(|summary| (j.id, j.view(), summary.clone())))
             .collect();
-        for (id, background, summary) in finished {
-            self.jobs.settle(id);
+        for (id, view, summary) in finished {
+            if let Some(status) = self.jobs.status_mut(id) {
+                status.mark_presented();
+            }
             self.close_progress_dialog(id);
-            self.report_finished(id, background, summary);
+            self.report_finished(id, view, summary);
         }
     }
 
-    /// The panels, the cursor and the status line after one job.
-    fn report_finished(&mut self, id: JobId, background: bool, summary: JobSummary) {
+    /// The panels, the cursor and the status line after one job: the effects
+    /// every finish has, then whatever [`report_for`] says this one shows.
+    fn report_finished(&mut self, id: JobId, view: View, summary: JobSummary) {
         // A job that changes nothing on disk leaves the panels alone; every
         // other kind has to re-read them or the operation looks like it did
         // not happen. the compare is the second read-only kind, and
@@ -713,68 +688,20 @@ impl App {
         if summary.kind == JobKind::Rename {
             self.finish_rename(id, &summary);
         }
-        match summary.kind {
-            // The `\u{2265}` in the status line resolving into a number is the
-            // feedback; a message per `Space` would be noise.
-            // A walk that could not read everything is the exception: its
-            // figure stays a lower bound, and the "never silently
-            // report a computed-looking total that is actually partial" means
-            // the reason has to reach the user somewhere other than the queue
-            // view. The status line, not a dialog: a walk steals no focus.
-            JobKind::Size => {
-                if let Some(first) = summary.failures.first() {
-                    self.message = Some(match summary.failures.len() {
-                        1 => format!("{}: {}", first.path, first.error),
-                        n => format!("{}: {} (and {} more)", first.path, first.error, n - 1),
-                    });
-                }
-            }
-            // No dialog was shown, so the status line is the only report there
-            // is - and it is where a failure has to appear.
-            JobKind::Mkdir => self.message = Some(summary.message()),
-            // A rename has no progress dialog and therefore no
-            // summary box either, so the status line is the whole of its
-            // report - and a batch that failed has to say where the detail is,
-            // which is the result list the dialog's button and
-            // `Action::RenameResult` both open.
-            JobKind::Rename => {
-                let mut line = summary.message();
-                if !summary.failures.is_empty() {
-                    line.push_str("; see the result list");
-                }
-                self.message = Some(line);
-            }
-            // the contents comparison marks and says how many,
-            // in the status line. It opens no summary box, because a
-            // comparison that found nothing has nothing to show and one that
-            // found something has already shown it - in both panels.
-            JobKind::Compare => self.finish_compare(&summary),
-            // Comparing two named files answers in a sentence rather than in
-            // marks, so this one does open a box: there is nothing on either
-            // panel for it to have shown already.
-            JobKind::CompareFiles => self.finish_compare_files(&summary),
-            // a job that finishes in the background "does not
-            // steal focus"; its result waits in the queue view.
-            _ if background => {}
-            // A clean finish, and a cancelled one, report in the status line
-            // and nothing more. Cancelling is not failure: a copy stopped
-            // part-way through a file records that file, but the user pressed
-            // Cancel and must not be answered with a "1 failed - Retry?" box
-            // for having done so. `outcome` is the one place that line is drawn.
-            _ if summary.outcome() != Outcome::Failed => {
-                self.message = Some(summary.message());
-            }
-            // "show a summary at the end with the option to
-            // retry the failures".
-            _ => {
-                let offer = crate::ops::delete::permanent_delete_offer(&summary);
-                // A summary of nothing but "there was no trash" would say the
-                // same thing as the offer and bury the question underneath it.
-                if offer.len() < summary.failures.len() {
+        match report_for(view, &summary) {
+            Report::Nothing => {}
+            Report::Message(line) => self.message = Some(line),
+            Report::Compare => self.finish_compare(&summary),
+            Report::CompareFiles => self.finish_compare_files(&summary),
+            Report::Failures {
+                show_summary,
+                offer_permanent_delete,
+            } => {
+                if show_summary {
                     self.push_dialog(Box::new(SummaryDialog::new(id, summary)));
                 }
-                if !offer.is_empty() {
-                    self.offer_permanent_delete(offer);
+                if !offer_permanent_delete.is_empty() {
+                    self.offer_permanent_delete(offer_permanent_delete);
                 }
             }
         }
@@ -892,7 +819,11 @@ impl App {
         let Some(id) = self.progress_job() else {
             return;
         };
-        let Some(request) = self.job(id).and_then(|j| j.pending_decision.clone()) else {
+        let Some(request) = self
+            .job(id)
+            .and_then(|j| j.pending_decision().cloned())
+            .map(Box::new)
+        else {
             return;
         };
         let suggested = request
@@ -930,7 +861,9 @@ impl App {
     /// `Esc` cancels, and the worker takes a moment to notice. Without this
     /// the next frame would reopen the dialog the `Esc` had just dismissed.
     pub fn dismiss_job_dialog(&mut self, id: JobId) {
-        self.jobs.dismiss(id);
+        if let Some(status) = self.jobs.status_mut(id) {
+            status.dismiss();
+        }
     }
 }
 
@@ -969,6 +902,7 @@ fn gate_lines(message: &str) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::config::{Config, Keymap, Theme};
+    use crate::ui::dialog::QueueDialog;
 
     #[test]
     fn a_job_is_queued_for_the_event_loop_rather_than_run_by_dispatch() {
@@ -1299,28 +1233,34 @@ mod tests {
             Some(VfsPath::local("/tmp")),
         ));
         app.background_job(id);
-        assert!(app.job(id).is_some_and(|j| j.background));
+        assert!(app.job(id).is_some_and(JobStatus::is_background));
 
         // The worker parks on a conflict.
         if let Some(status) = app.jobs.status_mut(id) {
-            status.started = true;
-            status.pending_decision = Some(Box::new(crate::ops::ConflictRequest {
-                source: VfsPath::local("/etc/hostname"),
-                dest: VfsPath::local("/tmp/hostname"),
-                source_size: 1,
-                dest_size: 2,
-                source_mtime: None,
-                dest_mtime: None,
-                both_dirs: false,
-                dest_is_dir: false,
-                resumable: false,
-            }));
+            status.apply(&JobEvent::Started {
+                kind: JobKind::Copy,
+                files_total: 1,
+                bytes_total: 1,
+            });
+            status.apply(&JobEvent::NeedsDecision {
+                request: Box::new(crate::ops::ConflictRequest {
+                    source: VfsPath::local("/etc/hostname"),
+                    dest: VfsPath::local("/tmp/hostname"),
+                    source_size: 1,
+                    dest_size: 2,
+                    source_mtime: None,
+                    dest_mtime: None,
+                    both_dirs: false,
+                    dest_is_dir: false,
+                    resumable: false,
+                }),
+            });
         }
 
         app.sync_job_dialogs();
 
         assert!(
-            app.job(id).is_some_and(|j| !j.background),
+            app.job(id).is_some_and(|j| !j.is_background()),
             "the blocked task was brought to the foreground"
         );
         // And the overwrite question is actually on screen: its progress dialog
@@ -1398,6 +1338,42 @@ mod tests {
 
         assert!(cancel.is_cancelled(), "the worker was told to stop");
         assert!(app.job(id).is_none(), "and the row is gone at once");
+    }
+
+    #[test]
+    fn esc_on_the_progress_dialog_does_not_put_it_back_the_next_frame() {
+        // The worker notices a cancel between chunks, so for a moment the
+        // job is still "running" - and without the dismissal the sync would
+        // reopen the dialog the Esc had just closed. Bringing the job forward
+        // by hand is the one thing that undoes the dismissal.
+        let mut app = App::headless(Config::default(), Keymap::builtin(), Theme::blue());
+        let id = app.request_job(JobSpec::new(
+            JobKind::Copy,
+            vec![VfsPath::local("/etc/hostname")],
+            Some(VfsPath::local("/tmp")),
+        ));
+        app.sync_job_dialogs();
+        assert_eq!(
+            app.top_dialog().map(|d| d.id()),
+            Some(DialogId::Progress),
+            "the copy's dialog opened"
+        );
+        // What `Esc` on the dialog does, through `run_job_action`.
+        app.cancel_job(id);
+        app.dismiss_job_dialog(id);
+        app.sync_job_dialogs();
+        assert!(
+            !app.dialog_is_open(),
+            "and it stays closed while the worker winds down"
+        );
+        assert!(app.job(id).is_some_and(JobStatus::is_dismissed));
+        app.foreground_job(id);
+        app.sync_job_dialogs();
+        assert_eq!(
+            app.top_dialog().map(|d| d.id()),
+            Some(DialogId::Progress),
+            "asked for by name, it comes back"
+        );
     }
 
     #[test]

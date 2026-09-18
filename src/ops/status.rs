@@ -178,6 +178,49 @@ impl JobHandle {
     }
 }
 
+/// Where a job is in its life. One value, so that "finished and also
+/// waiting on a question" or "started but never queued" cannot be written
+/// down at all - three shipped bugs came from deriving this from booleans
+/// that could disagree.
+///
+/// Only [`JobStatus::apply`] and the few named transitions on [`JobStatus`]
+/// move a job between these.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum JobState {
+    /// Admitted, no worker yet: waiting for a slot, or held at a gate.
+    Queued,
+    /// The worker is going.
+    Running,
+    /// The worker is parked on a conflict and will not proceed until the UI
+    /// answers it.
+    Blocked {
+        /// What is in the way.
+        on: Box<ConflictRequest>,
+    },
+    /// The worker is done, cleanly or otherwise.
+    Finished {
+        /// The end-of-batch summary.
+        summary: Box<JobSummary>,
+        /// Whether the finish has been acted on - reported, its dialog
+        /// closed - so that happens once and not on every frame.
+        presented: bool,
+    },
+}
+
+/// How a job is shown, orthogonal to where it is in its life: foreground
+/// and background are two views of one job, and this is which one it has.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum View {
+    /// Its progress dialog belongs on screen.
+    Foreground {
+        /// The user closed the dialog with `Esc` and the worker has not
+        /// yet noticed the cancel, so the dialog is not put straight back.
+        dismissed: bool,
+    },
+    /// `F2` sent it away; it is listed in the queue view and nowhere else.
+    Background,
+}
+
 /// The live state of one job, as the progress dialog and the queue view
 /// render it.
 ///
@@ -210,22 +253,13 @@ pub struct JobStatus {
     pub eta: Option<Duration>,
     /// How long it has been running.
     pub elapsed: Duration,
-    /// True once [`JobEvent::Started`] has arrived.
-    pub started: bool,
-    /// `F2` sent it to the background queue.
-    ///
-    /// Nothing about the worker changes: foreground and background are two
-    /// views of one job, and this is which view it currently has. Setting it
-    /// back to false is what "bringing it forward" means.
-    pub background: bool,
-    /// The conflict the worker is parked on, if any. The UI answers with
-    /// [`crate::app::App::answer_job`].
-    pub pending_decision: Option<Box<ConflictRequest>>,
+    /// Where it is in its life. Read through the accessors below; written
+    /// only by [`JobStatus::apply`] and the named transitions.
+    state: JobState,
+    /// Which view it has: on screen, or in the queue only.
+    view: View,
     /// Failures seen so far.
     pub failures: Vec<JobFailure>,
-    /// `Some` once the worker is done. A status with this set is finished and
-    /// may be dropped from the queue view whenever the UI likes.
-    pub finished: Option<Box<JobSummary>>,
 }
 
 impl JobStatus {
@@ -244,15 +278,14 @@ impl JobStatus {
             throughput: None,
             eta: None,
             elapsed: Duration::ZERO,
-            started: false,
-            background: false,
-            pending_decision: None,
+            state: JobState::Queued,
+            view: View::Foreground { dismissed: false },
             failures: Vec::new(),
-            finished: None,
         }
     }
 
-    /// Fold one event in.
+    /// Fold one event in. The one place the worker's word moves a job
+    /// between states.
     pub fn apply(&mut self, event: &JobEvent) {
         match event {
             JobEvent::Started {
@@ -263,7 +296,7 @@ impl JobStatus {
                 self.kind = *kind;
                 self.files_total = *files_total;
                 self.bytes_total = *bytes_total;
-                self.started = true;
+                self.start();
             }
             JobEvent::Progress {
                 file,
@@ -287,34 +320,150 @@ impl JobStatus {
                 self.throughput = *throughput;
                 self.eta = *eta;
                 self.elapsed = *elapsed;
-                self.started = true;
+                self.start();
             }
             JobEvent::NeedsDecision { request } => {
-                self.pending_decision = Some(request.clone());
+                // A finished job has nothing left to be blocked on; the
+                // question, if it arrives late, is moot.
+                if !self.is_finished() {
+                    self.state = JobState::Blocked {
+                        on: request.clone(),
+                    };
+                }
             }
             JobEvent::Failed { path, error } => self.failures.push(JobFailure {
                 path: path.clone(),
                 error: error.clone(),
             }),
             JobEvent::Finished { summary } => {
-                self.pending_decision = None;
                 self.files_done = summary.files_done;
                 self.bytes_done = summary.bytes_done;
                 self.elapsed = summary.elapsed;
-                self.finished = Some(summary.clone());
+                self.state = JobState::Finished {
+                    summary: summary.clone(),
+                    presented: false,
+                };
             }
         }
     }
 
-    /// True while the job is neither finished nor waiting for an answer.
-    pub fn is_running(&self) -> bool {
-        self.finished.is_none() && self.pending_decision.is_none()
+    /// The worker has spoken: a queued job is now running. A job already
+    /// past that - blocked, or finished - stays where it is.
+    fn start(&mut self) {
+        if self.state == JobState::Queued {
+            self.state = JobState::Running;
+        }
     }
 
-    /// a job blocked on a conflict "does not sit silently
-    /// blocked". This is what the queue view and the key-bar indicator ask.
+    /// The question was answered: a blocked job is running again.
+    pub fn unblock(&mut self) {
+        if self.is_blocked() {
+            self.state = JobState::Running;
+        }
+    }
+
+    /// The finish has been reported and its dialog closed; it is not
+    /// reported again. A no-op on a job that has not finished.
+    pub fn mark_presented(&mut self) {
+        if let JobState::Finished { presented, .. } = &mut self.state {
+            *presented = true;
+        }
+    }
+
+    /// `F2`: send the dialog away and leave the job running.
+    pub fn send_to_background(&mut self) {
+        self.view = View::Background;
+    }
+
+    /// `Enter` on the queue view: bring it back "exactly as it was". The
+    /// user asked to see it, so an earlier `Esc` no longer keeps it away.
+    pub fn bring_to_foreground(&mut self) {
+        self.view = View::Foreground { dismissed: false };
+    }
+
+    /// `Esc` on the progress dialog: do not put it back while the worker
+    /// winds down. Nothing to dismiss for a backgrounded job.
+    pub fn dismiss(&mut self) {
+        if let View::Foreground { dismissed } = &mut self.view {
+            *dismissed = true;
+        }
+    }
+
+    /// Where the job is in its life.
+    pub fn state(&self) -> &JobState {
+        &self.state
+    }
+
+    /// Which view it has.
+    pub fn view(&self) -> View {
+        self.view
+    }
+
+    /// True once the worker has spoken at all: running, blocked or done.
+    pub fn has_started(&self) -> bool {
+        self.state != JobState::Queued
+    }
+
+    /// True while the job is neither finished nor waiting for an answer.
+    pub fn is_running(&self) -> bool {
+        self.state == JobState::Running
+    }
+
+    /// True while the worker is parked on a conflict. a job blocked on a
+    /// conflict "does not sit silently blocked": this is what the queue view
+    /// and the key-bar indicator ask.
+    pub fn is_blocked(&self) -> bool {
+        matches!(self.state, JobState::Blocked { .. })
+    }
+
+    /// [`JobStatus::is_blocked`], under the name the key bar uses.
     pub fn needs_attention(&self) -> bool {
-        self.pending_decision.is_some()
+        self.is_blocked()
+    }
+
+    /// True once the worker is done. A finished status may be dropped from
+    /// the queue view whenever the UI likes.
+    pub fn is_finished(&self) -> bool {
+        matches!(self.state, JobState::Finished { .. })
+    }
+
+    /// True once the finish has been acted on.
+    pub fn is_presented(&self) -> bool {
+        matches!(
+            self.state,
+            JobState::Finished {
+                presented: true,
+                ..
+            }
+        )
+    }
+
+    /// `F2` sent it to the background.
+    pub fn is_background(&self) -> bool {
+        self.view == View::Background
+    }
+
+    /// The user closed its progress dialog and it is still in the
+    /// foreground view.
+    pub fn is_dismissed(&self) -> bool {
+        self.view == View::Foreground { dismissed: true }
+    }
+
+    /// The end-of-batch summary, once there is one.
+    pub fn summary(&self) -> Option<&JobSummary> {
+        match &self.state {
+            JobState::Finished { summary, .. } => Some(summary),
+            JobState::Queued | JobState::Running | JobState::Blocked { .. } => None,
+        }
+    }
+
+    /// The conflict the worker is parked on, if any. The UI answers with
+    /// [`crate::app::App::answer_job`].
+    pub fn pending_decision(&self) -> Option<&ConflictRequest> {
+        match &self.state {
+            JobState::Blocked { on } => Some(on),
+            JobState::Queued | JobState::Running | JobState::Finished { .. } => None,
+        }
     }
 
     /// The **batch** bar: completion as a fraction of the byte total, `None`
@@ -366,7 +515,7 @@ pub fn running_job_lines(jobs: &[JobStatus]) -> Vec<String> {
 
     let running: Vec<&JobStatus> = jobs
         .iter()
-        .filter(|j| j.finished.is_none() && j.kind.is_destructive())
+        .filter(|j| !j.is_finished() && j.kind.is_destructive())
         .collect();
     if running.is_empty() {
         return Vec::new();
@@ -396,7 +545,7 @@ fn job_extent(job: &JobStatus) -> String {
         )
     } else if job.files_total > 0 {
         format!("{} of {} files", job.files_done, job.files_total)
-    } else if job.started {
+    } else if job.has_started() {
         "in progress".to_string()
     } else {
         "queued".to_string()
