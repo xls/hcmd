@@ -150,6 +150,23 @@ impl App {
         self.request_job(spec);
         self.message = Some(format!("downloading {display}"));
     }
+
+    /// Show the downloads folder in the active panel.
+    ///
+    /// The folder is a real local directory, so this is an ordinary navigate;
+    /// it is created first so the panel has something to list even before the
+    /// first download has landed.
+    pub fn show_downloads(&mut self) {
+        match self.downloads.dir() {
+            Ok(dir) => {
+                let path = VfsPath::local(dir.to_path_buf());
+                self.navigate(self.active_side, path);
+            }
+            Err(e) => {
+                self.message = Some(format!("the downloads folder could not be opened: {e}"));
+            }
+        }
+    }
 }
 
 #[cfg(test)]

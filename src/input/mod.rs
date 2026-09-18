@@ -1283,6 +1283,7 @@ pub(crate) fn run_action(app: &mut App, action: Action, press: KeyPress) -> Resu
         A::Hotlist => app.request_drives(crate::app::DrivesRequest::Hotlist),
         A::HotlistAdd => open_hotlist_add(app),
         A::Download => open_download_prompt(app),
+        A::Downloads => app.show_downloads(),
 
         // -------------------------------------------- the design compare -
         A::CompareDirs => app.compare_lists(),

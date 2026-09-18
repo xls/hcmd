@@ -107,6 +107,9 @@ hotlist           = []
 # ctrl+d prompts for a URL and fetches it into the downloads folder (alt+j),
 # streaming and resumable, as a background job like a copy.
 download          = ["ctrl+d"]
+# alt+j opens the downloads folder in the active panel. It was the job queue's
+# fallback; that moved to alt+b when downloads took the key.
+downloads         = ["alt+j"]
 # ctrl+shift+d needs the enhanced keyboard protocol, so it carries an
 # alt+letter fallback like every other undeliverable key.
 hotlist_add       = ["ctrl+shift+d", "alt+a"]
