@@ -16,9 +16,10 @@
 //! Four things about this harness the other three do not need:
 //!
 //! * **The viewer owns the whole screen**, so its geometry
-//!   is fixed and simple: row 0 is the title, the last row is the status line,
-//!   and everything between is the file. [`Session::title_row`],
-//!   [`Session::status_row`] and [`Session::body`] are that layout, and they are
+//!   is fixed and simple: row 0 is the title, the last row is the key bar, the
+//!   status line sits above it, and everything between is the file.
+//!   [`Session::title_row`], [`Session::status_row`], [`Session::keybar_text`]
+//!   and [`Session::body`] are that layout, and they are
 //!   what makes "the top of the window did not move" an assertion rather than a
 //!   guess.
 //! * **Colours are read per cell, by column.** Criterion 2 is about a *mapping* -
@@ -591,9 +592,20 @@ impl Session {
         self.row_cells(0)
     }
 
-    /// The last row: the viewer's status line, or its find bar.
-    ///
+    /// The rows of chrome under the body: the status line, then the key bar
+    /// on the last row (`ui.show_keybar` is on in the default configuration
+    /// this harness runs with).
+    const CHROME_BELOW: u16 = 2;
+
+    /// The viewer's status line, or its find bar: the row above the key bar.
     fn status_row(&self) -> String {
+        let (rows, _) = self.parser.screen().size();
+        self.row_cells(rows.saturating_sub(Self::CHROME_BELOW))
+    }
+
+    /// The last row's text: the viewer's key bar. (`keybar_row` below is the
+    /// panels' bar's *index*, for the tests that close the viewer.)
+    fn keybar_text(&self) -> String {
         let (rows, _) = self.parser.screen().size();
         self.row_cells(rows.saturating_sub(1))
     }
@@ -601,7 +613,7 @@ impl Session {
     /// The rows between the title and the status line: the file itself.
     fn body(&self) -> Vec<String> {
         let (rows, _) = self.parser.screen().size();
-        (1..rows.saturating_sub(1))
+        (1..rows.saturating_sub(Self::CHROME_BELOW))
             .map(|r| self.row_cells(r))
             .collect()
     }
@@ -847,6 +859,15 @@ fn criterion_1_f3_opens_a_text_file_and_esc_returns_the_cursor_where_it_was() {
         "the first row is line 1 in the gutter, got {:?}",
         body_rows.first()
     );
+    // The key bar under the status line names the mode keys and the function
+    // keys, read off the keymap: what the number keys and F-keys do is on
+    // screen rather than remembered.
+    let bar = s.keybar_text();
+    for want in [
+        "1 Text", "2 Hex", "3 Doc", "F1 Help", "F3 Next", "F7 Find", "F9 Info",
+    ] {
+        assert!(bar.contains(want), "the key bar names {want}, got {bar:?}");
+    }
     // the status line: the offset under the cursor, in both bases.
     let status = s.status_row();
     assert!(

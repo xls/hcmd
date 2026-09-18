@@ -175,6 +175,120 @@ pub const fn body_rows(area: Rect) -> u16 {
     }
 }
 
+/// `ui.show_keybar`, and room for it: three rows of chrome on a terminal with
+/// fewer than four would leave the file itself no room to be read.
+fn show_keybar(app: &App, area: Rect) -> bool {
+    app.config.ui.show_keybar && area.height > 3
+}
+
+/// The screen with the key bar's row taken off the bottom, when there is one:
+/// what the viewer lays out and draws into. The event loop and the renderer
+/// both come through here, so they cannot disagree about the body's height.
+#[must_use]
+pub fn content_area(app: &App, area: Rect) -> Rect {
+    if !show_keybar(app, area) {
+        return area;
+    }
+    Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1))
+}
+
+/// The key bar's row: the bottom line, or nothing when the bar is off or the
+/// terminal is too short to spare it.
+#[must_use]
+pub fn keybar_area(app: &App, area: Rect) -> Rect {
+    if !show_keybar(app, area) {
+        return Rect::new(area.x, area.y, area.width, 0);
+    }
+    Rect::new(
+        area.x,
+        area.y.saturating_add(area.height.saturating_sub(1)),
+        area.width,
+        1,
+    )
+}
+
+/// What the viewer's key bar shows: the mode keys, then the function keys,
+/// each read off the active keymap so a rebinding shows here exactly as it
+/// does on the F1 page. An action with no key in the viewer is left out
+/// rather than shown as unbound.
+#[must_use]
+pub fn keybar_items(app: &App) -> Vec<(String, &'static str)> {
+    use crate::input::{Action, KeyContext};
+    const ITEMS: [(Action, &str); 10] = [
+        (Action::ModeText, "Text"),
+        (Action::ModeHex, "Hex"),
+        (Action::ModeRender, "Doc"),
+        (Action::Help, "Help"),
+        (Action::ViewerReload, "Reload"),
+        (Action::FindNext, "Next"),
+        (Action::QuickFind, "Find"),
+        (Action::CycleEncoding, "Enc"),
+        (Action::FileInfo, "Info"),
+        (Action::Close, "Close"),
+    ];
+    // A function key, `F1` to `F12`: the spelling a key bar exists to show.
+    let is_fkey = |key: &str| {
+        key.strip_prefix(['F', 'f'])
+            .is_some_and(|digits| !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()))
+    };
+    ITEMS
+        .iter()
+        .filter_map(|&(action, label)| {
+            let keys = app
+                .keymap
+                .describe(KeyContext::Viewer, action, app.keyboard.enhanced);
+            // Of several bindings the bar names the function key when there is
+            // one - `find_next` is `n` and `F3`, and this is the F-key bar -
+            // and otherwise the first, which is how `1`/`2`/`3` and `Esc` show.
+            let parts: Vec<&str> = keys.split(" / ").map(str::trim).collect();
+            let pick = parts
+                .iter()
+                .copied()
+                .find(|key| is_fkey(key))
+                .or_else(|| parts.first().copied())
+                .unwrap_or("");
+            (!pick.is_empty() && pick != crate::config::keymap::UNBOUND)
+                .then(|| (pick.to_string(), label))
+        })
+        .collect()
+}
+
+/// Paint the viewer's key bar in the panel key bar's colours: each key, then
+/// its operation on a button, as many as the width holds.
+pub fn draw_keybar(f: &mut Frame, app: &App, area: Rect) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+    let bg = super::color(app, app.theme.panel.bg);
+    let number = Style::new()
+        .fg(super::color(app, app.theme.keybar.number_fg))
+        .bg(bg);
+    let label = Style::new()
+        .fg(super::color(app, app.theme.keybar.label_fg))
+        .bg(super::color(app, app.theme.keybar.label_bg));
+    let width = usize::from(area.width);
+    let mut used = 0_usize;
+    let mut spans = Vec::new();
+    for (key, text) in keybar_items(app) {
+        let key_text = format!(" {key}");
+        let label_text = format!(" {text} ");
+        let need = key_text
+            .chars()
+            .count()
+            .saturating_add(label_text.chars().count());
+        if used.saturating_add(need) > width {
+            break;
+        }
+        used = used.saturating_add(need);
+        spans.push(Span::styled(key_text, number));
+        spans.push(Span::styled(label_text, label));
+    }
+    f.render_widget(
+        Paragraph::new(Line::from(spans)).style(Style::new().bg(bg)),
+        area,
+    );
+}
+
 /// The columns the body gets, once the line-number gutter is taken out.
 ///
 /// Hex mode gets the **whole** width: its geometry is a [`hex::HexPlan`], which
@@ -1357,6 +1471,68 @@ mod tests {
         a
     }
 
+    #[test]
+    fn the_key_bar_takes_the_bottom_row_when_it_is_shown() {
+        let mut a = app();
+        let screen = Rect::new(0, 0, 80, 24);
+        assert!(a.config.ui.show_keybar, "on by default");
+        assert_eq!(content_area(&a, screen), Rect::new(0, 0, 80, 23));
+        assert_eq!(keybar_area(&a, screen), Rect::new(0, 23, 80, 1));
+        // The layout and the renderer agree: the body is what is left after
+        // the title, the status line and the bar.
+        assert_eq!(body_rows(content_area(&a, screen)), 21);
+
+        // Off: the viewer has the whole screen and there is no bar.
+        a.config.ui.show_keybar = false;
+        assert_eq!(content_area(&a, screen), screen);
+        assert_eq!(keybar_area(&a, screen).height, 0);
+
+        // Too short to spare a row: the file comes first.
+        a.config.ui.show_keybar = true;
+        let tiny = Rect::new(0, 0, 80, 3);
+        assert_eq!(content_area(&a, tiny), tiny);
+        assert_eq!(keybar_area(&a, tiny).height, 0);
+    }
+
+    #[test]
+    fn the_key_bar_reads_its_keys_off_the_keymap() {
+        let mut a = app();
+        let lower = |items: Vec<(String, &'static str)>| -> Vec<(String, &'static str)> {
+            items
+                .into_iter()
+                .map(|(k, l)| (k.to_ascii_lowercase(), l))
+                .collect()
+        };
+        let items = lower(keybar_items(&a));
+        for want in [
+            ("1", "Text"),
+            ("2", "Hex"),
+            ("3", "Doc"),
+            ("f1", "Help"),
+            ("f2", "Reload"),
+            ("f3", "Next"),
+            ("f7", "Find"),
+            ("f8", "Enc"),
+            ("f9", "Info"),
+            ("esc", "Close"),
+        ] {
+            assert!(
+                items.iter().any(|(k, l)| (k.as_str(), *l) == want),
+                "{want:?} missing from {items:?}"
+            );
+        }
+        // A rebinding shows here as it does on the F1 page: the bar is read
+        // off the keymap, not a table that could drift from it.
+        a.keymap
+            .overlay("[viewer]\nmode_text = [\"t\"]\n", "test.toml");
+        let items = lower(keybar_items(&a));
+        let text_key = items
+            .iter()
+            .find(|(_, l)| *l == "Text")
+            .map(|(k, _)| k.as_str());
+        assert_eq!(text_key, Some("t"), "{items:?}");
+    }
+
     fn with_viewer(body: &str) -> App {
         let mut a = app();
         let v = Viewer::open_memory(
@@ -1371,10 +1547,11 @@ mod tests {
     }
 
     /// Lay out and draw exactly the way the event loop does (`src/main.rs`):
-    /// `body_rows`/`body_cols` first, then the frame.
+    /// `body_rows`/`body_cols` first - over the area left once the key bar's
+    /// row is taken, as the runtime does - then the frame.
     fn shown(a: &mut App, w: u16, h: u16) -> String {
         let area = Rect::new(0, 0, w, h);
-        let rows = body_rows(area);
+        let rows = body_rows(content_area(a, area));
         let cols = body_cols(a, area);
         a.service_viewer(rows, cols);
         dump(&render(a, w, h))

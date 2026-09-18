@@ -280,7 +280,14 @@ pub fn draw(f: &mut Frame, app: &App) {
     // screen, exactly as `Ctrl+O` does. Before the console check, because a
     // viewer opened from the command line is what the user is looking at.
     if viewer::is_backdrop(app) {
-        viewer::draw(f, app, area);
+        // The viewer gets the screen less its key bar's row, the same area the
+        // event loop laid its rows out for; the bar takes the bottom line.
+        let content = viewer::content_area(app, area);
+        viewer::draw(f, app, content);
+        let bar = viewer::keybar_area(app, area);
+        if bar.height > 0 {
+            viewer::draw_keybar(f, app, bar);
+        }
         if app.dialog_is_open() {
             let style = dialog_style(app);
             for frame in app.dialogs() {
@@ -288,7 +295,7 @@ pub fn draw(f: &mut Frame, app: &App) {
                 crate::dialog::draw(f, frame.dialog.as_ref(), within, &style);
             }
         }
-        if let Some((x, y)) = hardware_cursor(app, area) {
+        if let Some((x, y)) = hardware_cursor(app, content) {
             f.set_cursor_position((x, y));
         }
         return;

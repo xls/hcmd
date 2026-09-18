@@ -596,7 +596,7 @@ pub async fn event_loop() -> Result<()> {
         // so the keys held while it opened are applied to a viewer that knows
         // how big the screen is.
         let view_body = (
-            ui::viewer::body_rows(area),
+            ui::viewer::body_rows(ui::viewer::content_area(&app, area)),
             ui::viewer::body_cols(&app, area),
         );
         app.set_viewer_view(view_body.0, view_body.1);
@@ -733,7 +733,7 @@ pub async fn event_loop() -> Result<()> {
         // And lay it out, before the draw. `ui::draw` only has `&App`, and
         // reading the visible window is the model's job.
         if ui::viewer::is_backdrop(&app) {
-            let rows = ui::viewer::body_rows(area);
+            let rows = ui::viewer::body_rows(ui::viewer::content_area(&app, area));
             let cols = ui::viewer::body_cols(&app, area);
             app.service_viewer(rows, cols);
             // the restore rule, asked about the viewer's state rather

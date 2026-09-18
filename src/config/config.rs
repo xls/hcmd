@@ -146,7 +146,7 @@ pub struct UiConfig {
     pub ascii_borders: bool,
     /// Keep the menu bar permanently visible. `F9` summons it either way.
     pub show_menubar: bool,
-    /// Draw the key bar.
+    /// Draw the key bar, under the panels and along the bottom of the viewer.
     pub show_keybar: bool,
     /// Mouse support is optional and additive.
     pub mouse: bool,
