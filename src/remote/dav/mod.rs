@@ -151,10 +151,13 @@ impl DavFs {
     }
 }
 
-/// The HTTP agent, configured as the update check's is.
+/// The HTTP agent, configured as the update check's is - plus leave to send
+/// `PROPFIND`, `MKCOL` and `MOVE`, which ureq refuses by default as methods
+/// HTTP/1.1 does not define.
 fn agent() -> ureq::Agent {
     let config = ureq::Agent::config_builder()
         .timeout_global(Some(std::time::Duration::from_secs(30)))
+        .allow_non_standard_methods(true)
         .build();
     ureq::Agent::new_with_config(config)
 }

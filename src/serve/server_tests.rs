@@ -159,6 +159,89 @@ fn a_webdav_client_can_list_the_share_and_writes_are_refused() {
 }
 
 #[test]
+fn hcmd_itself_connects_to_the_share_as_a_dav_remote_and_reads_a_file() {
+    use crate::remote::dav::DavFs;
+    use crate::remote::transport::RemoteTransport;
+    use crate::remote::{Protocol, Target};
+    use crate::vfs::EntryKind;
+    use std::io::Read;
+
+    let (dir, roots) = scratch("client");
+    let (server, _rx) = serve(roots);
+    let target = Target {
+        protocol: Protocol::Dav,
+        host: "127.0.0.1".to_string(),
+        port: server.port(),
+        user: String::new(),
+        dir: None,
+    };
+    // `connect` lists the root as its proof of life.
+    let fs = DavFs::connect(&target, "", None).expect("connect to our own share");
+    assert_eq!(fs.start_dir(), "/");
+
+    let mut root = fs.list("/").expect("list /");
+    root.sort_by(|a, b| a.name.cmp(&b.name));
+    let names: Vec<(&str, EntryKind, u64)> = root
+        .iter()
+        .map(|e| (e.name.as_str(), e.kind, e.size))
+        .collect();
+    assert_eq!(
+        names,
+        vec![
+            ("photos", EntryKind::Dir, 0),
+            ("report.pdf", EntryKind::File, 9)
+        ]
+    );
+    assert!(
+        root.iter().all(|e| e.mtime.is_some()),
+        "the panel gets a date for every row"
+    );
+
+    let mut photos = fs.list("/photos/").expect("list /photos/");
+    photos.sort_by(|a, b| a.name.cmp(&b.name));
+    let names: Vec<(&str, EntryKind, u64)> = photos
+        .iter()
+        .map(|e| (e.name.as_str(), e.kind, e.size))
+        .collect();
+    assert_eq!(
+        names,
+        vec![
+            ("2026", EntryKind::Dir, 0),
+            ("big.bin", EntryKind::File, 150_000)
+        ]
+    );
+
+    let big = fs.stat("/photos/big.bin").expect("stat");
+    assert_eq!((big.kind, big.size), (EntryKind::File, 150_000));
+
+    let mut bytes = Vec::new();
+    fs.open_read("/photos/big.bin")
+        .expect("open")
+        .read_to_end(&mut bytes)
+        .expect("read");
+    assert_eq!(
+        bytes,
+        std::fs::read(dir.join("photos/big.bin")).expect("original")
+    );
+
+    // Read-only share: the client's write verbs come back as errors, not as
+    // silent no-ops.
+    assert!(fs.create_dir("/photos/new").is_err(), "MKCOL is refused");
+    assert!(fs.remove_file("/report.pdf").is_err(), "DELETE is refused");
+    assert!(
+        fs.rename("/report.pdf", "/moved.pdf").is_err(),
+        "MOVE is refused"
+    );
+    assert!(
+        dir.join("report.pdf").exists(),
+        "and nothing changed on disk"
+    );
+
+    drop(server);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn head_range_and_the_refusals_answer_as_http_says() {
     let (dir, roots) = scratch("head");
     let (server, _rx) = serve(roots);
