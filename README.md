@@ -117,7 +117,8 @@ background, follow their progress, and keep browsing while they run.
 **Two-panel browsing.** Source and destination side by side, with tabs and familiar function keys.
 
 [![Quick navigation](docs/hotlist.png)](docs/hotlist.png)
-Quick navigation with Volume list | Hot list | Tabs 
+
+**Quick navigation** with Volume list | Hot list | Tabs 
 
 ### Open the archive. Skip the unpacking.
 
