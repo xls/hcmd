@@ -54,7 +54,7 @@ fn enter_with_nobody_heard_refuses_and_a_device_that_arrives_is_chosen() {
         folders: 1,
         files: 1,
     });
-    assert_eq!(d.title(), "Send a folder and a file to a device");
+    assert_eq!(d.title(), "Send folder and 1 file - counting...");
     assert!(matches!(
         d.handle_key(&key(KeyCode::Enter)),
         DialogOutcome::Consumed
@@ -212,7 +212,7 @@ fn the_selection_is_described_in_words_and_the_count_arrives_later() {
             files: 0
         }
         .describe(),
-        "a folder"
+        "folder"
     );
     assert_eq!(
         Selection {
@@ -228,29 +228,59 @@ fn the_selection_is_described_in_words_and_the_count_arrives_later() {
             files: 1
         }
         .describe(),
-        "2 folders and a file"
+        "2 folders and 1 file"
     );
     assert_eq!(Selection::default().describe(), "nothing");
 
+    // A folder's title says what it comes to once counted, and the line
+    // under the list turns into a warning past the many-files mark.
     let mut d = SendDeviceDialog::new(Selection {
         folders: 1,
         files: 0,
     });
-    assert_eq!(d.title(), "Send a folder to a device");
-    assert_eq!(d.sending_line(), "Sending a folder: counting...");
+    assert_eq!(d.title(), "Send folder - counting...");
+    assert_eq!(
+        d.sending_line(),
+        ("Counting the files...".to_string(), false)
+    );
+    d.set_summary(Summary {
+        files: 12,
+        bytes: 4_200_000,
+    });
+    assert_eq!(d.title(), "Send folder - 12 files");
+    let (line, warn) = d.sending_line();
+    assert_eq!(line, "12 files, 4.0 MB in all");
+    assert!(!warn);
     d.set_summary(Summary {
         files: 1234,
         bytes: 2_400_000_000,
     });
-    let line = d.sending_line();
-    assert!(line.starts_with("Sending a folder: 1234 files, "), "{line}");
-    assert!(line.ends_with(" in all"), "{line}");
-    // Files alone need no counting to be announced.
+    assert_eq!(d.title(), "Send folder - 1234 files");
+    let (line, warn) = d.sending_line();
+    assert!(line.starts_with("Warning: 1234 files, "), "{line}");
+    assert!(line.contains("more than 50 files"), "{line}");
+    assert!(warn, "drawn as a warning");
+    // Several folders count together.
+    let mut d = SendDeviceDialog::new(Selection {
+        folders: 2,
+        files: 0,
+    });
+    d.set_summary(Summary {
+        files: 40,
+        bytes: 1,
+    });
+    assert_eq!(d.title(), "Send 2 folders - 40 files");
+    // Files alone are named by their count up front.
     let d = SendDeviceDialog::new(Selection {
         folders: 0,
         files: 2,
     });
-    assert_eq!(d.sending_line(), "Sending 2 files");
+    assert_eq!(d.title(), "Send 2 files");
+    let one = SendDeviceDialog::new(Selection {
+        folders: 0,
+        files: 1,
+    });
+    assert_eq!(one.title(), "Send 1 file");
     // And the box does not grow for the line.
     let before = d.size_hint();
     let mut d = d;

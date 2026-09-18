@@ -1713,15 +1713,15 @@ fn alt_x_puts_up_the_send_to_device_picker_with_its_fields_and_buttons() {
     s.press(keys::DOWN, "the cursor on the folder", |t| {
         t.contains("thunder")
     });
-    s.press(keys::ALT_X, "the picker", |t| t.contains("to a device"));
+    s.press(keys::ALT_X, "the picker", |t| t.contains("Send folder"));
     s.press(&[], "the folder counted", |t| t.contains("in all"));
     let text = s.text();
     assert!(
-        text.contains("Send a folder to a device"),
-        "the title:\n{text}"
+        text.contains("Send folder - 1 file"),
+        "the title says what the folder comes to:\n{text}"
     );
     assert!(
-        text.contains("Sending a folder: 1 file, 5 B in all"),
+        text.contains("1 file, 5 B in all"),
         "what is going:\n{text}"
     );
     assert!(text.contains("Address:"), "the address field:\n{text}");

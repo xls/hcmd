@@ -104,19 +104,28 @@ impl SendDeviceDialog {
         self.summary
     }
 
-    /// The line under the list saying what is going: the selection, and the
-    /// count and size once known - the fact to read before pressing Send.
-    fn sending_line(&self) -> String {
-        let what = self.selection.describe();
-        match &self.summary {
-            Some(summary) => format!(
-                "Sending {what}: {} file{}, {} in all",
-                summary.files,
-                if summary.files == 1 { "" } else { "s" },
-                crate::serve::http::human_size(summary.bytes)
-            ),
-            None if self.selection.folders > 0 => format!("Sending {what}: counting..."),
-            None => format!("Sending {what}"),
+    /// The line under the list: how many files and bytes are going, once
+    /// counted - the fact to read before pressing Send - and whether that is
+    /// enough to be drawn as a warning.
+    fn sending_line(&self) -> (String, bool) {
+        let Some(summary) = self.summary else {
+            return ("Counting the files...".to_string(), false);
+        };
+        let size = crate::serve::http::human_size(summary.bytes);
+        let plural = if summary.files == 1 { "" } else { "s" };
+        if summary.files > MANY_FILES {
+            (
+                format!(
+                    "Warning: {} files, {size} - more than {MANY_FILES} files are about to go",
+                    summary.files
+                ),
+                true,
+            )
+        } else {
+            (
+                format!("{} file{plural}, {size} in all", summary.files),
+                false,
+            )
         }
     }
 
@@ -261,19 +270,22 @@ pub struct Selection {
     pub files: usize,
 }
 
+/// Past this many files the sending line is a warning: a folder that looked
+/// like one thing is about to become a long list on the other side's screen.
+pub const MANY_FILES: u64 = 50;
+
 impl Selection {
-    /// "a folder", "3 files", "2 folders and 1 file".
+    /// "folder", "3 files", "2 folders", "2 folders and 1 file".
     #[must_use]
     pub fn describe(self) -> String {
         let folders = match self.folders {
             0 => None,
-            1 => Some("a folder".to_string()),
+            1 => Some("folder".to_string()),
             n => Some(format!("{n} folders")),
         };
         let files = match self.files {
             0 => None,
-            1 => Some("a file".to_string()),
-            n => Some(format!("{n} files")),
+            n => Some(format!("{n} file{}", if n == 1 { "" } else { "s" })),
         };
         match (folders, files) {
             (Some(f), Some(g)) => format!("{f} and {g}"),
@@ -359,8 +371,21 @@ impl Dialog for SendDeviceDialog {
         DialogId::SendDevice
     }
 
+    /// "Send 3 files", "Send folder - 12 files", "Send 2 folders - 40 files":
+    /// what was picked, and for folders what that comes to.
     fn title(&self) -> String {
-        format!("Send {} to a device", self.selection.describe())
+        let what = self.selection.describe();
+        if self.selection.folders == 0 {
+            return format!("Send {what}");
+        }
+        match self.summary {
+            Some(summary) => format!(
+                "Send {what} - {} file{}",
+                summary.files,
+                if summary.files == 1 { "" } else { "s" }
+            ),
+            None => format!("Send {what} - counting..."),
+        }
     }
 
     fn size_hint(&self) -> (u16, u16) {
@@ -486,7 +511,10 @@ impl Dialog for SendDeviceDialog {
             body,
             ascii,
         );
-        draw_text(f, rects.sending, &self.sending_line(), body, ascii);
+        let (sending, warn) = self.sending_line();
+        // The warning takes the colour the dialogs use for a refusal.
+        let sending_style = if warn { style.button(true) } else { body };
+        draw_text(f, rects.sending, &sending, sending_style, ascii);
         let list_focused = self.ring.is(LIST);
         for row in 0..rects.list.height {
             let Some(peer) = self.peers.get(usize::from(row)) else {
